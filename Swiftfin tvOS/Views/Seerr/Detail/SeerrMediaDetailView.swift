@@ -115,7 +115,9 @@ struct SeerrMediaDetailView: View {
             do {
                 try await seerrService.signInWithQuickConnect(jellyfinUserID: requester.id)
                 signingInName = nil
-                viewModel.requestMedia(seasons: seasons)
+
+                // In this async context the generated async overload is picked: it needs `await`.
+                await viewModel.requestMedia(seasons: seasons)
             } catch {
                 signingInName = nil
                 actionError = error
