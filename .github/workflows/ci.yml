@@ -6,14 +6,15 @@ name: "Build 🔨"
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, next ]
     paths:
       - '**'
       - '!Translations/*.lproj/**'
       - 'Translations/en.lproj/**'
   workflow_dispatch:
 
-# Only the newest commit on main is worth building: cancel superseded runs.
+# Only the newest commit on each branch is worth building: cancel superseded runs.
+# `next` is the integration branch for the post-movie-night wave (#3); it is merged into main afterwards.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
