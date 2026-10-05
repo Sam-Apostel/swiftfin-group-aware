@@ -339,7 +339,8 @@ struct SeerrSettingsView: View {
     @ViewBuilder
     private var disconnectSection: some View {
         Section {
-            if seerrService.hasAPIKey, viewModel.supportsQuickConnect == true {
+            // Only once someone is signed in: removing the key would otherwise leave Seerr unusable
+            if seerrService.hasAPIKey, seerrService.signedInUserIDs.isNotEmpty, viewModel.supportsQuickConnect == true {
                 Button(L10n.SeerrQuickConnect.removeAPIKey, role: .destructive) {
                     UIDevice.impact(.light)
                     viewModel.removeAPIKey()

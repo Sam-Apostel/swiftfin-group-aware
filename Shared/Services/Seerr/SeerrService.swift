@@ -135,6 +135,8 @@ final class SeerrService: ObservableObject {
             throw error
         }
 
+        endSessionsIfServerURLChanged(serverID: serverID, newURL: newClient.baseURL)
+
         Defaults[Self.serverURLKey(serverID: serverID)] = newClient.baseURL.absoluteString
         keychain.set(apiKey, forKey: Self.apiKeyKeychainKey(serverID: serverID))
 
@@ -181,13 +183,13 @@ final class SeerrService: ObservableObject {
 
         let apiKeyKey = Self.apiKeyKeychainKey(serverID: serverID)
         var savedAPIKey = keychain.get(apiKeyKey).flatMap { $0.isEmpty ? nil : $0 }
+        var isSavedAPIKeyRejected = false
 
         if let apiKey = savedAPIKey {
             do {
                 _ = try await Self.makeClient(url: url, auth: .apiKey(apiKey, asUser: nil)).me()
             } catch SeerrError.unauthorized {
-                logger.info("The saved Seerr API key doesn't work with the new server, removing it")
-                keychain.delete(apiKeyKey)
+                isSavedAPIKeyRejected = true
                 savedAPIKey = nil
             } catch {
                 // Keep the key on network hiccups
@@ -202,10 +204,18 @@ final class SeerrService: ObservableObject {
             throw ErrorMessage(L10n.SeerrQuickConnect.unsupportedVersion(serverStatus.version))
         }
 
+        // Only now that the new server is accepted: a failed attempt keeps the old configuration intact
+        if isSavedAPIKeyRejected {
+            logger.info("The saved Seerr API key doesn't work with the new server, removing it")
+            keychain.delete(apiKeyKey)
+        }
+
         logger.info(
             "Saved Seerr server for Quick Connect",
             metadata: ["version": .string(serverStatus.version)]
         )
+
+        endSessionsIfServerURLChanged(serverID: serverID, newURL: probeClient.baseURL)
 
         Defaults[Self.serverURLKey(serverID: serverID)] = probeClient.baseURL.absoluteString
 
@@ -696,6 +706,19 @@ final class SeerrService: ObservableObject {
         sessionClients[jellyfinUserID] = nil
         checkedBrowsingUserIDs.remove(jellyfinUserID)
         signedInUserIDs.remove(jellyfinUserID)
+    }
+
+    /// Sessions belong to one Seerr server: when the saved URL changes, end them (on the old server)
+    /// and forget them, so a session cookie is never sent to another server.
+    private func endSessionsIfServerURLChanged(serverID: String, newURL: URL) {
+        guard let storedURLString = Defaults[Self.serverURLKey(serverID: serverID)],
+              let storedURL = URL(string: storedURLString),
+              SeerrClient.normalizedServerURL(storedURL) != newURL
+        else { return }
+
+        for userID in storedUserIDs(serverID: serverID).union(signedInUserIDs) {
+            endSession(serverID: serverID, jellyfinUserID: userID)
+        }
     }
 
     /// A Jellyfin session for this user on the current server: the current session, or a

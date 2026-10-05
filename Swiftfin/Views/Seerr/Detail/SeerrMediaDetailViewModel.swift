@@ -345,14 +345,15 @@ final class SeerrMediaDetailViewModel: ViewModel {
             hasSubmittedRequest = true
             events.send(.requested)
 
-            await reloadDetails(client: client)
+            // `perform` may have renewed an expired browsing session: prefer the current client
+            await reloadDetails(client: seerrService.client ?? client)
         } catch {
             // 409: someone already requested it, which is what the user wanted.
             if case let .server(status, _)? = error as? SeerrError, status == 409 {
                 hasSubmittedRequest = true
                 events.send(.requested)
 
-                await reloadDetails(client: client)
+                await reloadDetails(client: seerrService.client ?? client)
                 return
             }
 
