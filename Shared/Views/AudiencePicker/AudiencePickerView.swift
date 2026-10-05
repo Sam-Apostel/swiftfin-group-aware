@@ -19,8 +19,15 @@ import SwiftUI
 /// The view dismisses itself after `onSave` / `onRemove`; do the async work in those closures.
 struct AudiencePickerView: View {
 
+    private enum FocusedButton: Hashable {
+        case save
+    }
+
     @Default(.accentColor)
     private var accentColor
+
+    @FocusState
+    private var focusedButton: FocusedButton?
 
     @Router
     private var router
@@ -30,6 +37,8 @@ struct AudiencePickerView: View {
 
     private let title: String
     private let isExisting: Bool
+    /// tvOS: start on Save when something is already picked, so one click saves.
+    private let startsWithSelection: Bool
     private let onSave: (Set<String>) -> Void
     private let onRemove: (() -> Void)?
 
@@ -50,6 +59,7 @@ struct AudiencePickerView: View {
         self.onSave = onSave
         self.onRemove = onRemove
         self._selection = State(initialValue: initialAudience)
+        self.startsWithSelection = initialAudience.isNotEmpty
 
         let userSession = Container.shared.currentUserSession()
         var users: [UserState] = []
@@ -68,7 +78,7 @@ struct AudiencePickerView: View {
             couchIDs = couch.memberIDs
         }
 
-        self.users = users
+        self.users = AudiencePickerView.ordered(users, couchMemberIDs: userSession?.couch.members.map(\.id) ?? [])
         self.kidIDs = kidIDs
         self.client = userSession?.client
         self.presets = AudiencePreset.presets(
@@ -78,6 +88,25 @@ struct AudiencePickerView: View {
             kidIDs: kidIDs,
             recents: AudiencePreset.recentAudiences
         )
+    }
+
+    /// People on the couch first, in couch order with grown-ups before restricted members (kids),
+    /// then everyone else in their stored order.
+    private static func ordered(_ users: [UserState], couchMemberIDs: [String]) -> [UserState] {
+        func key(_ user: UserState, offset: Int) -> (Int, Int, Int) {
+            let couchIndex = couchMemberIDs.firstIndex(of: user.id)
+
+            return (
+                couchIndex == nil ? 1 : 0,
+                user.isRestricted ? 1 : 0,
+                couchIndex ?? offset
+            )
+        }
+
+        return users
+            .enumerated()
+            .sorted { key($0.element, offset: $0.offset) < key($1.element, offset: $1.offset) }
+            .map(\.element)
     }
 
     // MARK: - Derived
@@ -225,6 +254,15 @@ struct AudiencePickerView: View {
     }
 
     @ViewBuilder
+    private var missingPeopleFootnote: some View {
+        Text(L10n.Audience.missingSomeone)
+            .font(UIDevice.isTV ? .callout : .footnote)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(UIDevice.isTV ? .center : .leading)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    @ViewBuilder
     private var tvOSMemberRow: some View {
         HStack(spacing: EdgeInsets.itemSpacing) {
             ForEach(users) { user in
@@ -256,6 +294,7 @@ struct AudiencePickerView: View {
         .frame(height: UIDevice.isTV ? 75 : 50)
         .frame(maxWidth: UIDevice.isTV ? 500 : .infinity)
         .disabled(selection.isEmpty)
+        .focused($focusedButton, equals: .save)
     }
 
     @ViewBuilder
@@ -309,6 +348,7 @@ struct AudiencePickerView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     sectionHeader(L10n.Audience.people)
                     members
+                    missingPeopleFootnote
                 }
             }
             .edgePadding(.horizontal)
@@ -345,7 +385,10 @@ struct AudiencePickerView: View {
 
                 presetSections
 
-                members
+                VStack(spacing: 10) {
+                    members
+                    missingPeopleFootnote
+                }
 
                 VStack(spacing: 30) {
                     sentenceView
@@ -359,6 +402,7 @@ struct AudiencePickerView: View {
             }
             .padding(.vertical, 60)
             .frame(maxWidth: .infinity)
+            .defaultFocus($focusedButton, startsWithSelection ? FocusedButton.save : nil)
         }
         .scrollClipDisabled()
     }

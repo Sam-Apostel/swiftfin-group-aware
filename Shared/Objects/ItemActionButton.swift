@@ -73,7 +73,7 @@ enum ItemActionButton: String, CaseIterable, Displayable, Equatable, Identifiabl
         case .delete:
             "trash"
         case .audience:
-            "bookmark.fill"
+            "person.2.fill"
         #if os(iOS)
         case .editMetadata:
             "pencil"
@@ -88,7 +88,7 @@ enum ItemActionButton: String, CaseIterable, Displayable, Equatable, Identifiabl
         case .record:
             "record.circle"
         case .audience:
-            "bookmark"
+            "person.2.badge.plus"
         default:
             systemImage
         }
@@ -109,17 +109,8 @@ enum ItemActionButton: String, CaseIterable, Displayable, Equatable, Identifiabl
         }
     }
 
-    #if os(tvOS)
-    // tvOS shows 3 bar buttons + "…": keep the original trio, the audience goes after trailers
-    static let defaultBarActionButtons: [ItemActionButton] = [
-        .played,
-        .favorited,
-        .record,
-        .trailers,
-        .audience,
-        .playback
-    ]
-    #else
+    /// tvOS shows 3 bar buttons + "…": "Who's it for?" is third, so it stays visible next to a trailer.
+    /// Live TV only shows `.record`, so it still gets a visible slot there.
     static let defaultBarActionButtons: [ItemActionButton] = [
         .played,
         .favorited,
@@ -128,7 +119,6 @@ enum ItemActionButton: String, CaseIterable, Displayable, Equatable, Identifiabl
         .trailers,
         .playback
     ]
-    #endif
 
     static let defaultMenuActionButtons: [ItemActionButton] = [
         .refresh,

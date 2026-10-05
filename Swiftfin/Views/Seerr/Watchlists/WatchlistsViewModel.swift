@@ -416,38 +416,16 @@ final class WatchlistsViewModel: ViewModel {
         }
     }
 
-    /// Best effort: keep each member's own Seerr watchlist in line with the audience.
+    /// Best effort, fire-and-forget: keep each member's own Seerr watchlist in line with the audience.
+    ///
+    /// By Jellyfin user id (like #14), so members that are not stored on this device are synced too
+    /// (through the API key). Members with a Quick Connect session use their own session.
     private func syncSeerrWatchlists(for entry: AudienceWatchlistEntry, adding: Set<String>, removing: Set<String>) {
-        guard let tmdbID = entry.tmdbID, seerrService.isConfigured else { return }
+        guard entry.tmdbID != nil, seerrService.isConfigured else { return }
         guard adding.isNotEmpty || removing.isNotEmpty else { return }
 
-        let mediaType: SeerrMediaType = entry.kind == .movie ? .movie : .tv
-        let title = entry.title
-
-        // By Jellyfin user id (like #14), so members that are not stored on this device are synced too
-        // (through the API key). Members with a Quick Connect session use their own session.
-        Task { [seerrService, logger] in
-            for jellyfinUserID in adding.union(removing).sorted() {
-                let isAdding = adding.contains(jellyfinUserID)
-
-                do {
-                    try await seerrService.perform(asJellyfinUserID: jellyfinUserID) { userClient in
-                        if isAdding {
-                            try await userClient.addToWatchlist(mediaType: mediaType, tmdbID: tmdbID, title: title)
-                        } else {
-                            try await userClient.removeFromWatchlist(mediaType: mediaType, tmdbID: tmdbID)
-                        }
-                    }
-                } catch {
-                    logger.error(
-                        "Watchlists: Seerr watchlist sync failed",
-                        metadata: [
-                            "jellyfinUserID": .string(jellyfinUserID),
-                            "error": .string(error.localizedDescription),
-                        ]
-                    )
-                }
-            }
+        Task { [seerrService] in
+            await seerrService.syncWatchlists(for: entry, adding: adding, removing: removing)
         }
     }
 }

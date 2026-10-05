@@ -20,7 +20,7 @@ extension L10n {
         // MARK: - Empty states
 
         static let emptyTitle = "Nothing here yet"
-        static let emptyDescription = "Tap \u{201C}Who\u{2019}s it for?\u{201D} on any movie or show."
+        static let emptyDescription = "Long-press a poster or press the people button on any movie or show to tag who it\u{2019}s for."
         static let noMatchesTitle = "No matches"
         static let noMatchesDescription = "Nothing on your watchlists matches this filter."
 

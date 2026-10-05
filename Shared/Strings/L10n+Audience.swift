@@ -15,7 +15,6 @@ extension L10n {
     enum Audience {
 
         static let whosItFor = "Who's it for?"
-        static let forEllipsis = "For…"
         static let justMe = "Just me"
         static let theCouch = "The couch"
         static let everyone = "Everyone"
@@ -29,6 +28,12 @@ extension L10n {
         static let forEveryone = "For everyone"
         static let kid = "Kid"
         static let noPeople = "No signed-in users on this server"
+        static let missingSomeone = "Missing someone? Add them under Settings \u{203A} Change who\u{2019}s on the couch."
+
+        /// The poster menu title for a tagged title: "For Sam & Lisa…" (opens the picker).
+        static func editAudience(_ sentence: String) -> String {
+            "\(sentence)\u{2026}"
+        }
 
         static func forNames(_ names: String) -> String {
             "For \(names)"

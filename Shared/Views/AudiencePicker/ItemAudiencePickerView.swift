@@ -37,16 +37,21 @@ struct ItemAudiencePickerView: View {
         self._resolvedItem = State(initialValue: item.providerIDs == nil ? nil : item)
     }
 
+    /// Fetches the full item and refreshes the watchlist at the same time.
     private func resolve() async {
-        var fullItem = item
+        async let fetchedItem: BaseItemDto? = fetchFullItem()
+        async let refresh: Void = AudienceWatchlistActions.refreshIfNeeded()
 
-        if let userSession, let fetchedItem = try? await item.getFullItem(userSession: userSession) {
-            fullItem = fetchedItem
-        }
+        let fullItem = await fetchedItem
+        await refresh
 
-        await AudienceWatchlistActions.refreshIfNeeded()
+        resolvedItem = fullItem ?? item
+    }
 
-        resolvedItem = fullItem
+    private func fetchFullItem() async -> BaseItemDto? {
+        guard let userSession else { return nil }
+
+        return try? await item.getFullItem(userSession: userSession)
     }
 
     @ViewBuilder

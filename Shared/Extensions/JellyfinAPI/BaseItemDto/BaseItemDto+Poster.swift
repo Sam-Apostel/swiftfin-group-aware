@@ -215,6 +215,9 @@ extension BaseItemDto: Poster {
 
 private struct BaseItemDtoPosterContextMenu: View {
 
+    @InjectedObject(\.audienceWatchlistStore)
+    private var audienceStore: AudienceWatchlistStore
+
     @Router
     private var router
 
@@ -231,6 +234,39 @@ private struct BaseItemDtoPosterContextMenu: View {
 
     private var isPlayed: Bool {
         item.userData?.isPlayed == true
+    }
+
+    /// The watchlist entry this item is tagged with, ignoring an entry without anyone in it.
+    private var audienceEntry: AudienceWatchlistEntry? {
+        guard let entry = AudienceWatchlistActions.entry(for: item, in: audienceStore),
+              entry.audience.isNotEmpty
+        else { return nil }
+
+        return entry
+    }
+
+    /// "Who's it for?" when untagged; "For Sam & Lisa…" plus "Remove from watchlist" when tagged.
+    /// Same icon pair as the item view's `ItemActionButton.audience`.
+    @ViewBuilder
+    private var audienceButtons: some View {
+        if let audienceEntry {
+            let sentence = AudienceLabel.sentence(
+                audience: audienceEntry.audience,
+                users: AudienceWatchlistActions.serverUsers()
+            )
+
+            Button(L10n.Audience.editAudience(sentence), systemImage: ItemActionButton.audience.systemImage) {
+                router.route(to: .audiencePicker(item: item))
+            }
+
+            Button(L10n.Audience.removeFromWatchlist, systemImage: "bookmark.slash", role: .destructive) {
+                AudienceWatchlistActions.perform(.removed, item: item, completion: nil)
+            }
+        } else {
+            Button(L10n.Audience.whosItFor, systemImage: ItemActionButton.audience.secondarySystemImage) {
+                router.route(to: .audiencePicker(item: item))
+            }
+        }
     }
 
     var body: some View {
@@ -263,9 +299,7 @@ private struct BaseItemDtoPosterContextMenu: View {
         }
 
         if AudienceWatchlistActions.supports(item) {
-            Button(L10n.Audience.whosItFor, systemImage: "person.2.badge.plus") {
-                router.route(to: .audiencePicker(item: item))
-            }
+            audienceButtons
         }
     }
 

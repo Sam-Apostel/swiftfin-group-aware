@@ -11,7 +11,7 @@ import SwiftUI
 
 extension ItemActionButtons {
 
-    /// "For…": tag who the item is for on the audience watchlist.
+    /// "Who's it for?" / "For Sam & Lisa": tag who the item is for on the audience watchlist.
     struct Audience: View {
 
         @EnvironmentObject
@@ -26,13 +26,18 @@ extension ItemActionButtons {
         @State
         private var error: Error?
 
+        /// The entry this item is tagged with, ignoring an entry without anyone in it.
         private var entry: AudienceWatchlistEntry? {
-            AudienceWatchlistActions.entry(for: provider.item, in: store)
+            guard let entry = AudienceWatchlistActions.entry(for: provider.item, in: store),
+                  entry.audience.isNotEmpty
+            else { return nil }
+
+            return entry
         }
 
         private var title: String {
             guard let entry else {
-                return L10n.Audience.forEllipsis
+                return L10n.Audience.whosItFor
             }
 
             return AudienceLabel.sentence(

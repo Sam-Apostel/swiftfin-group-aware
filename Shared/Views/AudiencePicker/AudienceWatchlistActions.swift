@@ -102,6 +102,19 @@ enum AudienceWatchlistActions {
         await store.refresh(sessions: sessions)
     }
 
+    /// Who an entry is recorded as added by: a grown-up on the couch.
+    ///
+    /// The primary, unless the primary is restricted (a kid, or a parental rating limit, e.g. with
+    /// kid-safe browsing on); then the first unrestricted member in couch order; otherwise the primary.
+    /// Same rule as `SeerrService.requesterJellyfinUserID(for:)`, without its Seerr eligibility check.
+    static func addedByUserID(for couch: CouchGroup) -> String {
+        let primary = couch.primary
+
+        guard primary.isRestricted else { return primary.id }
+
+        return couch.members.first { !$0.isRestricted }?.id ?? primary.id
+    }
+
     static func save(item: BaseItemDto, audience: Set<String>) async throws {
         guard let userSession = Container.shared.currentUserSession() else {
             throw ErrorMessage(L10n.unknownError)
@@ -109,15 +122,17 @@ enum AudienceWatchlistActions {
 
         let store = Container.shared.audienceWatchlistStore()
         let newEntry: AudienceWatchlistEntry
+        var previousAudience: Set<String> = []
 
         if var existing = entry(for: item, in: store) {
+            previousAudience = existing.audience
             existing.audience = audience
             existing.jellyfinItemID = existing.jellyfinItemID ?? item.id
             newEntry = existing
         } else if let created = AudienceWatchlistEntry(
             item: item,
             audience: audience,
-            addedBy: userSession.user.id
+            addedBy: addedByUserID(for: userSession.couch)
         ) {
             newEntry = created
         } else {
@@ -125,6 +140,12 @@ enum AudienceWatchlistActions {
         }
 
         try await store.upsert(newEntry, sessions: householdSessions())
+
+        syncSeerrWatchlists(
+            for: newEntry,
+            adding: audience.subtracting(previousAudience),
+            removing: previousAudience.subtracting(audience)
+        )
     }
 
     static func remove(item: BaseItemDto) async throws {
@@ -133,6 +154,24 @@ enum AudienceWatchlistActions {
         guard let existing = entry(for: item, in: store) else { return }
 
         try await store.remove(entryID: existing.id, sessions: householdSessions())
+
+        syncSeerrWatchlists(for: existing, adding: [], removing: existing.audience)
+    }
+
+    /// Fire-and-forget: mirror the change into each member's own Seerr watchlist (best effort, never fails the save).
+    private static func syncSeerrWatchlists(
+        for entry: AudienceWatchlistEntry,
+        adding: Set<String>,
+        removing: Set<String>
+    ) {
+        guard entry.tmdbID != nil, adding.isNotEmpty || removing.isNotEmpty else { return }
+
+        let seerrService = Container.shared.seerrService()
+        guard seerrService.isConfigured else { return }
+
+        Task { @MainActor in
+            await seerrService.syncWatchlists(for: entry, adding: adding, removing: removing)
+        }
     }
 
     /// Runs a save or remove after the picker was dismissed and reports the outcome.

@@ -38,6 +38,9 @@ extension AudiencePreset {
 
     /// Builds the quick chips (Just me, The couch, Everyone, one per kid) followed by
     /// up to 3 recently used audiences. Presets with the same members are only shown once.
+    ///
+    /// "Just me" is only offered when watching alone: on a group couch the primary can be a kid
+    /// (kid-safe browsing), and picking one person is a single tap in the People grid anyway.
     static func presets(
         users: [UserState],
         primaryID: String?,
@@ -46,9 +49,10 @@ extension AudiencePreset {
         recents: [Set<String>]
     ) -> [AudiencePreset] {
         let userIDs = Set(users.map(\.id))
+        let couch = couchIDs.intersection(userIDs)
         var candidates: [AudiencePreset] = []
 
-        if let primaryID, userIDs.contains(primaryID) {
+        if let primaryID, userIDs.contains(primaryID), couchIDs.count <= 1 {
             candidates.append(
                 AudiencePreset(
                     id: "just-me",
@@ -60,7 +64,6 @@ extension AudiencePreset {
             )
         }
 
-        let couch = couchIDs.intersection(userIDs)
         if couch.count > 1 {
             candidates.append(
                 AudiencePreset(
