@@ -18,6 +18,12 @@ struct UserSessionRootView: View {
     @InjectedObject(\.userSessionManager)
     private var userSessionManager
 
+    private var sessionViewID: String? {
+        guard let currentSession = userSessionManager.currentSession else { return nil }
+
+        return "\(currentSession.user.id)-\(currentSession.couch.id)"
+    }
+
     var body: some View {
         ZStack {
             switch userSessionManager.state {
@@ -33,8 +39,9 @@ struct UserSessionRootView: View {
                 PosterPreferencesEnvironment {
                     MainTabView()
                 }
-                // Rebuild tabs and home whenever the people on the couch change
-                .id(userSessionManager.currentSession?.couch.id)
+                // Rebuild tabs and home whenever the people on the couch change,
+                // or the couch browses as another member (same people, new primary)
+                .id(sessionViewID)
             }
         }
         .animation(.linear(duration: 0.1), value: userSessionManager.state)
