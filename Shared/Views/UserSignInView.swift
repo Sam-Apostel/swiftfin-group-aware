@@ -33,6 +33,9 @@ struct UserSignInView: View {
     /// Marks the user as a kid when saved. Only ever sets the flag, never unsets it.
     @State
     private var isKid: Bool = false
+    /// Quick Connect was opened: its sheet dismisses itself right before signing in.
+    @State
+    private var didOpenQuickConnect: Bool = false
     @State
     private var password: String = ""
     @State
@@ -98,7 +101,17 @@ struct UserSignInView: View {
             // couch) picks the user up from this notification.
             Notifications[.didAddUser].post(user)
             UIDevice.feedback(.success)
-            router.dismiss()
+
+            if didOpenQuickConnect {
+                // Dismissing while the Quick Connect sheet is still going away is
+                // ignored, which would leave sign-in up over the picker
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(600))
+                    router.dismiss()
+                }
+            } else {
+                router.dismiss()
+            }
         }
     }
 
@@ -225,6 +238,8 @@ struct UserSignInView: View {
         if viewModel.isQuickConnectEnabled {
             Section {
                 Button {
+                    didOpenQuickConnect = true
+
                     router.route(
                         to: .quickConnect(
                             client: viewModel.server.client

@@ -161,15 +161,38 @@ struct SelectUserView: View {
         router.route(to: .userSignIn(server: item.server, username: item.user.username))
     }
 
-    /// Opens sign-in for a server that was just connected to.
+    /// Opens sign-in for a server that was just connected to, once the connect sheet is gone.
     ///
-    /// Called on the picker's next appear, or shortly after connecting:
-    /// presenting while the connect sheet is still dismissing fails silently.
+    /// Presenting while the connect sheet is still dismissing fails silently, and that
+    /// sheet's `onDismiss` clears the new sheet (and on tvOS a route made while a sheet is
+    /// still set goes into that sheet). So this waits until no sheet is set, routes, and
+    /// checks a moment later that sign-in is still up, trying a few times.
     private func presentPendingSignIn() {
         guard let server = pendingSignInServer else { return }
 
-        pendingSignInServer = nil
-        router.route(to: .userSignIn(server: server))
+        Task { @MainActor in
+            let coordinator = router.router.navigationCoordinator
+
+            for _ in 0 ..< 6 {
+                try? await Task.sleep(for: .milliseconds(600))
+
+                // Replaced by another server, or someone signed in to it already
+                guard pendingSignInServer?.id == server.id,
+                      !StoredValues[.User.users].contains(where: { $0.serverID == server.id })
+                else { return }
+
+                if coordinator?.presentedSheet?.id == "userSignIn" {
+                    pendingSignInServer = nil
+                    return
+                }
+
+                guard coordinator?.presentedSheet == nil, coordinator?.presentedFullScreen == nil else { continue }
+
+                router.route(to: .userSignIn(server: server))
+            }
+
+            pendingSignInServer = nil
+        }
     }
 
     private func delete(user: UserState) {
@@ -836,9 +859,6 @@ struct SelectUserView: View {
                 }
             }
         }
-        .onAppear {
-            presentPendingSignIn()
-        }
         .onNotification(.didConnectToServer) { server in
             viewModel.background.getServers()
             serverSelection = .server(id: server.id)
@@ -848,11 +868,7 @@ struct SelectUserView: View {
             guard !StoredValues[.User.users].contains(where: { $0.serverID == server.id }) else { return }
 
             pendingSignInServer = server
-
-            Task { @MainActor in
-                try? await Task.sleep(for: .milliseconds(600))
-                presentPendingSignIn()
-            }
+            presentPendingSignIn()
         }
         .onNotification(.didAddUser) { user in
             didAddUser(user)
