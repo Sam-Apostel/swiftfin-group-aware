@@ -64,6 +64,8 @@ final class WatchlistsViewModel: ViewModel {
 
     /// Seerr lookups are shared across screen instances so re-opening the screen is instant.
     private static var seerrStatusCache: [String: WatchlistSeerrStatus] = [:]
+    /// The Jellyfin server the cache belongs to: each server has its own Seerr
+    private static var seerrStatusCacheServerID: String?
     private static let seerrStatusTTL: TimeInterval = 10 * 60
     private static let seerrConcurrency = 6
 
@@ -75,6 +77,7 @@ final class WatchlistsViewModel: ViewModel {
 
         super.init()
 
+        resetSeerrCacheIfServerChanged()
         self.seerrStatuses = Self.seerrStatusCache
         self.entries = store.entries
         self.isRefreshing = store.isRefreshing
@@ -125,6 +128,36 @@ final class WatchlistsViewModel: ViewModel {
 
     private func user(id: String) -> UserState? {
         users.first { $0.id == id }
+    }
+
+    /// Section header icon: everyone, a kid on their own, one person, a pair, or a bigger group.
+    func systemImage(for audience: Set<String>) -> String {
+        if users.count > 1, audience == Set(users.map(\.id)) {
+            return "person.3.fill"
+        }
+
+        switch audience.count {
+        case 1:
+            if let id = audience.first, user(id: id)?.isKid == true {
+                return "figure.child"
+            }
+            return "person.fill"
+
+        case 2:
+            return "heart.fill"
+
+        default:
+            return "person.2.fill"
+        }
+    }
+
+    private func resetSeerrCacheIfServerChanged() {
+        let serverID = userSession?.server.id
+
+        guard Self.seerrStatusCacheServerID != serverID else { return }
+
+        Self.seerrStatusCache = [:]
+        Self.seerrStatusCacheServerID = serverID
     }
 
     // MARK: - Refresh
@@ -227,6 +260,8 @@ final class WatchlistsViewModel: ViewModel {
 
     private func resolveSeerrStatuses(for entries: [AudienceWatchlistEntry], force: Bool) async {
         guard let client = seerrService.client else { return }
+
+        resetSeerrCacheIfServerChanged()
 
         let now = Date()
         let pending = entries.filter { entry in
@@ -351,7 +386,7 @@ final class WatchlistsViewModel: ViewModel {
             syncSeerrWatchlists(for: entry, adding: [], removing: entry.audience)
         } catch {
             logger.error("Watchlists: failed to remove entry", metadata: ["error": .string(error.localizedDescription)])
-            UIDevice.feedback(.error)
+            // `.errorMessage` plays the error haptic
             self.error = error
         }
     }
@@ -376,7 +411,7 @@ final class WatchlistsViewModel: ViewModel {
             )
         } catch {
             logger.error("Watchlists: failed to update audience", metadata: ["error": .string(error.localizedDescription)])
-            UIDevice.feedback(.error)
+            // `.errorMessage` plays the error haptic
             self.error = error
         }
     }
@@ -384,32 +419,24 @@ final class WatchlistsViewModel: ViewModel {
     /// Best effort: keep each member's own Seerr watchlist in line with the audience.
     private func syncSeerrWatchlists(for entry: AudienceWatchlistEntry, adding: Set<String>, removing: Set<String>) {
         guard let tmdbID = entry.tmdbID, let client = seerrService.client else { return }
+        guard adding.isNotEmpty || removing.isNotEmpty else { return }
 
         let mediaType: SeerrMediaType = entry.kind == .movie ? .movie : .tv
         let title = entry.title
-        let addUsers = adding.compactMap { user(id: $0) }
-        let removeUsers = removing.compactMap { user(id: $0) }
 
-        guard addUsers.isNotEmpty || removeUsers.isNotEmpty else { return }
-
+        // By Jellyfin user id (like #14), so members that are not stored on this device are synced too
         Task { [seerrService, logger] in
-            for user in addUsers {
-                guard let seerrUserID = await seerrService.seerrUserID(for: user) else { continue }
+            for jellyfinUserID in adding.union(removing).sorted() {
+                guard let seerrUserID = await seerrService.seerrUserID(forJellyfinUserID: jellyfinUserID) else { continue }
 
                 do {
-                    try await client.addToWatchlist(mediaType: mediaType, tmdbID: tmdbID, title: title, asUser: seerrUserID)
+                    if adding.contains(jellyfinUserID) {
+                        try await client.addToWatchlist(mediaType: mediaType, tmdbID: tmdbID, title: title, asUser: seerrUserID)
+                    } else {
+                        try await client.removeFromWatchlist(mediaType: mediaType, tmdbID: tmdbID, asUser: seerrUserID)
+                    }
                 } catch {
-                    logger.error("Watchlists: Seerr addToWatchlist failed", metadata: ["error": .string(error.localizedDescription)])
-                }
-            }
-
-            for user in removeUsers {
-                guard let seerrUserID = await seerrService.seerrUserID(for: user) else { continue }
-
-                do {
-                    try await client.removeFromWatchlist(mediaType: mediaType, tmdbID: tmdbID, asUser: seerrUserID)
-                } catch {
-                    logger.error("Watchlists: Seerr removeFromWatchlist failed", metadata: ["error": .string(error.localizedDescription)])
+                    logger.error("Watchlists: Seerr watchlist sync failed", metadata: ["error": .string(error.localizedDescription)])
                 }
             }
         }

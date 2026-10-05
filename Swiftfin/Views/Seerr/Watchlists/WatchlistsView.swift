@@ -102,6 +102,11 @@ struct WatchlistsView: View {
     @ViewBuilder
     private func sectionHeader(for section: WatchlistsSection) -> some View {
         HStack(alignment: .center) {
+            Image(systemName: viewModel.systemImage(for: section.audience))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+
             AudienceLabel(audience: section.audience, users: viewModel.users)
 
             Spacer(minLength: 8)
