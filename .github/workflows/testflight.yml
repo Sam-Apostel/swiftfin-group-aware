@@ -9,7 +9,7 @@ name: "TestFlight ✈️"
 #     Bursts of pushes collapse into a single build of the newest commit.
 #
 # Repository variables (Settings ▸ Secrets and variables ▸ Actions ▸ Variables):
-#   APP_BUNDLE_ID       e.g. be.apostel.swiftfin (defaults to the Fastfile fallback when unset)
+#   APP_BUNDLE_ID       e.g. land.sams.swiftfin (defaults to the Fastfile fallback when unset)
 #   TESTFLIGHT_ON_PUSH  "true" to upload a TestFlight build for every push to main
 #   XCODE_VERSION       optional; when unset the Mac's currently selected Xcode is used
 #

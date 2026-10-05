@@ -11,7 +11,7 @@ import Foundation
 class Fastfile: LaneFile {
     
     /// Override with the APP_BUNDLE_ID environment variable (set as a repository variable for this fork).
-    private let bundleIdentifier = ProcessInfo.processInfo.environment["APP_BUNDLE_ID"]?.trimOption() ?? "org.jellyfin.swiftfin"
+    private let bundleIdentifier = ProcessInfo.processInfo.environment["APP_BUNDLE_ID"]?.trimOption() ?? "land.sams.swiftfin"
     private let xcodeProject = "Swiftfin.xcodeproj"
     private let sourcePackagesPath = "build/SourcePackages"
     
