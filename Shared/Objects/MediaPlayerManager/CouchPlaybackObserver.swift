@@ -14,11 +14,7 @@ import JellyfinAPI
 /// A playback event that is mirrored to every other member on the couch.
 struct CouchPlaybackEvent {
 
-    enum Kind {
-        case start
-        case progress
-        case stop
-    }
+    typealias Kind = CouchEchoPlan.EventKind
 
     let kind: Kind
     let itemID: String
@@ -26,6 +22,12 @@ struct CouchPlaybackEvent {
     let positionTicks: Int
     let runtimeTicks: Int?
     let isPaused: Bool
+
+    /// Whether this stop ends playback that failed, for example a stream or transcode error.
+    ///
+    /// Jellyfin closes a failed session without touching user data, and the echo never
+    /// writes user data for it either.
+    var isFailed: Bool = false
 
     /// The fraction of the runtime that has been watched, if the runtime is known.
     var playedFraction: Double? {
@@ -38,9 +40,19 @@ struct CouchPlaybackEvent {
     ///
     /// Matches Jellyfin's default `MaxResumePct` of 90%.
     var didFinish: Bool {
-        guard kind == .stop, let playedFraction else { return false }
+        guard kind == .stop, !isFailed, let playedFraction else { return false }
 
         return playedFraction >= 0.9
+    }
+
+    /// The parts of this event that `CouchEchoPlan` decides on.
+    var planEvent: CouchEchoPlan.Event {
+        CouchEchoPlan.Event(
+            kind: kind,
+            positionTicks: positionTicks,
+            didFinish: didFinish,
+            isFailed: isFailed
+        )
     }
 }
 
@@ -129,8 +141,11 @@ final class CouchPlaybackObserver {
                 guard let self, let manager else { return }
 
                 switch action {
-                case .stop, .error:
+                case .stop:
                     self.stopObserving(manager: manager)
+                case .error:
+                    // The stream failed: close every member's session without writing their progress.
+                    self.stopObserving(manager: manager, isFailed: true)
                 case .playNewItem:
                     // Next episode, autoplay or a queue pick: close out the current item now,
                     // before the old player is stopped and the new item loads, which can move `seconds`.
@@ -165,15 +180,15 @@ final class CouchPlaybackObserver {
     }
 
     /// Emits a stop for the current item, if any, and forgets it.
-    private func stopCurrentItem(seconds: Duration) {
+    private func stopCurrentItem(seconds: Duration, isFailed: Bool = false) {
         guard let currentItem else { return }
 
         self.currentItem = nil
-        emit(.stop, item: currentItem, seconds: seconds)
+        emit(.stop, item: currentItem, seconds: seconds, isFailed: isFailed)
     }
 
-    private func stopObserving(manager: MediaPlayerManager) {
-        stopCurrentItem(seconds: manager.seconds)
+    private func stopObserving(manager: MediaPlayerManager, isFailed: Bool = false) {
+        stopCurrentItem(seconds: manager.seconds, isFailed: isFailed)
 
         cancellables = []
         service = nil
@@ -184,7 +199,8 @@ final class CouchPlaybackObserver {
         _ kind: CouchPlaybackEvent.Kind,
         item: BaseItemDto,
         seconds: Duration,
-        isPaused: Bool = false
+        isPaused: Bool = false,
+        isFailed: Bool = false
     ) {
         guard let itemID = item.id, !item.isLiveStream, let service else { return }
 
@@ -194,7 +210,8 @@ final class CouchPlaybackObserver {
             itemName: item.displayTitle,
             positionTicks: max(0, seconds.ticks),
             runtimeTicks: item.runTimeTicks,
-            isPaused: isPaused
+            isPaused: isPaused,
+            isFailed: isFailed
         )
 
         service.report(event)

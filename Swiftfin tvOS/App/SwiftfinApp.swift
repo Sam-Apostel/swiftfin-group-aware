@@ -6,6 +6,7 @@
 // Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
+import FactoryKit
 import SwiftUI
 
 @main
@@ -19,7 +20,7 @@ struct SwiftfinApp: App {
 
     var body: some Scene {
         WindowGroup {
-            OverlayToastView {
+            OverlayToastView(proxy: Container.shared.appToastProxy()) {
                 WithLocalUserAuthentication {
                     RootView()
                 }
