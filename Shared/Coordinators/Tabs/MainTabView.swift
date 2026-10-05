@@ -33,6 +33,7 @@ struct MainTabView: View {
         #if os(iOS)
         TabCoordinator {
             TabItem.contentGroup(provider: DefaultContentGroupProvider())
+            TabItem.discover
             TabItem.search
             TabItem.media
         }

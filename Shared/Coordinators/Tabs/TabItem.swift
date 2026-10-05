@@ -102,6 +102,18 @@ extension TabItem {
         }
     }
 
+    #if os(iOS)
+    static var discover: TabItem {
+        TabItem(
+            id: "discover",
+            title: L10n.SeerrDiscover.title,
+            systemImage: "popcorn.fill"
+        ) {
+            DiscoverView()
+        }
+    }
+    #endif
+
     static var media: TabItem {
         TabItem(
             id: "media",
