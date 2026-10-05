@@ -109,6 +109,17 @@ enum ItemActionButton: String, CaseIterable, Displayable, Equatable, Identifiabl
         }
     }
 
+    #if os(tvOS)
+    // tvOS shows 3 bar buttons + "…": keep the original trio, the audience goes after trailers
+    static let defaultBarActionButtons: [ItemActionButton] = [
+        .played,
+        .favorited,
+        .record,
+        .trailers,
+        .audience,
+        .playback
+    ]
+    #else
     static let defaultBarActionButtons: [ItemActionButton] = [
         .played,
         .favorited,
@@ -117,6 +128,7 @@ enum ItemActionButton: String, CaseIterable, Displayable, Equatable, Identifiabl
         .trailers,
         .playback
     ]
+    #endif
 
     static let defaultMenuActionButtons: [ItemActionButton] = [
         .refresh,
