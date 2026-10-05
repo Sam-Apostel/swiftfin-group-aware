@@ -151,8 +151,9 @@ struct CouchDeciderSlotReel: View {
     private func spin() async {
         let others = reelItems
 
-        // Reduce Motion, or nothing to spin through: crossfade to the landing.
-        if reduceMotion || (landingItemID != nil && others.isEmpty) {
+        // Reduce Motion, nothing to spin through, or a landing item missing from `items`
+        // (it would otherwise idle-spin forever and never call `onLanded`): crossfade to the landing.
+        if reduceMotion || (landingItemID != nil && (others.isEmpty || landingItem == nil)) {
             if let landingItem, landingItem.id != displayedItem?.id {
                 show(landingItem, animation: .easeInOut(duration: 0.3))
             }

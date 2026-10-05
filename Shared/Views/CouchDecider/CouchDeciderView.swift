@@ -135,10 +135,6 @@ struct CouchDeciderView: View {
         .animation(.easeInOut(duration: 0.25), value: viewModel.state)
         .colorScheme(.dark)
         .toolbar(.hidden, for: .navigationBar)
-        .refreshable {
-            pendingAnimation = .reel(duration: 1.6)
-            await viewModel.load()
-        }
         .onFirstAppear {
             pendingAnimation = .reel(duration: 1.6)
             viewModel.load()
@@ -288,7 +284,13 @@ struct CouchDeciderView: View {
 
         case .error:
             if let error = viewModel.error {
+                // `.refreshable` only here: on the whole screen, the horizontal filter row would
+                // inherit it on iOS, and pulling down on the chips would reload the deck.
                 ErrorView(error: error)
+                    .refreshable {
+                        pendingAnimation = .reel(duration: 1.6)
+                        await viewModel.load()
+                    }
             } else {
                 loadingView
             }
