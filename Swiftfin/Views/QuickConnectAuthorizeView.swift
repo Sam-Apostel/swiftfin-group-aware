@@ -58,7 +58,8 @@ struct QuickConnectAuthorizeView: View {
 
             do {
                 try await Self.confirm(person, authenticationAction: authenticationAction)
-                viewModel.authorize(code: code)
+                // In a Task the @Stateful async overload is picked: await it
+                await viewModel.authorize(code: code)
             } catch is CancellationError {
                 isCodeFocused = true
             } catch {
