@@ -52,6 +52,15 @@ struct SelectUserView: View {
     private var isStartingCouch = false
     @State
     private var kidUserIDs: Set<String> = []
+    /// The IDs of the stored users without an access token, who need to sign in again.
+    @State
+    private var needsSignInUserIDs: Set<String> = []
+    /// The IDs of the users who just signed in, to put on the couch once they are loaded.
+    @State
+    private var pendingCouchAdditionIDs: [String] = []
+    /// A server that was just connected to, to open sign-in for once the connect sheet is gone.
+    @State
+    private var pendingSignInServer: ServerState?
     /// The users selected for deletion in edit mode, separate from the couch selection.
     @State
     private var selectedUsers: Set<UserState> = []
@@ -145,8 +154,21 @@ struct SelectUserView: View {
         return viewModel.servers.keys.first { $0.id == serverID }
     }
 
-    private func addUser(server: ServerState) {
+    /// Opens sign-in with the user's name filled in. Signing in replaces the stored
+    /// token, for a sign-in that ran out or was revoked by a password change.
+    private func signInAgain(_ item: UserItem) {
         UIDevice.impact(.light)
+        router.route(to: .userSignIn(server: item.server, username: item.user.username))
+    }
+
+    /// Opens sign-in for a server that was just connected to.
+    ///
+    /// Called on the picker's next appear, or shortly after connecting:
+    /// presenting while the connect sheet is still dismissing fails silently.
+    private func presentPendingSignIn() {
+        guard let server = pendingSignInServer else { return }
+
+        pendingSignInServer = nil
         router.route(to: .userSignIn(server: server))
     }
 
@@ -172,6 +194,56 @@ struct SelectUserView: View {
         }
     }
 
+    /// Puts a user who just signed in on the couch, with the same server rule as
+    /// `toggleCouch(user:)`. Never takes anyone off the couch.
+    private func addToCouch(user: UserState) {
+        guard !couchSelection.contains(where: { $0.id == user.id }) else { return }
+
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            if let first = couchSelection.first, first.serverID != user.serverID {
+                // Couch members must share a server: start a new couch with this user
+                couchSelection = [user]
+            } else {
+                couchSelection.append(user)
+            }
+        }
+    }
+
+    /// Handles `Notifications[.didAddUser]`: a person signed in from this picker.
+    private func didAddUser(_ user: UserState) {
+        pendingCouchAdditionIDs.append(user.id)
+
+        // A user signing in again is already stored and is added right away,
+        // a new user once the reload below has loaded them
+        refreshUserFlags()
+        applyPendingCouchAdditions()
+
+        viewModel.background.getServers()
+    }
+
+    private func applyPendingCouchAdditions() {
+        guard pendingCouchAdditionIDs.isNotEmpty else { return }
+
+        let users = storedUsers
+        var remainingIDs: [String] = []
+
+        for id in pendingCouchAdditionIDs {
+            if let user = users.first(where: { $0.id == id }) {
+                addToCouch(user: user)
+            } else {
+                remainingIDs.append(id)
+            }
+        }
+
+        pendingCouchAdditionIDs = remainingIDs
+    }
+
+    private func refreshUserFlags() {
+        let users = storedUsers
+        kidUserIDs = Set(users.filter(\.isKid).map(\.id))
+        needsSignInUserIDs = Set(users.filter { $0.storedAccessToken == nil }.map(\.id))
+    }
+
     private func toggleKid(user: UserState) {
         let isKid = !user.isKid
         user.isKid = isKid
@@ -189,7 +261,7 @@ struct SelectUserView: View {
     /// pre-selects the last couch once the users are first loaded.
     private func syncCouchSelection() {
         let users = storedUsers
-        kidUserIDs = Set(users.filter(\.isKid).map(\.id))
+        refreshUserFlags()
 
         if !hasRestoredLastCouch, users.isNotEmpty {
             hasRestoredLastCouch = true
@@ -200,6 +272,8 @@ struct SelectUserView: View {
                 users.first { $0.id == member.id }
             }
         }
+
+        applyPendingCouchAdditions()
     }
 
     private func lastCouch(from users: [UserState]) -> [UserState] {
@@ -469,19 +543,31 @@ struct SelectUserView: View {
         }
     }
 
+    private var headerSubtitle: String {
+        if userItems.isEmpty {
+            L10n.CouchPicker.emptySubtitle
+        } else if UIDevice.isTV {
+            L10n.CouchPicker.subtitleTV
+        } else {
+            L10n.CouchPicker.subtitle
+        }
+    }
+
     @ViewBuilder
     private var headerView: some View {
-        if !isEditing, userItems.isNotEmpty {
+        if !isEditing {
             VStack(spacing: UIDevice.isTV ? 8 : 4) {
                 Text(L10n.CouchPicker.title)
                     .font(UIDevice.isTV ? .title3 : .title2)
                     .fontWeight(.bold)
+                    .lineLimit(1)
 
-                Text(L10n.CouchPicker.subtitle)
+                Text(headerSubtitle)
                     .font(UIDevice.isTV ? .callout : .subheadline)
                     .foregroundStyle(.secondary)
+                    .lineLimit(3)
+                    .frame(maxWidth: UIDevice.isTV ? 900 : 500)
             }
-            .lineLimit(1)
             .minimumScaleFactor(0.8)
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity)
@@ -503,25 +589,7 @@ struct SelectUserView: View {
 
             ZStack {
                 if userItems.isEmpty {
-                    EmptyUserView {
-                        if let selectedServer {
-                            addUser(server: selectedServer)
-                        }
-                    }
-                    .contextMenu {
-                        if selectedServer == nil {
-                            Text(L10n.selectServer)
-
-                            ForEach(viewModel.servers.keys) { server in
-                                Button {
-                                    addUser(server: server)
-                                } label: {
-                                    Text(server.name)
-                                    Text(server.effectiveServerURL.absoluteString)
-                                }
-                            }
-                        }
-                    }
+                    EmptyUserView(servers: viewModel.servers.keys)
                 } else {
                     switch userListDisplayType {
                     case .list:
@@ -531,9 +599,12 @@ struct SelectUserView: View {
                             selectedUsers: $selectedUsers,
                             couchSelectionIDs: couchSelection.map(\.id),
                             kidUserIDs: kidUserIDs,
+                            needsSignInUserIDs: needsSignInUserIDs,
                             serverSelection: serverSelection,
+                            servers: viewModel.servers.keys,
                             action: { toggleCouch(user: $0) },
                             onToggleKid: { toggleKid(user: $0) },
+                            onSignInAgain: { signInAgain($0) },
                             onDelete: { delete(user: $0) }
                         )
 
@@ -544,9 +615,12 @@ struct SelectUserView: View {
                             selectedUsers: $selectedUsers,
                             couchSelectionIDs: couchSelection.map(\.id),
                             kidUserIDs: kidUserIDs,
+                            needsSignInUserIDs: needsSignInUserIDs,
                             serverSelection: serverSelection,
+                            servers: viewModel.servers.keys,
                             action: { toggleCouch(user: $0) },
                             onToggleKid: { toggleKid(user: $0) },
+                            onSignInAgain: { signInAgain($0) },
                             onDelete: { delete(user: $0) }
                         )
                     }
@@ -762,9 +836,26 @@ struct SelectUserView: View {
                 }
             }
         }
+        .onAppear {
+            presentPendingSignIn()
+        }
         .onNotification(.didConnectToServer) { server in
             viewModel.background.getServers()
             serverSelection = .server(id: server.id)
+
+            // Sign-in opens by itself for a server without people yet, once the
+            // connect sheet has finished dismissing
+            guard !StoredValues[.User.users].contains(where: { $0.serverID == server.id }) else { return }
+
+            pendingSignInServer = server
+
+            Task { @MainActor in
+                try? await Task.sleep(for: .milliseconds(600))
+                presentPendingSignIn()
+            }
+        }
+        .onNotification(.didAddUser) { user in
+            didAddUser(user)
         }
         .onNotification(.didChangeServerConnection) { _ in
             viewModel.background.getServers()

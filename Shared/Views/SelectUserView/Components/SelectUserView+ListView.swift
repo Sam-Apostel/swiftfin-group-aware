@@ -7,6 +7,7 @@
 //
 
 import Defaults
+import OrderedCollections
 import SwiftUI
 
 extension SelectUserView {
@@ -21,23 +22,32 @@ extension SelectUserView {
         private let users: [UserItem]
         private let couchSelectionIDs: [String]
         private let kidUserIDs: Set<String>
+        private let needsSignInUserIDs: Set<String>
         private let serverSelection: SelectUserServerSelection
+        private let servers: OrderedSet<ServerState>
         private let action: (UserState) -> Void
         private let onToggleKid: (UserState) -> Void
+        private let onSignInAgain: (UserItem) -> Void
         private let onDelete: (UserState) -> Void
 
         /// - Parameters:
         ///   - couchSelectionIDs: The IDs of the users on the couch, in pick order.
+        ///   - needsSignInUserIDs: The IDs of the users without a stored access token.
+        ///   - servers: The servers a person can be added to with the "Add person" row.
         ///   - action: Toggles a user on or off the couch. Not called in edit mode.
+        ///   - onSignInAgain: Opens sign-in with the user's name filled in.
         init(
             userItems: [UserItem],
             isEditing: Binding<Bool>,
             selectedUsers: Binding<Set<UserState>>,
             couchSelectionIDs: [String],
             kidUserIDs: Set<String>,
+            needsSignInUserIDs: Set<String>,
             serverSelection: SelectUserServerSelection,
+            servers: OrderedSet<ServerState>,
             action: @escaping (UserState) -> Void,
             onToggleKid: @escaping (UserState) -> Void,
+            onSignInAgain: @escaping (UserItem) -> Void,
             onDelete: @escaping (UserState) -> Void
         ) {
             self.users = userItems
@@ -45,10 +55,17 @@ extension SelectUserView {
             self._selectedUsers = selectedUsers
             self.couchSelectionIDs = couchSelectionIDs
             self.kidUserIDs = kidUserIDs
+            self.needsSignInUserIDs = needsSignInUserIDs
             self.serverSelection = serverSelection
+            self.servers = servers
             self.action = action
             self.onToggleKid = onToggleKid
+            self.onSignInAgain = onSignInAgain
             self.onDelete = onDelete
+        }
+
+        private func needsSignIn(_ user: UserState) -> Bool {
+            needsSignInUserIDs.contains(user.id)
         }
 
         private func isOnCouch(_ user: UserState) -> Bool {
@@ -91,6 +108,13 @@ extension SelectUserView {
                         }
                     }
 
+                    if needsSignIn(item.user) {
+                        Text(L10n.CouchPicker.signInAgain)
+                            .font(UIDevice.isTV ? .body : .footnote)
+                            .foregroundStyle(Color.orange)
+                            .lineLimit(1)
+                    }
+
                     if serverSelection == .all {
                         Text(item.server.name)
                             .font(UIDevice.isTV ? .body : .footnote)
@@ -106,6 +130,8 @@ extension SelectUserView {
             ChevronButton {
                 if isEditing {
                     selectedUsers.toggle(value: item.user)
+                } else if needsSignIn(item.user), !isOnCouch(item.user) {
+                    onSignInAgain(item)
                 } else {
                     action(item.user)
                 }
@@ -119,6 +145,14 @@ extension SelectUserView {
                         systemImage: "figure.child"
                     ) {
                         onToggleKid(item.user)
+                    }
+
+                    // For a sign-in that ran out or was revoked by a password change
+                    Button(
+                        L10n.CouchPicker.signInAgain,
+                        systemImage: "person.badge.key"
+                    ) {
+                        onSignInAgain(item)
                     }
 
                     Button(L10n.delete, role: .destructive) {
@@ -150,6 +184,11 @@ extension SelectUserView {
                     row(for: item)
                 }
                 .listRowBackground(Color.clear)
+
+                if !isEditing {
+                    AddPersonRow(servers: servers)
+                        .listRowBackground(Color.clear)
+                }
             }
             .listStyle(.plain)
             #if os(iOS)

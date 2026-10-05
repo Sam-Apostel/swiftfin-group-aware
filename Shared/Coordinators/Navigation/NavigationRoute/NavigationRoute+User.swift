@@ -44,13 +44,17 @@ extension NavigationRoute {
     }
     #endif
 
-    static func userSignIn(server: ServerState) -> NavigationRoute {
+    /// Signs a user in to `server` and saves them on this device, then posts
+    /// `Notifications[.didAddUser]` and dismisses. It never starts a session.
+    ///
+    /// - Parameter username: Fills in the username, e.g. to sign a stored user in again.
+    static func userSignIn(server: ServerState, username: String? = nil) -> NavigationRoute {
         NavigationRoute(
             id: "userSignIn",
             style: .sheet
         ) {
             WithLocalUserAuthentication {
-                UserSignInView(server: server)
+                UserSignInView(server: server, username: username)
             }
         }
     }

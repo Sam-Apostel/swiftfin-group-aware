@@ -7,6 +7,7 @@
 //
 
 import Defaults
+import OrderedCollections
 import SwiftUI
 
 // TODO: remember last focused user for tvOS focus
@@ -15,6 +16,21 @@ extension SelectUserView {
 
     struct GridView: PlatformView {
 
+        /// A grid cell: a user, or the trailing "Add person" tile.
+        private enum Cell {
+            case user(UserItem)
+            case addPerson
+
+            var id: String {
+                switch self {
+                case let .user(item):
+                    item.user.id
+                case .addPerson:
+                    "addPerson"
+                }
+            }
+        }
+
         @Binding
         private var isEditing: Bool
         @Binding
@@ -22,24 +38,33 @@ extension SelectUserView {
 
         private let couchSelectionIDs: [String]
         private let kidUserIDs: Set<String>
+        private let needsSignInUserIDs: Set<String>
         private let onDelete: (UserState) -> Void
         private let onToggleKid: (UserState) -> Void
+        private let onSignInAgain: (UserItem) -> Void
         private let action: (UserState) -> Void
         private let serverSelection: SelectUserServerSelection
+        private let servers: OrderedSet<ServerState>
         private let userItems: [UserItem]
 
         /// - Parameters:
         ///   - couchSelectionIDs: The IDs of the users on the couch, in pick order.
+        ///   - needsSignInUserIDs: The IDs of the users without a stored access token.
+        ///   - servers: The servers a person can be added to with the "Add person" tile.
         ///   - action: Toggles a user on or off the couch. Not called in edit mode.
+        ///   - onSignInAgain: Opens sign-in with the user's name filled in.
         init(
             userItems: [UserItem],
             isEditing: Binding<Bool>,
             selectedUsers: Binding<Set<UserState>>,
             couchSelectionIDs: [String],
             kidUserIDs: Set<String>,
+            needsSignInUserIDs: Set<String>,
             serverSelection: SelectUserServerSelection,
+            servers: OrderedSet<ServerState>,
             action: @escaping (UserState) -> Void,
             onToggleKid: @escaping (UserState) -> Void,
+            onSignInAgain: @escaping (UserItem) -> Void,
             onDelete: @escaping (UserState) -> Void
         ) {
             self.userItems = userItems
@@ -47,10 +72,20 @@ extension SelectUserView {
             self._selectedUsers = selectedUsers
             self.couchSelectionIDs = couchSelectionIDs
             self.kidUserIDs = kidUserIDs
+            self.needsSignInUserIDs = needsSignInUserIDs
             self.serverSelection = serverSelection
+            self.servers = servers
             self.action = action
             self.onToggleKid = onToggleKid
+            self.onSignInAgain = onSignInAgain
             self.onDelete = onDelete
+        }
+
+        /// The users, then "Add person" outside of edit mode.
+        private var cells: [Cell] {
+            let users = userItems.map { Cell.user($0) }
+
+            return isEditing ? users : users + [.addPerson]
         }
 
         @ViewBuilder
@@ -82,19 +117,33 @@ extension SelectUserView {
                     },
                     onDelete: {
                         onDelete(item.user)
+                    },
+                    needsSignIn: needsSignInUserIDs.contains(item.user.id),
+                    onSignInAgain: {
+                        onSignInAgain(item)
                     }
                 )
             }
         }
 
+        @ViewBuilder
+        private func cellView(for cell: Cell) -> some View {
+            switch cell {
+            case let .user(item):
+                userGridButton(for: item)
+            case .addPerson:
+                AddPersonTile(servers: servers)
+            }
+        }
+
         var iOSView: some View {
             CenteredLazyVGrid(
-                data: userItems,
-                id: \.user.id,
+                data: cells,
+                id: \.id,
                 columns: UIDevice.isPhone ? 2 : 5,
                 spacing: EdgeInsets.itemSpacing
-            ) { item in
-                userGridButton(for: item)
+            ) { cell in
+                cellView(for: cell)
             }
             .edgePadding(UIDevice.isPhone ? [.horizontal, .vertical] : .horizontal)
             .scrollIfLargerThanContainer(axes: .vertical, padding: 100)
@@ -102,8 +151,8 @@ extension SelectUserView {
 
         var tvOSView: some View {
             HStack(spacing: EdgeInsets.itemSpacing) {
-                ForEach(userItems, id: \.user.id) { item in
-                    userGridButton(for: item)
+                ForEach(cells, id: \.id) { cell in
+                    cellView(for: cell)
                         .frame(width: 300)
                 }
             }

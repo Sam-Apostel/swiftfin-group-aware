@@ -22,9 +22,6 @@ struct UserSignInView: View {
     @Environment(\.localUserAuthenticationAction)
     private var authenticationAction
 
-    @Injected(\.userSessionManager)
-    private var userSessionManager: UserSessionManager
-
     @FocusState
     private var focusedTextField: Field?
 
@@ -33,10 +30,9 @@ struct UserSignInView: View {
 
     @State
     private var accessPolicy: LocalUserAccessPolicy = .none
+    /// Marks the user as a kid when saved. Only ever sets the flag, never unsets it.
     @State
-    private var existingUser: UserSignInViewModel.UserStateDataPair? = nil
-    @State
-    private var isPresentingExistingUser: Bool = false
+    private var isKid: Bool = false
     @State
     private var password: String = ""
     @State
@@ -47,8 +43,10 @@ struct UserSignInView: View {
     @StateObject
     private var viewModel: UserSignInViewModel
 
-    init(server: ServerState) {
+    /// - Parameter username: Fills in the username, e.g. to sign a stored user in again.
+    init(server: ServerState, username: String? = nil) {
         self._viewModel = StateObject(wrappedValue: UserSignInViewModel(server: server))
+        self._username = State(initialValue: username ?? "")
     }
 
     private func handleEvent(_ event: UserSignInViewModel._Event) {
@@ -69,19 +67,38 @@ struct UserSignInView: View {
             )
 
         case let .existingUser(existingUser):
-            self.existingUser = existingUser
-            self.isPresentingExistingUser = true
+            guard let authenticationAction else { return }
+
+            // Someone who just typed the password never wants to keep the old,
+            // possibly revoked token: always replace it. The user's own local
+            // PIN or device check still runs.
+            let userState = existingUser.state.state
+            let existingUserAccessPolicy = userState.accessPolicy
+
+            viewModel.saveExisting(
+                user: existingUser,
+                replaceForAccessToken: true,
+                authenticationAction: (
+                    authenticationAction,
+                    existingUserAccessPolicy,
+                    existingUserAccessPolicy.authenticateReason(
+                        user: userState
+                    )
+                ),
+                evaluatedPolicyMap: .init(action: processEvaluatedPolicy)
+            )
 
         case let .saved(user):
-            Task { @MainActor in
-                do {
-                    try await userSessionManager.signIn(userID: user.id)
-                    UIDevice.feedback(.success)
-                    router.dismiss()
-                } catch {
-                    await viewModel.error(error)
-                }
+            // Only ever sets the kid flag, never unsets it
+            if isKid {
+                user.isKid = true
             }
+
+            // Signing in never starts a session: the couch picker (or a signed-in
+            // couch) picks the user up from this notification.
+            Notifications[.didAddUser].post(user)
+            UIDevice.feedback(.success)
+            router.dismiss()
         }
     }
 
@@ -140,6 +157,11 @@ struct UserSignInView: View {
             .textContentType(.password)
             .textInputAutocapitalization(.never)
             .focused($focusedTextField, equals: .password)
+
+            Toggle(isOn: $isKid) {
+                Label(L10n.CouchPicker.thisIsAKid, systemImage: "figure.child")
+            }
+            .disabled(viewModel.state == .signingIn)
         } header: {
             Text(L10n.signInToServer(viewModel.server.name))
         } footer: {
@@ -343,51 +365,9 @@ struct UserSignInView: View {
             .interactiveDismissDisabled(viewModel.state == .signingIn)
             .onReceive(viewModel.events, perform: handleEvent)
             .onFirstAppear {
-                focusedTextField = .username
+                // A prefilled username (signing in again) only needs the password
+                focusedTextField = username.isEmpty ? .username : .password
                 viewModel.getPublicData()
-            }
-            .alert(
-                L10n.duplicateUser,
-                isPresented: $isPresentingExistingUser,
-                presenting: existingUser
-            ) { existingUser in
-
-                let userState = existingUser.state.state
-                let existingUserAccessPolicy = userState.accessPolicy
-
-                Button(L10n.signIn) {
-                    viewModel.saveExisting(
-                        user: existingUser,
-                        replaceForAccessToken: false,
-                        authenticationAction: (
-                            authenticationAction!,
-                            existingUserAccessPolicy,
-                            existingUserAccessPolicy.authenticateReason(
-                                user: userState
-                            )
-                        ),
-                        evaluatedPolicyMap: .init(action: processEvaluatedPolicy)
-                    )
-                }
-
-                Button(L10n.replace) {
-                    viewModel.saveExisting(
-                        user: existingUser,
-                        replaceForAccessToken: true,
-                        authenticationAction: (
-                            authenticationAction!,
-                            existingUserAccessPolicy,
-                            existingUserAccessPolicy.authenticateReason(
-                                user: userState
-                            )
-                        ),
-                        evaluatedPolicyMap: .init(action: processEvaluatedPolicy)
-                    )
-                }
-
-                Button(L10n.dismiss, role: .cancel) {}
-            } message: { existingUser in
-                Text(L10n.duplicateUserSaved(existingUser.state.state.username))
             }
             .errorMessage($viewModel.error)
     }

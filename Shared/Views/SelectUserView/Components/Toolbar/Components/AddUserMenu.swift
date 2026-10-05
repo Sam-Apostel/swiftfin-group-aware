@@ -35,7 +35,7 @@ extension SelectUserView {
                     }
                 }
             } label: {
-                Label(L10n.addUser, systemImage: "plus")
+                Label(L10n.CouchPicker.addPerson, systemImage: "plus")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .fontWeight(.bold)
                     .labelStyle(.iconOnly)

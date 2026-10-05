@@ -29,6 +29,11 @@ extension SelectUserView {
         let action: () -> Void
         let onToggleKid: () -> Void
         let onDelete: () -> Void
+        /// The user has no stored access token: tapping signs them in again
+        /// instead of putting them on the couch.
+        var needsSignIn: Bool = false
+        /// Opens sign-in with the user's name filled in.
+        var onSignInAgain: () -> Void = {}
 
         private var checkmarkSize: CGFloat {
             UIDevice.isTV ? 75 : 40
@@ -39,7 +44,11 @@ extension SelectUserView {
         }
 
         private var subtitle: String? {
-            switch (isKid, showServer) {
+            if needsSignIn {
+                return showServer ? "\(L10n.CouchPicker.signInAgain) · \(server.name)" : L10n.CouchPicker.signInAgain
+            }
+
+            return switch (isKid, showServer) {
             case (true, true):
                 "\(L10n.CouchPicker.kid) · \(server.name)"
             case (true, false):
@@ -52,7 +61,8 @@ extension SelectUserView {
         }
 
         var body: some View {
-            Button(action: action) {
+            // A selected user still toggles off, so they can be taken off the couch
+            Button(action: needsSignIn && !isSelected ? onSignInAgain : action) {
                 labelView
             }
             .contextMenu {
@@ -60,6 +70,13 @@ extension SelectUserView {
                     isKid ? L10n.CouchPicker.unmarkAsKid : L10n.CouchPicker.markAsKid,
                     systemImage: "figure.child",
                     action: onToggleKid
+                )
+
+                // For a sign-in that ran out or was revoked by a password change
+                Button(
+                    L10n.CouchPicker.signInAgain,
+                    systemImage: "person.badge.key",
+                    action: onSignInAgain
                 )
 
                 Button(
@@ -155,7 +172,7 @@ extension SelectUserView {
             } content: {
                 if let subtitle {
                     Marquee(subtitle)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(needsSignIn ? Color.orange : Color.secondary)
                 }
             }
             .font(.footnote)
