@@ -48,6 +48,9 @@ extension L10n {
 
         static let forcedSubtitlesOnly = "forced subtitles only"
 
+        /// The file's default subtitle track plays, but its language is unknown.
+        static let genericSubtitles = "subtitles"
+
         /// The user picked the subtitle track.
         static let chosenSubtitles = "chosen subtitles"
 
@@ -107,6 +110,9 @@ extension L10n {
         static func noSubtitlesReadableByAll(_ names: String) -> String {
             "no subtitles \(names) can all read"
         }
+
+        /// Why the file's default subtitle track plays.
+        static let fileDefaultSubtitles = "the file's default subtitles"
 
         // MARK: Summary
 

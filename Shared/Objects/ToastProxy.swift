@@ -40,23 +40,25 @@ class ToastProxy: ObservableObject {
             }
     }
 
-    func present(_ title: String, systemName: String? = nil) {
-        present(Text(title), systemName: systemName)
+    /// - Parameter duration: how long the toast stays, in seconds.
+    func present(_ title: String, systemName: String? = nil, duration: TimeInterval = 2) {
+        present(Text(title), systemName: systemName, duration: duration)
     }
 
-    func present(_ title: Text, systemName: String? = nil) {
+    /// - Parameter duration: how long the toast stays, in seconds.
+    func present(_ title: Text, systemName: String? = nil, duration: TimeInterval = 2) {
         self.title = title
         self.systemName = systemName
 
-        poke(equalsPrevious: title == self.title)
+        poke(equalsPrevious: title == self.title, duration: duration)
     }
 
-    private func poke(equalsPrevious: Bool) {
+    private func poke(equalsPrevious: Bool, duration: TimeInterval) {
         withAnimation(.easeInOut(duration: 0.2)) {
             isPresenting = true
         }
 
-        pokeTimer.poke()
+        pokeTimer.poke(interval: duration)
     }
 
     func dismiss() {

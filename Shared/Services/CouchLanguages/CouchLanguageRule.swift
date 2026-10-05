@@ -321,6 +321,9 @@ struct CouchLanguageDecision: Hashable, Sendable {
         case notNeeded
         /// Nobody needs subtitles, but the file has forced subtitles for the audio language.
         case forcedOnly
+        /// Nobody needs subtitles, but someone without known languages uses subtitle mode Default or Smart:
+        /// the file's default subtitle track plays, as it would in Jellyfin.
+        case fileDefault
         /// These people don't understand the audio.
         case neededBy([String])
         /// Only people who always want subtitles turned them on.
@@ -387,9 +390,16 @@ struct CouchLanguageDecision: Hashable, Sendable {
 ///
 /// **Subtitles** (skipped when the user picked a track) are decided against the chosen audio language:
 /// *needers* read subtitles, don't use mode `.none`, and either use `.always` or don't understand the audio.
-/// Without needers a forced track in the audio language (or an unknown language) plays when one exists,
-/// otherwise subtitles are off (`-1`). With needers, a full track in a language every needer reads
-/// plays; else the language read by the most needers; else subtitles are off.
+/// Without needers, the first step that matches wins:
+/// 1. A forced track in the audio language (or an unknown language), unless everyone uses mode `.none`.
+/// 2. The file's default subtitle track (default-flagged, not forced), when someone who reads subtitles and has
+///    no known languages uses mode `.default` or `.smart`, and the original audio language plays: the
+///    default track belongs to the original audio, not to a dub chosen for listeners. Modes `.onlyForced` and
+///    `.none` never ask for it.
+/// 3. Otherwise subtitles are off (`-1`).
+///
+/// With needers, a full track in a language every needer reads plays; else the language read by the most
+/// needers; else subtitles are off.
 ///
 /// **Ties** between languages go to the lowest summed preference rank, then to the first person in couch order
 /// (primary first) who ranks them differently. Among tracks in one language the original track wins its own
@@ -428,10 +438,15 @@ enum CouchLanguageRule {
             )
         }
 
+        // The original track, as `chooseAudio` defines it: the default-flagged track, else the first.
+        let originalAudio = audio.first(where: \.isDefault) ?? audio.first
+        let playsOriginalAudio = originalAudio == nil || audioChoice.language == originalAudio?.language
+
         let subtitleChoice = chooseSubtitles(
             profiles: profiles,
             subtitles: subtitles,
-            audioLanguage: audioChoice.language
+            audioLanguage: audioChoice.language,
+            playsOriginalAudio: playsOriginalAudio
         )
 
         return CouchLanguageDecision(
@@ -615,7 +630,8 @@ extension CouchLanguageRule {
     private static func chooseSubtitles(
         profiles: [CouchLanguageProfile],
         subtitles: [CouchStreamCandidate],
-        audioLanguage: String?
+        audioLanguage: String?,
+        playsOriginalAudio: Bool
     ) -> SubtitleChoice {
 
         let needers = profiles.filter { profile in
@@ -628,13 +644,25 @@ extension CouchLanguageRule {
             return !profile.isFlexible && !understands(profile, audioLanguage)
         }
 
-        // No needers: only forced subtitles for the audio language, as Jellyfin does.
+        // No needers: forced subtitles for the audio language, else the file's default track, as Jellyfin does.
         guard !needers.isEmpty else {
             let wantsForced = profiles.contains { $0.subtitleMode != .none }
             let forced = subtitles.filter { $0.isForced && ($0.language == nil || $0.language == audioLanguage) }
 
             if wantsForced, let track = bestCandidate(forced) {
                 return SubtitleChoice(index: track.index, language: track.language, reason: .forcedOnly)
+            }
+
+            // People with mode Default or Smart and no known languages get what Jellyfin plays for them alone.
+            let wantsFileDefault = profiles.contains { profile in
+                profile.readsSubtitles
+                    && profile.isFlexible
+                    && (profile.subtitleMode == .default || profile.subtitleMode == .smart)
+            }
+            let fileDefaults = subtitles.filter { $0.isDefault && !$0.isForced }
+
+            if wantsFileDefault, playsOriginalAudio, let track = bestCandidate(fileDefaults) {
+                return SubtitleChoice(index: track.index, language: track.language, reason: .fileDefault)
             }
 
             return SubtitleChoice(index: -1, language: nil, reason: .notNeeded)

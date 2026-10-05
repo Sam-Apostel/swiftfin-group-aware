@@ -285,7 +285,9 @@ final class MediaPlayerManager: ViewModel {
             return
         }
 
-        if let nextItem = queue?.nextItem, try authenticatedUser.data.configuration?.enableNextEpisodeAutoPlay == true {
+        // Solo: the user's Jellyfin setting. Group couch: this device's couch setting, else the first pick's,
+        // never the kid-safe primary's.
+        if let nextItem = queue?.nextItem, try CouchAutoPlay.isNextEpisodeEnabled(in: requireUserSession()) {
             await self.playNewItem(provider: nextItem)
         } else {
             await self.stop()

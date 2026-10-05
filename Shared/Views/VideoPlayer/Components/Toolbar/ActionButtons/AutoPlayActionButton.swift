@@ -6,6 +6,7 @@
 // Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
+import Defaults
 import FactoryKit
 import JellyfinAPI
 import SwiftUI
@@ -19,6 +20,10 @@ extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
         @ViewContextContains(.isInMenu)
         private var isInMenu
 
+        /// Group couch only: this device's autoplay setting, `nil` follows the first person picked.
+        @Default(.Couch.autoPlayNextEpisode)
+        private var couchAutoPlayNextEpisode
+
         @EnvironmentObject
         private var manager: MediaPlayerManager
 
@@ -31,8 +36,19 @@ extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
         @Toaster
         private var toaster
 
+        /// The group couch, `nil` when watching alone.
+        private var groupCouch: CouchGroup? {
+            guard let couch = manager.userSession?.couch, couch.isGroup else { return nil }
+
+            return couch
+        }
+
         private var isAutoPlayEnabled: Bool {
-            manager.userSession?.user.data.configuration?.enableNextEpisodeAutoPlay == true
+            if let groupCouch {
+                return couchAutoPlayNextEpisode ?? CouchAutoPlay.firstPickSetting(for: groupCouch)
+            }
+
+            return manager.userSession?.user.data.configuration?.enableNextEpisodeAutoPlay == true
         }
 
         private var systemImage: String {
@@ -54,9 +70,15 @@ extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
             Button {
                 let newValue = !isAutoPlayEnabled
 
-                userConfiguration.enableNextEpisodeAutoPlay = newValue
-                manager.userSession?.user.data.configuration = userConfiguration
-                viewModel.updateConfiguration(userConfiguration)
+                if groupCouch != nil {
+                    // A group couch keeps autoplay on this device: kid-safe browsing can make a kid
+                    // the session user, and nobody's server account should change.
+                    couchAutoPlayNextEpisode = newValue
+                } else {
+                    userConfiguration.enableNextEpisodeAutoPlay = newValue
+                    manager.userSession?.user.data.configuration = userConfiguration
+                    viewModel.updateConfiguration(userConfiguration)
+                }
 
                 if newValue {
                     toaster.present("Auto Play on", systemName: "play.circle.fill")

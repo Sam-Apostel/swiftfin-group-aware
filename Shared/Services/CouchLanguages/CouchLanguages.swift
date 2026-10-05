@@ -185,8 +185,20 @@ extension CouchLanguageDecision {
         switch subtitleReason {
         case .userChoice:
             return L10n.CouchLanguages.chosenSubtitles
+
         case .forcedOnly:
             return L10n.CouchLanguages.forcedSubtitlesOnly
+
+        case .fileDefault:
+            guard let subtitleStreamIndex, subtitleStreamIndex >= 0 else {
+                return L10n.CouchLanguages.noSubtitles
+            }
+            guard let subtitleLanguage else {
+                return L10n.CouchLanguages.genericSubtitles
+            }
+
+            return L10n.CouchLanguages.subtitles(CouchLanguages.displayName(forLanguage: subtitleLanguage))
+
         case .notNeeded, .neededBy, .alwaysOn, .partial, .noSharedLanguage:
             guard let subtitleStreamIndex, subtitleStreamIndex >= 0 else {
                 return L10n.CouchLanguages.noSubtitles
@@ -198,7 +210,8 @@ extension CouchLanguageDecision {
 
     /// Why, in a few words. In order of priority: listeners ("Tuur is on the couch"), unserved listeners
     /// ("no Dutch audio for Tuur"), everyone understands ("everyone understands Dutch"), subtitles needed
-    /// ("for Sam and Lisa"), always on ("Sam always wants subtitles"), partial or no shared language.
+    /// ("for Sam and Lisa"), always on ("Sam always wants subtitles"), partial or no shared language,
+    /// the file's default subtitles.
     var reasonSummary: String? {
         if case let .listeners(names) = audioReason, names.isNotEmpty {
             let joinedNames = Self.joined(names)
@@ -240,6 +253,9 @@ extension CouchLanguageDecision {
             return names.count == 1
                 ? L10n.CouchLanguages.noSubtitlesReadableBy(Self.joined(names))
                 : L10n.CouchLanguages.noSubtitlesReadableByAll(Self.joined(names))
+
+        case .fileDefault:
+            return L10n.CouchLanguages.fileDefaultSubtitles
 
         default:
             return nil
