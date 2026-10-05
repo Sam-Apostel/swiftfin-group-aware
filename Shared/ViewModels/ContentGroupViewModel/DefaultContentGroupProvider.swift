@@ -27,6 +27,11 @@ struct DefaultContentGroupProvider: ContentGroupProvider {
         return L10n.home
     }
 
+    /// A group's home has a "Picked for…" row that follows the watchlist live.
+    var picksCouch: CouchGroup? {
+        groupCouch
+    }
+
     /// The current couch, when more than one person is on it.
     private var groupCouch: CouchGroup? {
         guard let couch = userSession?.couch, couch.isGroup else { return nil }

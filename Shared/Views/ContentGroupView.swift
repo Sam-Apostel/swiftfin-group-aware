@@ -130,6 +130,10 @@ struct ContentGroupView<Provider: ContentGroupProvider>: View {
         }
         .onSceneWillEnterForeground {
             viewModel.refreshIfPendingChanges()
+            viewModel.refreshCouchPicksIfStale()
+        }
+        .task {
+            await viewModel.refreshCouchPicksWhileVisible()
         }
         .topBarTrailing {
             if #unavailable(iOS 26.0) {

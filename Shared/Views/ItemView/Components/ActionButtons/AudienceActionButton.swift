@@ -49,14 +49,24 @@ extension ItemActionButtons {
             }
         }
 
+        /// On tvOS this button may sit in the action bar's "…" menu, where its own alert never shows:
+        /// without a completion, a failed save is shown by the app-wide alert instead.
+        private var completion: ((Result<AudienceWatchlistActions.Outcome, Error>) -> Void)? {
+            #if os(tvOS)
+            return nil
+            #else
+            return { result in
+                if case let .failure(failure) = result {
+                    error = failure
+                }
+            }
+            #endif
+        }
+
         var body: some View {
             Button(title, systemImage: systemImage) {
                 router.route(
-                    to: .audiencePicker(item: provider.item) { result in
-                        if case let .failure(failure) = result {
-                            error = failure
-                        }
-                    }
+                    to: .audiencePicker(item: provider.item, completion: completion)
                 )
             }
             .isSelected(entry != nil)

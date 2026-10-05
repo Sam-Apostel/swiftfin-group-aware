@@ -136,6 +136,9 @@ enum AudienceWatchlistActions {
     }
 
     /// Runs a save or remove after the picker was dismissed and reports the outcome.
+    ///
+    /// Without a `completion`, a failure is shown by the app-wide alert (`audienceWatchlistSaveErrorAlert()`),
+    /// so a save started from a context menu doesn't fail silently.
     static func perform(
         _ outcome: Outcome,
         item: BaseItemDto,
@@ -156,7 +159,12 @@ enum AudienceWatchlistActions {
                     "Unable to update the audience watchlist",
                     metadata: ["error": .string(error.localizedDescription)]
                 )
-                completion?(.failure(error))
+
+                if let completion {
+                    completion(.failure(error))
+                } else {
+                    Notifications[.audienceWatchlistSaveDidFail].post(error.localizedDescription)
+                }
             }
         }
     }

@@ -136,6 +136,8 @@ struct MainTabView: View {
                     await tabCoordinator.route(to: route)
                 }
             }
+            // "Who's it for?" saves started from a poster context menu report their errors here
+            .audienceWatchlistSaveErrorAlert()
             #if os(tvOS)
             .background(alignment: .top) {
                 FocusedPosterCinematicBackgroundView()

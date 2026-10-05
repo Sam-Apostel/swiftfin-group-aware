@@ -14,8 +14,21 @@ protocol ContentGroupProvider: Displayable, Identifiable {
     var environment: Environment { get set }
     var id: String { get }
 
+    /// The couch whose "Picked for…" watchlist picks these groups show, or `nil`.
+    ///
+    /// When set, the groups refresh by themselves when the picks for exactly this couch change,
+    /// for example after someone tags a title on another device.
+    var picksCouch: CouchGroup? { get }
+
     @ContentGroupBuilder
     func makeGroups(environment: Environment) async throws -> [any ContentGroup]
+}
+
+extension ContentGroupProvider {
+
+    var picksCouch: CouchGroup? {
+        nil
+    }
 }
 
 extension ContentGroupProvider where Environment == Empty {
