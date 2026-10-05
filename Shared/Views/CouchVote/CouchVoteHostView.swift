@@ -455,11 +455,26 @@ extension CouchVoteHostView {
                 VStack(spacing: UIDevice.isTV ? 40 : 16) {
                     unreachableBanner
 
+                    openHint
+
                     optionsSection
 
                     footer
                 }
                 .transition(.opacity)
+            }
+        }
+
+        /// How to join from a phone (or, when no phone can join, how to vote here).
+        /// Above the options: on tvOS the scroll view only follows focus, so a hint below them stays off screen.
+        @ViewBuilder
+        private var openHint: some View {
+            if host.phase == .open {
+                Text(host.phoneMemberIDs.isEmpty ? L10n.CouchVote.hostVoteHint : L10n.CouchVote.joinHint)
+                    .font(UIDevice.isTV ? .callout : .footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .transition(.opacity)
             }
         }
 
@@ -720,12 +735,6 @@ extension CouchVoteHostView {
         @ViewBuilder
         private var openFooter: some View {
             VStack(spacing: UIDevice.isTV ? 30 : 16) {
-                // How to join from a phone, unless no phone can join this vote
-                Text(host.phoneMemberIDs.isEmpty ? L10n.CouchVote.hostVoteHint : L10n.CouchVote.joinHint)
-                    .font(UIDevice.isTV ? .callout : .footnote)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-
                 HStack(spacing: UIDevice.isTV ? 40 : 12) {
                     Button {
                         closeNow()

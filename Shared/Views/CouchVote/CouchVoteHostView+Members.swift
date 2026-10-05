@@ -165,7 +165,10 @@ extension CouchVoteHostView {
                 Text(memberStatus?.displayTitle ?? .emptyDash)
                     .font(UIDevice.isTV ? .caption : .caption2)
                     .foregroundStyle(memberStatus == .unreachable ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
-                    .lineLimit(1)
+                    // "Can vote on their phone" doesn't fit one line under an avatar
+                    .lineLimit(2, reservesSpace: true)
+                    .multilineTextAlignment(.center)
+                    .minimumScaleFactor(0.85)
                     .isVisible(memberStatus != nil)
                     .contentTransition(.opacity)
             }
