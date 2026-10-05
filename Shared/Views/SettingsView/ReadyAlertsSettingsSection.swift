@@ -17,7 +17,7 @@ import UserNotifications
 /// The "It's ready" sections of Couch settings. Place it inside a `Form`.
 ///
 /// - iOS and tvOS: the "Just arrived" row and the "It's ready" banner.
-/// - iOS only: local notifications and whom this iPhone notifies about.
+/// - iOS only: local notifications and whom this iPhone or iPad notifies about.
 struct ReadyAlertsSettingsSection: View {
 
     @Default(.ReadyAlerts.showJustArrivedRow)
@@ -79,7 +79,10 @@ struct ReadyAlertsSettingsSection: View {
     @ViewBuilder
     private var notificationsSection: some View {
         Section {
-            Toggle(L10n.ReadyAlerts.notifyThisIPhone, isOn: notificationsBinding)
+            Toggle(
+                UIDevice.isPad ? L10n.ReadyAlerts.notifyThisIPad : L10n.ReadyAlerts.notifyThisIPhone,
+                isOn: notificationsBinding
+            )
         } header: {
             Text(L10n.ReadyAlerts.notifications)
         } footer: {
@@ -218,10 +221,30 @@ struct ReadyAlertsSettingsSection: View {
 
             isPermissionDenied = false
 
-            if notifyUserIDs.isEmpty, let currentUserID = userSessionManager.currentSession?.user.id {
-                notifyUserIDs = [currentUserID]
+            if notifyUserIDs.isEmpty {
+                notifyUserIDs = defaultNotifyUserIDs()
             }
         }
+    }
+
+    /// Whom to notify about when notifications are first turned on: the grown-ups on the couch,
+    /// never a child (the primary may be the kid when kid-safe browsing is on).
+    ///
+    /// Falls back to the current user only when they are not a child (`isChildAudience`).
+    private func defaultNotifyUserIDs() -> [String] {
+        guard let currentSession = userSessionManager.currentSession else { return [] }
+
+        let grownUpIDs = currentSession.couch.grownUps.map(\.id)
+
+        if grownUpIDs.isNotEmpty {
+            return grownUpIDs
+        }
+
+        if currentSession.user.isChildAudience {
+            return []
+        }
+
+        return [currentSession.user.id]
     }
 
     @MainActor

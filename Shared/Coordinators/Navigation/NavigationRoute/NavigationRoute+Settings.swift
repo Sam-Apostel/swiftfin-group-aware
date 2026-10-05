@@ -65,7 +65,10 @@ extension NavigationRoute {
         NavigationRoute(
             id: "couchSettings"
         ) {
-            CouchSettingsView()
+            // The grown-up check asks for a PIN before kid protection is turned off
+            WithLocalUserAuthentication {
+                CouchSettingsView()
+            }
         }
     }
 
@@ -246,6 +249,18 @@ extension NavigationRoute {
         ) {
             WithLocalUserAuthentication {
                 LocalUserSecurityView()
+            }
+        }
+    }
+
+    /// The sign-in security of another stored user, e.g. "Set a PIN for Sam…" from the Grown-up lock
+    /// in Couch settings while the couch browses as Tuur. Edits `userSession.user`, not the current user.
+    static func localUserSecurity(userSession: UserSession) -> NavigationRoute {
+        NavigationRoute(
+            id: "localUserSecurity-\(userSession.user.id)"
+        ) {
+            WithLocalUserAuthentication {
+                LocalUserSecurityView(userSession: userSession)
             }
         }
     }

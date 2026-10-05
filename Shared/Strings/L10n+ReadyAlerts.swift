@@ -40,6 +40,7 @@ extension L10n {
 
         static let notifications = "Notifications"
         static let notifyThisIPhone = "Notify this iPhone"
+        static let notifyThisIPad = "Notify this iPad"
         static let notifyAbout = "Notify about"
         static let notificationsOff = "Notifications are off for Couchfin"
         static let openSettings = "Open Settings"

@@ -28,12 +28,38 @@ struct LocalUserSecurityView: View {
     private var signInPolicy: LocalUserAccessPolicy = .none
 
     @StateObject
-    private var viewModel = LocalUserSecurityViewModel()
+    private var viewModel: LocalUserSecurityViewModel
+
+    /// The user session whose sign-in security this screen edits, when it is not the current session
+    /// (e.g. "Set a PIN for Sam…" in Couch settings while the couch browses as Tuur).
+    private let userSessionOverride: UserSession?
+
+    /// - Parameter userSession: the session of the user to edit. `nil` edits the current session user.
+    init(userSession: UserSession? = nil) {
+        self.userSessionOverride = userSession
+        self._viewModel = StateObject(wrappedValue: Self.makeViewModel(userSession: userSession))
+    }
+
+    private static func makeViewModel(userSession: UserSession?) -> LocalUserSecurityViewModel {
+        let viewModel = LocalUserSecurityViewModel()
+
+        if let userSession {
+            viewModel.userSession = userSession
+        }
+
+        return viewModel
+    }
 
     @MainActor
     private func performSaveSecurityPolicy() async {
         guard let authenticationAction else {
             return
+        }
+
+        // A server connection change re-resolves the view model's session to the current one:
+        // keep editing the user this screen was opened for
+        if let userSessionOverride, viewModel.userSession?.user.id != userSessionOverride.user.id {
+            viewModel.userSession = userSessionOverride
         }
 
         do {
@@ -102,7 +128,7 @@ struct LocalUserSecurityView: View {
             }
         }
         .animation(.linear, value: signInPolicy)
-        .navigationTitle(L10n.security)
+        .navigationTitle(userSessionOverride?.user.username ?? L10n.security)
         .onFirstAppear {
             guard let user = viewModel.userSession?.user else { return }
 

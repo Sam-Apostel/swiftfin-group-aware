@@ -44,15 +44,15 @@ extension L10n {
         static let together = "Together"
 
         static let kidSafeBrowsingFooter =
-            "When a kid or someone with parental controls is on the couch, Swiftfin browses as the most restricted person, so their Jellyfin parental controls apply. Takes effect the next time you start a couch."
+            "With a kid on the couch, Couchfin browses as the most restricted person, so their Jellyfin parental controls apply. Turning this off asks a grown-up."
 
         static let hideWatchedByAnyMember = "Hide what anyone already watched"
         static let hideWatchedByAnyMemberFooter =
-            "Couch rows on Home skip anything that someone on the couch has already watched."
+            "Hides titles anyone on the couch has watched from New for All of You and What should we watch?"
 
         static let kids = "Kids"
         static let kidsFooter =
-            "Kids get kid-safe browsing and their own picks. Tip: also set a parental rating on their Jellyfin account."
+            "Kids get kid-friendly rows, suggestions and Seerr. Applies on every device in the household."
         static let noUsers = "No users on this server yet"
 
         static let kid = "Kid"
@@ -66,5 +66,59 @@ extension L10n {
         static func browsingAsKidSafe(_ name: String) -> String {
             "Browsing as \(name) (kid-safe)"
         }
+
+        // MARK: No age limit
+
+        /// Under a kid without a maximum parental rating on their Jellyfin account.
+        static func noAgeLimit(_ name: String) -> String {
+            "No age limit on \(name)'s Jellyfin account — grown-up titles can still show."
+        }
+
+        static let setAgeLimit = "Set age limit…"
+        static let setAgeLimitInDashboard = "Set it in the Jellyfin dashboard (needs an admin account)."
+        static let setAgeLimitElsewhere = "Set it on your iPhone or in the Jellyfin dashboard."
+
+        // MARK: Grown-up lock
+
+        static let grownUpLock = "Grown-up lock"
+
+        /// "Tuur can start this Apple TV as Sam — Sam has no PIN here."
+        ///
+        /// - Parameters:
+        ///   - kids: A localized list of the children's names.
+        ///   - device: "iPhone", "iPad" or "Apple TV".
+        ///   - grownUps: The names of the grown-ups without a PIN on this device.
+        static func grownUpLockWarning(kids: String, device: String, grownUps: [String]) -> String {
+            let names = ListFormatter.localizedString(byJoining: grownUps)
+
+            if grownUps.count == 1 {
+                return "\(kids) can start this \(device) as \(names) — \(names) has no PIN here."
+            }
+
+            return "\(kids) can start this \(device) as \(names) — they have no PIN here."
+        }
+
+        static func setPinFor(_ name: String) -> String {
+            "Set a PIN for \(name)…"
+        }
+
+        static func grownUpLockFooter(device: String) -> String {
+            "A PIN stops anyone from starting this \(device) as a grown-up, and lets a grown-up approve turning kid protection off. PINs are kept on this \(device) only."
+        }
+
+        // MARK: Grown-up check
+
+        /// Added to the "no PIN" confirmation when the Grown-up lock section is shown.
+        static let setPinUnderGrownUpLock = "Set a PIN under Grown-up lock."
+
+        // MARK: Apply
+
+        /// - Parameter name: The member the couch would browse as.
+        static func applyNow(_ name: String) -> String {
+            "Apply now — browse as \(name)"
+        }
+
+        static let stopPlaybackToApply = "Stop playback to apply."
+        static let takesEffectNextCouch = "Takes effect the next time you start a couch."
     }
 }
