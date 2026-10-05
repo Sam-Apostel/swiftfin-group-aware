@@ -173,6 +173,17 @@ jobs:
             exit $status
           fi
 
+          # The App Store rejects arm64e slices in embedded frameworks (MPVUI's tvOS Libmpv ships
+          # arm64 + arm64e). Strip them before export, which signs the app for the App Store.
+          for fw in "$archive"/Products/Applications/*.app/Frameworks/*.framework; do
+            [ -d "$fw" ] || continue
+            bin="$fw/$(basename "$fw" .framework)"
+            if lipo -archs "$bin" 2>/dev/null | tr ' ' '\n' | grep -qx arm64e; then
+              lipo -remove arm64e "$bin" -output "$bin"
+              echo "Stripped arm64e from $(basename "$fw")"
+            fi
+          done
+
           xcodebuild -exportArchive \
             -archivePath "$archive" \
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
