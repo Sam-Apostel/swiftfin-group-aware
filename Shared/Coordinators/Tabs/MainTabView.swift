@@ -138,6 +138,8 @@ struct MainTabView: View {
             }
             // "Who's it for?" saves started from a poster context menu report their errors here
             .audienceWatchlistSaveErrorAlert()
+            // "It's ready" banner (iOS) / alert (tvOS) on launch and couch start
+            .readyAlertsBanner()
             #if os(tvOS)
             .background(alignment: .top) {
                 FocusedPosterCinematicBackgroundView()

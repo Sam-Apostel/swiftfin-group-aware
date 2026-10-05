@@ -85,6 +85,10 @@ struct DefaultContentGroupProvider: ContentGroupProvider {
         )
         #endif
 
+        if Defaults[.ReadyAlerts.showJustArrivedRow], let couch = userSession?.couch {
+            PosterGroup(id: "ready-just-arrived", library: JustArrivedLibrary(couch: couch), posterDisplayType: .portrait)
+        }
+
         PosterGroup(
             library: NextUpLibrary()
         )
@@ -134,6 +138,10 @@ struct DefaultContentGroupProvider: ContentGroupProvider {
             library: CouchPickedLibrary(couch: couch),
             posterDisplayType: .portrait
         )
+
+        if Defaults[.ReadyAlerts.showJustArrivedRow] {
+            PosterGroup(id: "ready-just-arrived", library: JustArrivedLibrary(couch: couch), posterDisplayType: .portrait)
+        }
 
         #if !os(tvOS)
         PosterGroup(
