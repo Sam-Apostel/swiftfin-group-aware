@@ -254,15 +254,20 @@ extension CouchVoteHostView {
             isDismissing = true
 
             if isVoteActive {
-                Task {
+                // Leave right away: the cancel write finishes in the background. Waiting for it
+                // froze the screen on a slow account, and a Menu press meanwhile (no exit handler
+                // once the phase is `.cancelled`) closed the screen, so the late dismiss closed the decider too.
+                let host = self.host
+
+                Task { @MainActor in
                     await host.cancel()
                     host.stop()
-                    router.dismiss()
                 }
             } else {
                 host.stop()
-                router.dismiss()
             }
+
+            router.dismiss()
         }
 
         private func dismissAfterReveal() {

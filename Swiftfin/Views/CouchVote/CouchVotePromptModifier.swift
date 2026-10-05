@@ -55,12 +55,16 @@ private struct CouchVotePromptModifier: ViewModifier {
     /// However the sheet went away (swipe, Done, auto-dismiss after the result),
     /// the same poll never prompts again.
     private func onDismiss() {
-        if let lastPresentedPollID {
-            handledPollIDs.insert(lastPresentedPollID)
-        }
+        guard let pollID = lastPresentedPollID else { return }
 
+        handledPollIDs.insert(pollID)
         lastPresentedPollID = nil
-        participant.dismiss()
+
+        // Only hide the poll this sheet was for: a newer vote that arrived while the sheet
+        // was closing ("Vote cancelled", then the TV started again) must still prompt.
+        if participant.poll?.id == pollID {
+            participant.dismiss()
+        }
     }
 
     func body(content: Content) -> some View {
