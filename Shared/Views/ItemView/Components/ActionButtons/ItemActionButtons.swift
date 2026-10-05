@@ -103,6 +103,8 @@ struct ItemActionButtons: View {
             provider.item.canEditSubtitles
         case .delete:
             provider.item.canDelete == true
+        case .audience:
+            AudienceWatchlistActions.supports(provider.item)
         #if os(iOS)
         case .editMetadata:
             provider.item.canEditMetadata
@@ -160,6 +162,8 @@ struct ItemActionButtons: View {
                 Subtitles()
             case .delete:
                 Delete()
+            case .audience:
+                Audience()
             #if os(iOS)
             case .editMetadata:
                 Edit()

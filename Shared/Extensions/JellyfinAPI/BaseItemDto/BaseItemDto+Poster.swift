@@ -261,6 +261,12 @@ private struct BaseItemDtoPosterContextMenu: View {
                 }
             }
         }
+
+        if AudienceWatchlistActions.supports(item) {
+            Button(L10n.Audience.whosItFor, systemImage: "person.2.badge.plus") {
+                router.route(to: .audiencePicker(item: item))
+            }
+        }
     }
 
     @MainActor

@@ -18,6 +18,7 @@ enum ItemActionButton: String, CaseIterable, Displayable, Equatable, Identifiabl
     case subtitles
     case refresh
     case delete
+    case audience
     #if os(iOS)
     case editMetadata
     #endif
@@ -40,6 +41,8 @@ enum ItemActionButton: String, CaseIterable, Displayable, Equatable, Identifiabl
             L10n.subtitles
         case .delete:
             L10n.delete
+        case .audience:
+            L10n.Audience.whosItFor
         #if os(iOS)
         case .editMetadata:
             L10n.edit
@@ -69,6 +72,8 @@ enum ItemActionButton: String, CaseIterable, Displayable, Equatable, Identifiabl
             "captions.bubble"
         case .delete:
             "trash"
+        case .audience:
+            "bookmark.fill"
         #if os(iOS)
         case .editMetadata:
             "pencil"
@@ -82,6 +87,8 @@ enum ItemActionButton: String, CaseIterable, Displayable, Equatable, Identifiabl
             "heart"
         case .record:
             "record.circle"
+        case .audience:
+            "bookmark"
         default:
             systemImage
         }
@@ -95,6 +102,8 @@ enum ItemActionButton: String, CaseIterable, Displayable, Equatable, Identifiabl
             .pink
         case .record:
             .red
+        case .audience:
+            .blue
         default:
             nil
         }
@@ -103,6 +112,7 @@ enum ItemActionButton: String, CaseIterable, Displayable, Equatable, Identifiabl
     static let defaultBarActionButtons: [ItemActionButton] = [
         .played,
         .favorited,
+        .audience,
         .record,
         .trailers,
         .playback

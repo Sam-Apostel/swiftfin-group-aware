@@ -49,6 +49,8 @@ extension ItemView {
                     menuButtons: menu,
                     focusedButton: $focusedButton
                 )
+
+                ItemAudienceLabel(item: provider.item)
             }
             .focusSection()
             .defaultFocus(
