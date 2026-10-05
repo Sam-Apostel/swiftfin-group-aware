@@ -45,7 +45,7 @@ enum CouchAutoPlay {
 
     /// The first person picked for the couch, from the stored pick order.
     ///
-    /// Falls back to the first member who isn't a kid, then to the primary user.
+    /// Falls back to the first member who isn't a child (`UserState.isChildAudience`), then to the primary user.
     static func firstPick(of couch: CouchGroup) -> UserState? {
         let memberIDs = couch.memberIDs
 
@@ -55,6 +55,6 @@ enum CouchAutoPlay {
             return member
         }
 
-        return couch.members.first { !$0.isKid } ?? couch.primary
+        return couch.members.first { !$0.isChildAudience } ?? couch.primary
     }
 }
