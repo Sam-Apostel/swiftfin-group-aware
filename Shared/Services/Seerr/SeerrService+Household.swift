@@ -45,6 +45,8 @@ extension SeerrService {
 
     #if os(tvOS)
     private static var householdAdoptionTask: Task<URL?, Error>?
+    /// The household URL last read on this device, by Jellyfin server id.
+    private static var lastHouseholdURLs: [String: URL] = [:]
     #endif
 
     private static var householdLogger: Logger {
@@ -57,10 +59,26 @@ extension SeerrService {
     ///
     /// Call it after an explicit, successful connect: it also marks this device's URL as chosen here,
     /// so an Apple TV never replaces it with the household's (`adoptHouseholdServerIfNeeded()`).
+    /// tvOS exception: connecting to the household URL itself (last read by `householdServerURL()`)
+    /// publishes nothing and keeps following the household.
     func publishHouseholdServer() {
         guard let session = Container.shared.currentUserSession() else { return }
 
-        Defaults[Self.householdAdoptedKey(serverID: session.server.id)] = false
+        let adoptedKey = Self.householdAdoptedKey(serverID: session.server.id)
+
+        #if os(tvOS)
+        // Connected to the household's own URL ("Use <host> from your household"): keep following
+        // the household, and don't bump its record from the Apple TV
+        if let serverURL,
+           let householdURL = Self.lastHouseholdURLs[session.server.id],
+           serverURL.absoluteString == householdURL.absoluteString
+        {
+            Defaults[adoptedKey] = true
+            return
+        }
+        #endif
+
+        Defaults[adoptedKey] = false
 
         publishHouseholdServer(session: session)
     }
@@ -114,6 +132,10 @@ extension SeerrService {
             )
             return nil
         }
+
+        #if os(tvOS)
+        Self.lastHouseholdURLs[session.server.id] = url
+        #endif
 
         return url
     }
