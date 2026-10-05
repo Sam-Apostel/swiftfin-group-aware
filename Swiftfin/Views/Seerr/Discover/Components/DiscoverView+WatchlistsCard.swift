@@ -63,16 +63,10 @@ extension DiscoverView {
         @ViewBuilder
         private var avatars: some View {
             if let userSession, couchMembers.count > 1 {
-                HStack(spacing: -10) {
-                    ForEach(couchMembers.prefix(4), id: \.id) { member in
-                        UserProfileImage(
-                            userID: member.id,
-                            source: member.profileImageSource(client: userSession.client),
-                            pipeline: .Swiftfin.local
-                        )
-                        .frame(width: 28, height: 28)
-                    }
-                }
+                CouchAvatarStack(
+                    users: couchMembers,
+                    server: userSession.server
+                )
             }
         }
 
