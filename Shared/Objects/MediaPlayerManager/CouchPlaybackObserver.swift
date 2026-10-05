@@ -131,6 +131,10 @@ final class CouchPlaybackObserver {
                 switch action {
                 case .stop, .error:
                     self.stopObserving(manager: manager)
+                case .playNewItem:
+                    // Next episode, autoplay or a queue pick: close out the current item now,
+                    // before the old player is stopped and the new item loads, which can move `seconds`.
+                    self.stopCurrentItem(seconds: manager.seconds)
                 default: ()
                 }
             }
@@ -151,8 +155,7 @@ final class CouchPlaybackObserver {
 
         // Track, bitrate and media source changes rebuild the playback item with the same id: ignore those.
         if let currentItem, currentItem.id != newItemID {
-            emit(.stop, item: currentItem, seconds: manager.seconds)
-            self.currentItem = nil
+            stopCurrentItem(seconds: manager.seconds)
         }
 
         if let newItem, newItemID != nil, currentItem == nil {
@@ -161,12 +164,17 @@ final class CouchPlaybackObserver {
         }
     }
 
-    private func stopObserving(manager: MediaPlayerManager) {
-        if let currentItem {
-            emit(.stop, item: currentItem, seconds: manager.seconds)
-        }
+    /// Emits a stop for the current item, if any, and forgets it.
+    private func stopCurrentItem(seconds: Duration) {
+        guard let currentItem else { return }
 
-        currentItem = nil
+        self.currentItem = nil
+        emit(.stop, item: currentItem, seconds: seconds)
+    }
+
+    private func stopObserving(manager: MediaPlayerManager) {
+        stopCurrentItem(seconds: manager.seconds)
+
         cancellables = []
         service = nil
         self.manager = nil
