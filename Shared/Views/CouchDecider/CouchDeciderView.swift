@@ -70,6 +70,12 @@ struct CouchDeciderView: View {
     @State
     private var isInfoVisible = true
 
+    /// Whether the filter row offers "Undo" (for a few seconds after "Not tonight").
+    @State
+    private var isUndoOffered = false
+    @State
+    private var undoTask: Task<Void, Never>?
+
     @State
     private var flipAngle: Double = 0
     @State
@@ -114,6 +120,31 @@ struct CouchDeciderView: View {
         viewModel.background.is(.resolving)
     }
 
+    private var headerTitle: String {
+        if viewModel.couch.isGroup {
+            return L10n.CouchDecider.tonightFor(viewModel.couch.displayNames)
+        }
+
+        return L10n.CouchDecider.tonightForYou
+    }
+
+    /// "Undo" right after "Not tonight", then "Hidden: N" while titles are hidden.
+    private var hiddenChip: HiddenChip? {
+        if isUndoOffered, viewModel.canUndoNotTonight {
+            return .undo
+        }
+
+        if viewModel.excludedCount > 0 {
+            return .hidden(count: viewModel.excludedCount)
+        }
+
+        return nil
+    }
+
+    private var isHeaderVoteVisible: Bool {
+        viewModel.state == .content && viewModel.current != nil && Self.isVoteAvailable(viewModel)
+    }
+
     // MARK: - Body
 
     var body: some View {
@@ -141,9 +172,13 @@ struct CouchDeciderView: View {
         }
         .onDisappear {
             skipToLanding()
+            hideUndo()
         }
         .onChange(of: viewModel.cardGeneration) { _, _ in
             cardDidChange()
+        }
+        .onChange(of: viewModel.notTonightGeneration) { _, _ in
+            offerUndo()
         }
         .onChange(of: viewModel.state) { _, newState in
             focusWatchIfNeeded(for: newState)
@@ -200,7 +235,7 @@ struct CouchDeciderView: View {
     private var header: some View {
         HStack(alignment: .top, spacing: 16) {
             VStack(alignment: .leading, spacing: UIDevice.isTV ? 12 : 6) {
-                Text(L10n.CouchDecider.tonightFor(viewModel.couch.displayNames))
+                Text(headerTitle)
                     .font(UIDevice.isTV ? .title3 : .title2)
                     .fontWeight(.bold)
                     .lineLimit(2)
@@ -212,6 +247,10 @@ struct CouchDeciderView: View {
             Spacer(minLength: 0)
 
             #if os(iOS)
+            if isHeaderVoteVisible {
+                voteCapsule
+            }
+
             Button {
                 router.dismiss()
             } label: {
@@ -231,6 +270,27 @@ struct CouchDeciderView: View {
         .edgePadding(.horizontal)
     }
 
+    #if os(iOS)
+    /// "Let everyone vote" as a labelled capsule next to Close.
+    private var voteCapsule: some View {
+        Button(action: startVote) {
+            Label(L10n.CouchDecider.vote, systemImage: "hand.raised")
+                .labelStyle(.titleAndIcon)
+                .font(.body)
+                .fontWeight(.semibold)
+                .lineLimit(1)
+                .padding(.horizontal, 16)
+                .frame(height: 44)
+        }
+        .foregroundStyle(.primary, .secondary)
+        .buttonStyle(.borderless)
+        .buttonBorderShape(.capsule)
+        .backport
+        .glassEffect(.regular.interactive(), in: .capsule)
+        .accessibilityHint(L10n.CouchVote.letEveryoneVote)
+    }
+    #endif
+
     @ViewBuilder
     private var kidSafetyBadge: some View {
         switch viewModel.pool.kidSafety {
@@ -239,24 +299,37 @@ struct CouchDeciderView: View {
 
         case let .verified(names):
             kidSafetyLabel(
-                L10n.CouchDecider.kidSafeFor(ListFormatter.localizedString(byJoining: names)),
+                L10n.CouchDecider.kidSafeFor(Self.joined(names)),
+                systemImage: "checkmark.shield.fill",
                 color: .green
+            )
+
+        case let .localOnly(names):
+            kidSafetyLabel(
+                L10n.CouchDecider.kidSafeLocalOnly(Self.joined(names)),
+                systemImage: "exclamationmark.shield.fill",
+                color: .orange
             )
 
         case let .limitedToPicks(names):
             kidSafetyLabel(
-                L10n.CouchDecider.onlyPicksFor(ListFormatter.localizedString(byJoining: names)),
+                L10n.CouchDecider.onlyPicksFor(Self.joined(names)),
+                systemImage: "exclamationmark.shield.fill",
                 color: .orange
             )
         }
     }
 
-    private func kidSafetyLabel(_ title: String, color: Color) -> some View {
+    private static func joined(_ names: [String]) -> String {
+        ListFormatter.localizedString(byJoining: names)
+    }
+
+    private func kidSafetyLabel(_ title: String, systemImage: String, color: Color) -> some View {
         Label {
             Text(title)
                 .foregroundStyle(.primary)
         } icon: {
-            Image(systemName: "checkmark.shield.fill")
+            Image(systemName: systemImage)
                 .foregroundStyle(color)
         }
         .font(UIDevice.isTV ? .caption : .footnote)
@@ -313,12 +386,52 @@ struct CouchDeciderView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
+    /// Nothing to suggest: Retry when a restricted member's account couldn't be checked, otherwise Browse.
+    @ViewBuilder
     private var emptyPoolView: some View {
-        ContentUnavailableView {
-            Label(L10n.CouchDecider.nothingToSuggest, systemImage: "dice")
-        } description: {
-            Text(LocalizedStringKey(L10n.CouchDecider.nothingToSuggestHint))
+        if case let .limitedToPicks(names) = viewModel.pool.kidSafety {
+            ContentUnavailableView {
+                Label(
+                    L10n.CouchDecider.couldNotCheckAccount(Self.joined(names)),
+                    systemImage: "person.crop.circle.badge.exclamationmark"
+                )
+            } description: {
+                Text(L10n.CouchDecider.couldNotCheckAccountHint)
+            } actions: {
+                Button(action: retry) {
+                    Text(L10n.retry)
+                }
+                .backport
+                .buttonStyle(.glassProminent.shadow(false))
+                .tint(accentColor)
+            }
+            .focusSection()
+        } else {
+            ContentUnavailableView {
+                Label(L10n.CouchDecider.nothingToSuggest, systemImage: "dice")
+            } description: {
+                Text(LocalizedStringKey(emptyPoolHint))
+            } actions: {
+                Button {
+                    router.dismiss()
+                } label: {
+                    Text(L10n.CouchDecider.browse)
+                }
+                .backport
+                .buttonStyle(.glassProminent.shadow(false))
+                .tint(accentColor)
+            }
+            .focusSection()
         }
+    }
+
+    /// Says so when the rating ceiling for kids without a parental rating emptied the pool.
+    private var emptyPoolHint: String {
+        if case let .localOnly(names) = viewModel.pool.kidSafety, viewModel.pool.removedByKidCeiling > 0 {
+            return L10n.CouchDecider.nothingRatedFor(Self.joined(names))
+        }
+
+        return L10n.CouchDecider.nothingToSuggestHint
     }
 
     @ViewBuilder
@@ -326,10 +439,12 @@ struct CouchDeciderView: View {
         VStack(spacing: UIDevice.isTV ? 30 : 12) {
             CouchDeciderView.FilterBar(
                 filters: viewModel.filters,
-                genreChips: viewModel.genreChips
-            ) { newFilters in
-                setFilters(newFilters)
-            }
+                genreChips: viewModel.genreChips,
+                hiddenChip: hiddenChip,
+                onUndo: undoNotTonight,
+                onRestoreHidden: resetExclusions,
+                onChange: setFilters
+            )
 
             if viewModel.current == nil {
                 noMatchView
@@ -407,7 +522,8 @@ struct CouchDeciderView: View {
         if let displayedCandidate {
             CouchDeciderView.CardInfo(
                 candidate: displayedCandidate,
-                item: displayedItem
+                item: displayedItem,
+                isGroup: viewModel.couch.isGroup
             )
             .id(displayedCandidate.id)
             .transition(.opacity)
@@ -423,8 +539,17 @@ struct CouchDeciderView: View {
             onShuffle: shuffle,
             onWatch: watch,
             onDetails: details,
-            onVote: Self.isVoteAvailable(viewModel) ? startVote : nil
+            onVote: isTVVoteAvailable ? startVote : nil
         )
+    }
+
+    /// The iPhone shows its vote button in the header (`voteCapsule`).
+    private var isTVVoteAvailable: Bool {
+        #if os(tvOS)
+        return Self.isVoteAvailable(viewModel)
+        #else
+        return false
+        #endif
     }
 
     #if os(tvOS)
@@ -610,8 +735,47 @@ struct CouchDeciderView: View {
 
     private func resetExclusions() {
         skipToLanding()
+        hideUndo()
         pendingAnimation = .reel(duration: 0.6)
         viewModel.resetExclusions()
+    }
+
+    /// Brings back the last "Not tonight" title as the current card.
+    private func undoNotTonight() {
+        guard viewModel.canUndoNotTonight else { return }
+
+        skipToLanding()
+        hideUndo()
+        pendingAnimation = .reel(duration: 0.6)
+        viewModel.undoNotTonight()
+    }
+
+    private func retry() {
+        skipToLanding()
+        pendingAnimation = .reel(duration: 1.6)
+        viewModel.load()
+    }
+
+    /// Offers "Undo" in the filter row for about 5 seconds.
+    private func offerUndo() {
+        undoTask?.cancel()
+        isUndoOffered = true
+
+        undoTask = Task { @MainActor in
+            do {
+                try await Task.sleep(for: .seconds(5))
+            } catch {
+                return
+            }
+
+            isUndoOffered = false
+        }
+    }
+
+    private func hideUndo() {
+        undoTask?.cancel()
+        undoTask = nil
+        isUndoOffered = false
     }
 
     /// The player covers the decider; closing it returns here on the same card.

@@ -38,6 +38,9 @@ struct CouchDeciderCandidate: Hashable, Identifiable, Sendable {
         /// "New for all of you".
         case newForEveryone
 
+        /// A random title from the whole library, so older favourites come up too.
+        case library
+
         /// How strongly this source pulls a candidate to the front of the deck.
         var weight: Double {
             switch self {
@@ -47,6 +50,8 @@ struct CouchDeciderCandidate: Hashable, Identifiable, Sendable {
                 2
             case .newForEveryone:
                 1
+            case .library:
+                0.75
             }
         }
     }
@@ -70,8 +75,11 @@ struct CouchDeciderCandidate: Hashable, Identifiable, Sendable {
 
     var sources: Set<Source>
 
-    /// The sum of the weights of the candidate's sources.
+    /// Scales `weight`, e.g. `0.2` for a pick everyone on the couch already watched.
+    var weightScale: Double = 1
+
+    /// The sum of the weights of the candidate's sources, scaled by `weightScale`.
     var weight: Double {
-        sources.reduce(0) { $0 + $1.weight }
+        sources.reduce(0) { $0 + $1.weight } * weightScale
     }
 }

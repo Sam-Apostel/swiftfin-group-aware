@@ -168,6 +168,23 @@ struct CouchDeciderDeck: Sendable {
         current = order[index]
     }
 
+    /// Shows this candidate (e.g. the title an Undo just brought back), keeping the lap's order.
+    ///
+    /// - Returns: `false`, without changing anything, when the candidate isn't in the deck
+    ///   or doesn't match the filters and exclusions.
+    @discardableResult
+    mutating func show(candidateID: String) -> Bool {
+        guard let index = order.firstIndex(where: { $0.id == candidateID }),
+              matches(order[index])
+        else { return false }
+
+        didWrap = false
+        position = index
+        current = order[index]
+
+        return true
+    }
+
     /// The current card followed by the next `count - 1` matching cards of this lap.
     ///
     /// Doesn't wrap into a new lap, so it can return fewer than `count` cards.

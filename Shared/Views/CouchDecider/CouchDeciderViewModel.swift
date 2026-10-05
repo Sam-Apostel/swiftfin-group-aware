@@ -24,6 +24,7 @@ final class CouchDeciderViewModel: ViewModel {
         case load
         case shuffle
         case notTonight
+        case undoNotTonight
         case setFilters(CouchDeciderFilters)
         case resetExclusions
         case watch
@@ -32,7 +33,7 @@ final class CouchDeciderViewModel: ViewModel {
             switch self {
             case .load:
                 .to(.loading, then: .content)
-            case .shuffle, .notTonight, .setFilters, .resetExclusions:
+            case .shuffle, .notTonight, .undoNotTonight, .setFilters, .resetExclusions:
                 .none
             case .watch:
                 .background(.resolving)
@@ -75,6 +76,12 @@ final class CouchDeciderViewModel: ViewModel {
     /// Bumped on every card change; the view keys its flip/reel animations on it.
     @Published
     private(set) var cardGeneration: Int = 0
+    /// Bumped on every "Not tonight"; the view offers Undo for a few seconds after it.
+    @Published
+    private(set) var notTonightGeneration: Int = 0
+
+    /// The titles hidden with "Not tonight" on this screen, the most recent last (for Undo).
+    private var notTonightHistory: [String] = []
 
     private let exclusions: CouchDeciderExclusions
     private var deck = CouchDeciderDeck(candidates: [], seed: 0)
@@ -89,6 +96,13 @@ final class CouchDeciderViewModel: ViewModel {
         self.exclusions = Container.shared.couchDeciderExclusions()
 
         super.init()
+    }
+
+    /// Whether Undo can bring back a title hidden with "Not tonight" on this screen.
+    var canUndoNotTonight: Bool {
+        let excluded = excludedIDs
+
+        return notTonightHistory.contains { excluded.contains($0) }
     }
 
     // MARK: - Lookup
@@ -137,6 +151,9 @@ final class CouchDeciderViewModel: ViewModel {
         guard let currentID = deck.current?.id else { return }
 
         exclusions.exclude(itemID: currentID, couchID: couch.id)
+        notTonightHistory.removeAll { $0 == currentID }
+        notTonightHistory.append(currentID)
+        notTonightGeneration &+= 1
 
         // With other matches left, advance first so the next card follows the deck order
         // (and a new lap reshuffles), then drop the excluded one.
@@ -150,6 +167,28 @@ final class CouchDeciderViewModel: ViewModel {
         deck.apply(filters: filters, excluded: excludedIDs)
 
         publishDeck(didWrap: wrapped && deck.current != nil, forceNewCard: true)
+    }
+
+    // MARK: - Undo Not Tonight
+
+    /// Brings back the last title hidden with "Not tonight" on this screen and shows it.
+    ///
+    /// When the filters no longer match it, it is still brought back, and the card stays.
+    @Function(\Action.Cases.undoNotTonight)
+    private func _undoNotTonight() {
+        let excluded = excludedIDs
+
+        while let lastID = notTonightHistory.popLast() {
+            // Skip titles that were already brought back (e.g. "Bring back" from another screen)
+            guard excluded.contains(lastID) else { continue }
+
+            exclusions.include(itemID: lastID, couchID: couch.id)
+            deck.apply(filters: filters, excluded: excludedIDs)
+            deck.show(candidateID: lastID)
+
+            publishDeck(didWrap: false, forceNewCard: true)
+            return
+        }
     }
 
     // MARK: - Filters
@@ -167,6 +206,7 @@ final class CouchDeciderViewModel: ViewModel {
     @Function(\Action.Cases.resetExclusions)
     private func _resetExclusions() {
         exclusions.reset(couchID: couch.id)
+        notTonightHistory.removeAll()
         deck.apply(filters: filters, excluded: excludedIDs)
 
         publishDeck(didWrap: false, forceNewCard: false)

@@ -40,7 +40,9 @@ extension CouchDeciderView {
         let onShuffle: () -> Void
         let onWatch: () -> Void
         let onDetails: () -> Void
-        /// "Let everyone vote" (#33). `nil` hides the button (solo couch, fewer than 3 matches).
+        /// "Let everyone vote" (#33), on its own row on tvOS. `nil` hides the button (solo couch,
+        /// fewer than 3 matches). The iPhone shows a labelled "Vote" capsule in the header instead,
+        /// so the bar ignores it there.
         var onVote: (() -> Void)?
 
         var body: some View {
@@ -86,12 +88,6 @@ extension CouchDeciderView {
                     action: .details,
                     perform: onDetails
                 )
-
-                #if os(iOS)
-                if let onVote {
-                    voteButton(onVote)
-                }
-                #endif
             }
         }
 

@@ -35,6 +35,8 @@ extension CouchDeciderView {
 
         let candidate: CouchDeciderCandidate
         let item: BaseItemDto?
+        /// `false` on a solo couch: the why-tags read "Next up" and "New for you".
+        var isGroup: Bool = true
 
         private var alignment: HorizontalAlignment {
             UIDevice.isTV ? .leading : .center
@@ -103,7 +105,7 @@ extension CouchDeciderView {
                         .lineLimit(3)
                 }
 
-                WhyTags(sources: candidate.sources)
+                WhyTags(sources: candidate.sources, isGroup: isGroup)
             }
             .multilineTextAlignment(textAlignment)
             .frame(maxWidth: .infinity, alignment: Alignment(horizontal: alignment, vertical: .center))
@@ -142,25 +144,47 @@ extension CouchDeciderView {
 
     // MARK: - Why Tags
 
-    /// Why this card is in the deck: "Picked for you", "Next up together", "New for all of you".
+    /// Why this card is in the deck: "Picked for this couch", "Next up together", "New for all of you",
+    /// "From your library". On a solo couch: "Picked for you", "Next up", "New for you".
+    ///
+    /// The tags wrap into a column when they don't fit on one line (large text sizes).
     struct WhyTags: View {
 
         @Default(.accentColor)
         private var accentColor
 
         let sources: Set<CouchDeciderCandidate.Source>
+        var isGroup: Bool = true
 
         private var orderedSources: [CouchDeciderCandidate.Source] {
             CouchDeciderCandidate.Source.allCases.filter { sources.contains($0) }
         }
 
+        private var spacing: CGFloat {
+            UIDevice.isTV ? 16 : 6
+        }
+
+        private var columnAlignment: HorizontalAlignment {
+            UIDevice.isTV ? .leading : .center
+        }
+
         var body: some View {
             if orderedSources.isNotEmpty {
-                HStack(spacing: UIDevice.isTV ? 16 : 6) {
-                    ForEach(orderedSources, id: \.self) { source in
-                        tag(for: source)
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: spacing) {
+                        tags
+                    }
+
+                    VStack(alignment: columnAlignment, spacing: spacing) {
+                        tags
                     }
                 }
+            }
+        }
+
+        private var tags: some View {
+            ForEach(orderedSources, id: \.self) { source in
+                tag(for: source)
             }
         }
 
@@ -179,11 +203,13 @@ extension CouchDeciderView {
         private func title(for source: CouchDeciderCandidate.Source) -> String {
             switch source {
             case .picked:
-                L10n.CouchDecider.pickedForYou
+                isGroup ? L10n.CouchDecider.pickedForThisCouch : L10n.CouchDecider.pickedForYou
             case .nextUp:
-                L10n.CouchDecider.nextUpTogether
+                isGroup ? L10n.CouchDecider.nextUpTogether : L10n.CouchDecider.nextUpSolo
             case .newForEveryone:
-                L10n.CouchDecider.newForAllOfYou
+                isGroup ? L10n.CouchDecider.newForAllOfYou : L10n.CouchDecider.newForYou
+            case .library:
+                L10n.CouchDecider.fromYourLibrary
             }
         }
 
@@ -195,6 +221,8 @@ extension CouchDeciderView {
                 "forward.end.fill"
             case .newForEveryone:
                 "sparkles"
+            case .library:
+                "books.vertical"
             }
         }
     }

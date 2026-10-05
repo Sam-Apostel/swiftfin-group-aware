@@ -44,6 +44,14 @@ final class CouchDeciderExclusions: ObservableObject {
         excludedByCouchID[couchID, default: []].insert(itemID)
     }
 
+    /// Brings back one title excluded for this couch (Undo).
+    func include(itemID: String, couchID: String) {
+        guard var excluded = excludedByCouchID[couchID], excluded.contains(itemID) else { return }
+
+        excluded.remove(itemID)
+        excludedByCouchID[couchID] = excluded.isEmpty ? nil : excluded
+    }
+
     /// Brings back every title excluded for this couch.
     func reset(couchID: String) {
         guard excludedByCouchID[couchID] != nil else { return }

@@ -11,7 +11,18 @@ import SwiftUI
 
 extension CouchDeciderView {
 
-    /// One horizontal row of capsule chips: length (single), kind (single), genres (multi), Clear.
+    /// The chip at the end of the filter row, for the titles hidden with "Not tonight".
+    enum HiddenChip: Equatable {
+
+        /// "Undo": brings back the last title, for a few seconds after "Not tonight".
+        case undo
+
+        /// "Hidden: 3": brings all of them back.
+        case hidden(count: Int)
+    }
+
+    /// One horizontal row of capsule chips: length (single), kind (single), genres (multi), Clear,
+    /// and the Undo / "Hidden: N" chip.
     ///
     /// A `.focusSection()` on tvOS, so swiping up from the action bar lands here.
     struct FilterBar: View {
@@ -21,6 +32,9 @@ extension CouchDeciderView {
 
         let filters: CouchDeciderFilters
         let genreChips: [String]
+        var hiddenChip: HiddenChip?
+        var onUndo: () -> Void = {}
+        var onRestoreHidden: () -> Void = {}
         let onChange: (CouchDeciderFilters) -> Void
 
         private var chipSpacing: CGFloat {
@@ -47,6 +61,12 @@ extension CouchDeciderView {
 
                         clearChip
                     }
+
+                    if let hiddenChip {
+                        separator
+
+                        hiddenChipButton(hiddenChip)
+                    }
                 }
                 .padding(.vertical, UIDevice.isTV ? 16 : 4)
                 .edgePadding(.horizontal)
@@ -59,6 +79,7 @@ extension CouchDeciderView {
             .focusSection()
             .animation(.easeInOut(duration: 0.2), value: genreChips)
             .animation(.easeInOut(duration: 0.2), value: filters.isDefault)
+            .animation(.easeInOut(duration: 0.2), value: hiddenChip)
         }
 
         // MARK: - Chips
@@ -76,6 +97,8 @@ extension CouchDeciderView {
                     Text(title(for: length))
                 }
                 .isSelected(filters.length == length)
+                .accessibilityLabel(accessibilityTitle(for: length))
+                .accessibilityAddTraits(filters.length == length ? .isSelected : [])
             }
         }
 
@@ -92,6 +115,7 @@ extension CouchDeciderView {
                     Text(title(for: kind))
                 }
                 .isSelected(filters.kind == kind)
+                .accessibilityAddTraits(filters.kind == kind ? .isSelected : [])
             }
         }
 
@@ -114,6 +138,7 @@ extension CouchDeciderView {
                     Text(genre)
                 }
                 .isSelected(isSelected(genre: genre))
+                .accessibilityAddTraits(isSelected(genre: genre) ? .isSelected : [])
             }
         }
 
@@ -124,6 +149,37 @@ extension CouchDeciderView {
                 Label(L10n.CouchDecider.clear, systemImage: "xmark")
             }
             .transition(.opacity.combined(with: .scale))
+        }
+
+        /// One button for both states, so tvOS focus stays on it when "Undo" turns into "Hidden: N".
+        private func hiddenChipButton(_ chip: HiddenChip) -> some View {
+            Button {
+                switch chip {
+                case .undo:
+                    onUndo()
+                case .hidden:
+                    onRestoreHidden()
+                }
+            } label: {
+                switch chip {
+                case .undo:
+                    Label(L10n.CouchDecider.undo, systemImage: "arrow.uturn.backward")
+                case let .hidden(count):
+                    Label(L10n.CouchDecider.hiddenCount(count), systemImage: "eye.slash")
+                }
+            }
+            .id("hidden-chip")
+            .accessibilityLabel(hiddenChipAccessibilityLabel(chip))
+            .transition(.opacity.combined(with: .scale))
+        }
+
+        private func hiddenChipAccessibilityLabel(_ chip: HiddenChip) -> String {
+            switch chip {
+            case .undo:
+                L10n.CouchDecider.undoNotTonight
+            case let .hidden(count):
+                L10n.CouchDecider.bringBack(count)
+            }
         }
 
         private var separator: some View {
@@ -150,6 +206,20 @@ extension CouchDeciderView {
                 L10n.CouchDecider.lessThanOneHour45
             case .underTwoHoursThirty:
                 L10n.CouchDecider.lessThanTwoHours30
+            }
+        }
+
+        /// The spoken length: "Under 1 hour 45 minutes" instead of "less than 1h45".
+        private func accessibilityTitle(for length: CouchDeciderFilters.Length) -> String {
+            switch length {
+            case .any:
+                L10n.any
+            case .underOneHour:
+                L10n.CouchDecider.underOneHour
+            case .underOneHourFortyFive:
+                L10n.CouchDecider.underOneHour45
+            case .underTwoHoursThirty:
+                L10n.CouchDecider.underTwoHours30
             }
         }
 

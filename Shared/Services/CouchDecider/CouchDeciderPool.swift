@@ -6,6 +6,8 @@
 // Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
+import Defaults
+import FactoryKit
 import Foundation
 import JellyfinAPI
 import Logging
@@ -19,8 +21,13 @@ struct CouchDeciderPool {
         /// Nobody on the couch is restricted.
         case notNeeded
 
-        /// Every candidate was checked with the accounts of these restricted members.
+        /// Every candidate was checked with the accounts of these restricted members,
+        /// and the server restricts every one of them.
         case verified(names: [String])
+
+        /// These kids have no parental rating on the server: besides their own account's check,
+        /// only titles rated PG or lower are suggested (picks excepted).
+        case localOnly(names: [String])
 
         /// These restricted members' accounts couldn't be checked,
         /// so only titles picked for this couch are suggested.
@@ -28,7 +35,7 @@ struct CouchDeciderPool {
     }
 
     /// The candidates, merged, enriched and kid-filtered, in source order:
-    /// picks first, then next up, then new.
+    /// picks first, then next up, then new, then the library.
     let candidates: [CouchDeciderCandidate]
 
     /// The enriched item of every candidate, by `CouchDeciderCandidate.id`
@@ -37,11 +44,14 @@ struct CouchDeciderPool {
 
     let kidSafety: KidSafety
 
+    /// How many titles the kids' rating ceiling (`KidSafety.localOnly`) left out.
+    var removedByKidCeiling: Int = 0
+
     static let empty = CouchDeciderPool(candidates: [], items: [:], kidSafety: .notNeeded)
 }
 
 /// Builds the decider's pool from the couch home's rows: "Picked for …", "Next up together"
-/// and "New for all of you".
+/// and "New for all of you", plus random titles from the whole library.
 ///
 /// Reusing the couch libraries means the decider follows the home's rules: every member's own
 /// account and access, the played rule (`Defaults[.Couch.hideWatchedByAnyMember]`) and the toddler filter.
@@ -54,6 +64,19 @@ enum CouchDeciderCandidateSource {
     /// How many "New for all of you" titles are considered.
     static let newForEveryoneCount = 60
 
+    /// How many random library titles are requested (before the couch filters).
+    static let libraryCount = 80
+
+    /// The weight scale of a pick everyone on the couch already watched.
+    static let watchedByEveryoneWeightScale = 0.2
+
+    /// The highest official rating suggested to a kid without a parental rating on the server.
+    static let kidRatingCeiling = "PG"
+
+    /// Ratings Jellyfin treats as no rating at all (`LocalizationManager._unratedValues`).
+    /// Jellyfin 10.11+ lets unrated items through `maxOfficialRating`, so they never count as rated.
+    private static let unratedValues: Set<String> = ["N/A", "UNRATED", "NOT RATED", "NR"]
+
     /// The extra fields for the decider's card.
     static let enrichmentFields: [ItemFields] = [.genres, .overview, .taglines, .providerIDs]
 
@@ -65,33 +88,51 @@ enum CouchDeciderCandidateSource {
     ///
     /// Each source is isolated: a failing source is logged and skipped.
     ///
-    /// - Throws: Only when every source failed: "Next up together" and "New for all of you" threw
-    ///   and there are no picks. (Picks never throw: the watchlist store falls back to its cache.)
+    /// - Throws: Only when every source failed: "Next up together", "New for all of you" and the library
+    ///   threw and there are no picks. (Picks never throw: the watchlist store falls back to its cache.)
     static func load(couch: CouchGroup, primary: UserSession) async throws -> CouchDeciderPool {
-        async let pickedLoad = CouchHomeSupport.pickedItems(couch: couch, session: primary, refreshStore: true)
+        async let pickedLoad = CouchHomeSupport.pickedItemsSplit(couch: couch, session: primary, refreshStore: true)
         async let nextUpLoad = nextUpItems(couch: couch, primary: primary)
         async let newLoad = newForEveryoneItems(couch: couch, primary: primary)
+        async let libraryLoad = libraryItems(couch: couch, primary: primary)
 
-        let picked = await pickedLoad
+        let pickedSplit = await pickedLoad
         let nextUpResult = await nextUpLoad
         let newResult = await newLoad
+        let libraryResult = await libraryLoad
 
-        if case let .failure(error) = nextUpResult, case .failure = newResult, picked.isEmpty {
+        let picked = pickedSplit.fresh + pickedSplit.watchedByEveryone
+
+        if case let .failure(error) = nextUpResult,
+           case .failure = newResult,
+           case .failure = libraryResult,
+           picked.isEmpty
+        {
             throw error
         }
 
         let nextUp = (try? nextUpResult.get()) ?? []
         let newForEveryone = (try? newResult.get()) ?? []
+        let library = (try? libraryResult.get()) ?? []
 
+        // The library goes last, so a title that is also new or next up keeps those tags first
         let entries = merge([
             (source: .picked, items: picked),
             (source: .nextUp, items: nextUp),
             (source: .newForEveryone, items: newForEveryone),
+            (source: .library, items: library),
         ])
 
-        guard entries.isNotEmpty else { return .empty }
+        guard entries.isNotEmpty else {
+            return CouchDeciderPool(
+                candidates: [],
+                items: [:],
+                kidSafety: kidSafetyWithoutCandidates(couch: couch, primary: primary)
+            )
+        }
 
         let enrichedByID = await enrichedItems(for: entries, primary: primary)
+        let watchedPickIDs = Set(pickedSplit.watchedByEveryone.compactMap(\.id))
 
         var candidates: [CouchDeciderCandidate] = []
         var items: [String: BaseItemDto] = [:]
@@ -101,28 +142,42 @@ enum CouchDeciderCandidateSource {
 
             let item = enrichedByID[id] ?? entry.item
 
-            guard let newCandidate = Self.candidate(
+            guard var newCandidate = Self.candidate(
                 for: item,
                 sources: entry.sources,
                 seriesGenres: item.seriesID.flatMap { enrichedByID[$0]?.genres }
             ) else { continue }
 
+            // Played picks stay (kids rewatch favourites), they only come up less often
+            if newCandidate.sources.contains(.picked), watchedPickIDs.contains(id) {
+                newCandidate.weightScale = watchedByEveryoneWeightScale
+            }
+
             candidates.append(newCandidate)
             items[newCandidate.id] = item
         }
 
-        let (safeCandidates, kidSafety) = await kidSafeCandidates(
+        // Ratings are judged on the enriched items, and on their shows for episodes
+        var ratingItems = enrichedByID
+
+        for (id, item) in items where ratingItems[id] == nil {
+            ratingItems[id] = item
+        }
+
+        let kidCheck = await kidSafeCandidates(
             candidates,
             couch: couch,
-            primary: primary
+            primary: primary,
+            ratingItems: ratingItems
         )
 
-        let safeIDs = Set(safeCandidates.map(\.id))
+        let safeIDs = Set(kidCheck.candidates.map(\.id))
 
         return CouchDeciderPool(
-            candidates: safeCandidates,
+            candidates: kidCheck.candidates,
             items: items.filter { safeIDs.contains($0.key) },
-            kidSafety: kidSafety
+            kidSafety: kidCheck.kidSafety,
+            removedByKidCeiling: kidCheck.removedByCeiling
         )
     }
 
@@ -225,6 +280,56 @@ enum CouchDeciderCandidateSource {
         }
     }
 
+    /// Random movies and shows from the whole library, so older titles that were never
+    /// tagged or recently added come up too.
+    ///
+    /// The same rules as "New for all of you": every member's access, checked with their own
+    /// account (failing closed for restricted members), the played rule and the toddler filter.
+    private static func libraryItems(
+        couch: CouchGroup,
+        primary: UserSession
+    ) async -> Result<[BaseItemDto], Error> {
+        let playedRule: CouchPlayedRule = Defaults[.Couch.hideWatchedByAnyMember] ? .anyMember : .allMembers
+
+        var parameters = Paths.GetItemsParameters()
+        parameters.enableUserData = true
+        parameters.fields = PosterSubtitleField.itemFields
+        parameters.includeItemTypes = [.movie, .series]
+        parameters.isRecursive = true
+        parameters.limit = libraryCount
+        parameters.sortBy = [.random]
+        parameters.userID = primary.user.id
+
+        // The primary user's own watch history is filtered by the server
+        if playedRule == .anyMember {
+            parameters.isPlayed = false
+        }
+
+        do {
+            let request = Paths.getItems(parameters: parameters)
+            let response = try await primary.client.send(request)
+
+            let unwatched = await CouchItemFilter.filter(
+                response.value.items ?? [],
+                couch: couch,
+                primary: primary,
+                excludePlayedBy: playedRule
+            )
+
+            let items = await CouchHomeSupport.removingToddlerContent(
+                unwatched,
+                couch: couch,
+                session: primary
+            )
+
+            return .success(items)
+        } catch {
+            logger.error("Couch decider: could not load library titles: \(error.localizedDescription)")
+
+            return .failure(error)
+        }
+    }
+
     // MARK: - Merge
 
     private struct Entry {
@@ -319,22 +424,83 @@ enum CouchDeciderCandidateSource {
 
     // MARK: - Kid safety
 
+    private struct KidCheck {
+        var candidates: [CouchDeciderCandidate]
+        var kidSafety: CouchDeciderPool.KidSafety
+        var removedByCeiling: Int = 0
+    }
+
+    /// Whether a restricted member also gets the rating ceiling: a kid without a maximum parental
+    /// rating on the server (or whose policy is unknown), so their own account may see anything rated.
+    ///
+    /// Covers `UserState.isKidWithoutServerLimit`, and also kids whose server access is limited only
+    /// by libraries or tags, which don't cap ratings either.
+    static func needsRatingCeiling(_ member: UserState) -> Bool {
+        member.isKid && member.data.policy?.maxParentalRating == nil
+    }
+
+    /// The badge once every restricted member was checked.
+    private static func checkedKidSafety(restricted: [UserState]) -> CouchDeciderPool.KidSafety {
+        guard restricted.isNotEmpty else { return .notNeeded }
+
+        let ceilingMembers = restricted.filter { needsRatingCeiling($0) }
+
+        // Green only when the server itself restricts every one of them
+        guard ceilingMembers.isEmpty else {
+            return .localOnly(names: ceilingMembers.map(\.username))
+        }
+
+        return .verified(names: restricted.map(\.username))
+    }
+
+    /// The badge for an empty pool. There was nothing to check, so the couch rows' own checks
+    /// (recorded in `CouchMemberHealth` during this load) say whether the restricted members could be checked.
+    private static func kidSafetyWithoutCandidates(
+        couch: CouchGroup,
+        primary: UserSession
+    ) -> CouchDeciderPool.KidSafety {
+        let restricted = couch.members.filter(\.isRestricted)
+
+        guard restricted.isNotEmpty else { return .notNeeded }
+
+        let failures = Container.shared.couchMemberHealth().failures(for: couch)
+
+        let uncheckedNames = restricted
+            .filter { member in
+                primary.session(forMemberID: member.id) == nil || failures[member.id] != nil
+            }
+            .map(\.username)
+
+        guard uncheckedNames.isEmpty else { return .limitedToPicks(names: uncheckedNames) }
+
+        return checkedKidSafety(restricted: restricted)
+    }
+
     /// Keeps the candidates every restricted member can see, checked with their own account,
     /// so the server's parental controls apply.
+    ///
+    /// Kids without a parental rating on the server (`needsRatingCeiling(_:)`) are also capped at
+    /// `kidRatingCeiling`: the server decides with its rating tables, asked with the kid's own account.
+    /// When that request fails, `KidRatings.isKidSafe` decides instead. Either way, a title without
+    /// a rating on the item or its show is left out.
     ///
     /// Picked candidates always pass: they were tagged for this exact couch.
     /// Fails closed: when a restricted member has no session or their check failed, only picks are kept.
     private static func kidSafeCandidates(
         _ candidates: [CouchDeciderCandidate],
         couch: CouchGroup,
-        primary: UserSession
-    ) async -> ([CouchDeciderCandidate], CouchDeciderPool.KidSafety) {
+        primary: UserSession,
+        ratingItems: [String: BaseItemDto]
+    ) async -> KidCheck {
         let restricted = couch.members.filter(\.isRestricted)
 
-        guard restricted.isNotEmpty else { return (candidates, .notNeeded) }
+        guard restricted.isNotEmpty else {
+            return KidCheck(candidates: candidates, kidSafety: .notNeeded)
+        }
 
         let names = restricted.map(\.username)
         let picksOnly = candidates.filter { $0.sources.contains(.picked) }
+        let checkedSafety = checkedKidSafety(restricted: restricted)
 
         var checkedSessions: [UserSession] = []
         var membersWithoutSession: [String] = []
@@ -350,14 +516,16 @@ enum CouchDeciderCandidateSource {
         guard membersWithoutSession.isEmpty else {
             logger.error("Couch decider: no stored session for a restricted member, suggesting picks only")
 
-            return (picksOnly, .limitedToPicks(names: membersWithoutSession))
+            return KidCheck(candidates: picksOnly, kidSafety: .limitedToPicks(names: membersWithoutSession))
         }
 
         let idsToCheck = candidates
             .filter { !$0.sources.contains(.picked) }
             .map(\.id)
 
-        guard idsToCheck.isNotEmpty else { return (candidates, .verified(names: names)) }
+        guard idsToCheck.isNotEmpty else {
+            return KidCheck(candidates: candidates, kidSafety: checkedSafety)
+        }
 
         let results = await CouchItemFilter.fetchItems(
             ids: idsToCheck,
@@ -369,7 +537,7 @@ enum CouchDeciderCandidateSource {
         guard results.count == restricted.count else {
             logger.error("Couch decider: unexpected access check results, suggesting picks only")
 
-            return (picksOnly, .limitedToPicks(names: names))
+            return KidCheck(candidates: picksOnly, kidSafety: .limitedToPicks(names: names))
         }
 
         var failedNames: [String] = []
@@ -381,7 +549,7 @@ enum CouchDeciderCandidateSource {
         guard failedNames.isEmpty else {
             logger.error("Couch decider: could not check a restricted member's access, suggesting picks only")
 
-            return (picksOnly, .limitedToPicks(names: failedNames))
+            return KidCheck(candidates: picksOnly, kidSafety: .limitedToPicks(names: failedNames))
         }
 
         var visibleToAll = Set(idsToCheck)
@@ -390,10 +558,130 @@ enum CouchDeciderCandidateSource {
             visibleToAll.formIntersection((memberItems ?? []).compactMap(\.id))
         }
 
+        // The rating ceiling, for each kid without a parental rating on the server
+        let visibleCount = visibleToAll.count
+
+        for (member, session) in zip(restricted, checkedSessions) where needsRatingCeiling(member) {
+            let ids = idsToCheck.filter { visibleToAll.contains($0) }
+
+            guard ids.isNotEmpty else { break }
+
+            let allowedIDs = await ratedKidSafeIDs(
+                ids,
+                kidSession: session,
+                ratingItems: ratingItems
+            )
+
+            visibleToAll.formIntersection(allowedIDs)
+        }
+
         let safeCandidates = candidates.filter { candidate in
             candidate.sources.contains(.picked) || visibleToAll.contains(candidate.id)
         }
 
-        return (safeCandidates, .verified(names: names))
+        return KidCheck(
+            candidates: safeCandidates,
+            kidSafety: checkedSafety,
+            removedByCeiling: visibleCount - visibleToAll.count
+        )
+    }
+
+    /// The ids of the titles rated `kidRatingCeiling` or lower, as the server judges them for this kid.
+    ///
+    /// Falls back to `KidRatings.isKidSafe` when the request fails.
+    /// Fails closed: titles without a rating on the item or its show are never returned.
+    private static func ratedKidSafeIDs(
+        _ ids: [String],
+        kidSession: UserSession,
+        ratingItems: [String: BaseItemDto]
+    ) async -> Set<String> {
+        do {
+            let serverItems = try await fetchRatedItems(ids: ids, session: kidSession)
+
+            var allowedIDs: Set<String> = []
+
+            for serverItem in serverItems {
+                guard let id = serverItem.id else { continue }
+
+                let item = ratingItems[id] ?? serverItem
+                let knownRatings = itemRatings(of: item, series: series(of: item, in: ratingItems))
+                    .filter { !unratedValues.contains(KidRatings.normalized($0)) }
+
+                // Jellyfin 10.11+ lets unrated titles through `maxOfficialRating`
+                if knownRatings.isNotEmpty {
+                    allowedIDs.insert(id)
+                }
+            }
+
+            return allowedIDs
+        } catch {
+            logger.error(
+                "Couch decider: could not check ratings with the kid's account, using the local list: \(error.localizedDescription)"
+            )
+
+            var allowedIDs: Set<String> = []
+
+            for id in ids {
+                guard let item = ratingItems[id] else { continue }
+
+                let ratings = itemRatings(of: item, series: series(of: item, in: ratingItems))
+
+                if ratings.isNotEmpty, ratings.allSatisfy({ KidRatings.isKidSafe($0) }) {
+                    allowedIDs.insert(id)
+                }
+            }
+
+            return allowedIDs
+        }
+    }
+
+    /// The items with these ids that the kid's account sees with a rating up to `kidRatingCeiling`.
+    ///
+    /// `maxOfficialRating` replaces the account's own maximum, so it is only sent for kids without one
+    /// (`needsRatingCeiling(_:)`), and the result is intersected with their own access check.
+    private static func fetchRatedItems(
+        ids: [String],
+        session: UserSession
+    ) async throws -> [BaseItemDto] {
+        var result: [BaseItemDto] = []
+        var start = 0
+
+        while start < ids.count {
+            let end = min(start + CouchItemFilter.maxIDsPerRequest, ids.count)
+            let chunk = Array(ids[start ..< end])
+            start = end
+
+            var parameters = Paths.GetItemsParameters()
+            parameters.enableImages = false
+            parameters.enableUserData = false
+            parameters.hasParentalRating = true
+            parameters.ids = chunk
+            parameters.limit = chunk.count
+            parameters.maxOfficialRating = kidRatingCeiling
+            parameters.userID = session.user.id
+
+            let request = Paths.getItems(parameters: parameters)
+            let response = try await session.client.send(request)
+
+            result.append(contentsOf: response.value.items ?? [])
+        }
+
+        return result
+    }
+
+    /// The show of an episode, when it was fetched.
+    private static func series(of item: BaseItemDto, in items: [String: BaseItemDto]) -> BaseItemDto? {
+        guard item.type == .episode else { return nil }
+
+        return item.seriesID.flatMap { items[$0] }
+    }
+
+    /// The ratings that apply to an item: its own and its show's (each custom rating first, as Jellyfin does).
+    private static func itemRatings(of item: BaseItemDto, series: BaseItemDto?) -> [String] {
+        [item, series].compactMap { ratedItem -> String? in
+            guard let ratedItem else { return nil }
+
+            return ratedItem.customRating?.nilIfBlank ?? ratedItem.officialRating?.nilIfBlank
+        }
     }
 }
