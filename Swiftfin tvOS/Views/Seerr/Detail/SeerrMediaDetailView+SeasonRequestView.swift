@@ -15,10 +15,13 @@ extension SeerrMediaDetailView {
     ///
     /// The tvOS counterpart of the iOS `SeasonRequestView` (same selection logic),
     /// laid out like a tvOS settings form. Menu dismisses it.
+    ///
+    /// The Request button comes first and has the default focus, labelled with the count
+    /// ("Request 3 seasons"), so requesting everything is one click.
     struct SeasonRequestView: View {
 
         private enum FocusField: Hashable {
-            case allSeasons
+            case request
         }
 
         @Default(.accentColor)
@@ -76,7 +79,7 @@ extension SeerrMediaDetailView {
         }
 
         private var requestTitle: String {
-            isAllSelected ? L10n.SeerrDetail.request : L10n.SeerrDetail.requestSeasonCount(selection.count)
+            L10n.SeerrDetail.requestSeasonCount(selection.count)
         }
 
         private func request() {
@@ -138,14 +141,18 @@ extension SeerrMediaDetailView {
             .buttonStyle(.glassProminent.shadow(false))
             .tint(accentColor)
             .frame(maxHeight: 75)
+            .focused($focusedField, equals: .request)
             .disabled(selection.isEmpty)
         }
 
         var body: some View {
             Form {
                 Section {
+                    requestButton
+                }
+
+                Section {
                     Toggle(L10n.SeerrDetail.allSeasons, isOn: allSeasonsBinding)
-                        .focused($focusedField, equals: .allSeasons)
                 }
 
                 Section {
@@ -155,15 +162,11 @@ extension SeerrMediaDetailView {
                 } footer: {
                     Text(L10n.SeerrDetail.seasonsFooter)
                 }
-
-                Section {
-                    requestButton
-                }
             } image: {
                 header
             }
             .tint(accentColor)
-            .defaultFocus($focusedField, .allSeasons, priority: .userInitiated)
+            .defaultFocus($focusedField, .request, priority: .userInitiated)
         }
     }
 }

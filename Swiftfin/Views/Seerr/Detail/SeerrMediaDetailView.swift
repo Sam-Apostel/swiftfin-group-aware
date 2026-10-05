@@ -45,11 +45,26 @@ struct SeerrMediaDetailView: View {
         router.route(to: .item(item: item))
     }
 
+    /// Request and "Request it too?": the season picker for a show, else straight to the view model,
+    /// which requests as a grown-up on the couch (signing them in to Seerr first when needed).
     private func request() {
+        guard viewModel.requestGate == .allowed,
+              viewModel.signingInName == nil,
+              !viewModel.background.is(.requesting)
+        else { return }
+
         if viewModel.mediaType == .tv, viewModel.requestableSeasons.isNotEmpty {
             isPresentingSeasonPicker = true
         } else {
-            viewModel.requestMedia(seasons: nil)
+            viewModel.submitRequest(seasons: nil)
+        }
+    }
+
+    /// "Request it too?" → Request: let the dialog finish dismissing before the season picker opens.
+    private func requestFromOffer() {
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(400))
+            request()
         }
     }
 
@@ -84,7 +99,7 @@ struct SeerrMediaDetailView: View {
             break
 
         case let .audienceSaved(offerRequest):
-            if offerRequest {
+            if offerRequest, viewModel.requestGate == .allowed, viewModel.canRequest {
                 // Let the picker sheet finish dismissing before showing the dialog.
                 Task { @MainActor in
                     try? await Task.sleep(for: .milliseconds(400))
@@ -135,7 +150,7 @@ struct SeerrMediaDetailView: View {
                 title: details.title,
                 seasons: viewModel.requestableSeasons
             ) { seasons in
-                viewModel.requestMedia(seasons: seasons)
+                viewModel.submitRequest(seasons: seasons)
             }
             .presentationDetents([.medium, .large])
         }
@@ -189,7 +204,7 @@ struct SeerrMediaDetailView: View {
             titleVisibility: .visible
         ) {
             Button(L10n.SeerrDetail.request) {
-                viewModel.requestMedia(seasons: nil)
+                requestFromOffer()
             }
 
             Button(L10n.cancel, role: .cancel) {}

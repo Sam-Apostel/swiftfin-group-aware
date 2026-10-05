@@ -18,10 +18,13 @@ extension L10n {
 
         static let available = "Available"
         static let blocklisted = "Blocklisted"
+        static let declined = "Declined"
         static let notRequested = "Not requested"
         static let partiallyAvailable = "Partially available"
-        static let processing = "Processing"
+        /// Seerr's processing status (approved, on its way), and the requested button.
         static let requested = "Requested"
+        /// Seerr's pending status: the request waits for an admin.
+        static let waitingForApproval = "Waiting for approval"
 
         // MARK: - Actions
 
@@ -31,6 +34,20 @@ extension L10n {
         static let requestSeasons = "Request seasons"
         static let unavailable = "Unavailable"
         static let whosItFor = "Who's it for?"
+
+        // MARK: - Kids
+
+        /// Shown instead of Request when nobody on the couch may request (only kids).
+        static let askAGrownUp = "Ask a grown-up"
+        /// "Ask a grown-up" once it was pressed: the kids are in the title's audience.
+        static let asked = "Asked ✓"
+        /// The confirmation line under "Asked ✓". Never claims a notification.
+        static let askedConfirmation = "Saved for a grown-up to see on the watchlist"
+
+        /// "Not while Tuur is on the couch": the title is above kid level and a child is on the couch.
+        static func notWhileOnTheCouch(_ names: String, count: Int) -> String {
+            count == 1 ? "Not while \(names) is on the couch" : "Not while \(names) are on the couch"
+        }
 
         // MARK: - Request offer
 

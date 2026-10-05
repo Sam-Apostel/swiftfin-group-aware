@@ -8,15 +8,17 @@
 
 import Foundation
 
-/// English strings for the tvOS Seerr media detail screen (#32).
+/// English strings for the tvOS Seerr media detail screen (#32); the requester lines are also used on iOS (#50).
 /// Kept out of the generated `Strings.swift` to avoid merge conflicts.
 /// The shared detail strings live in `L10n.SeerrDetail`.
 extension L10n {
 
     enum SeerrTVDetail {
 
-        /// Shown instead of the Request button when only kids are on the couch.
-        static let askAGrownUp = "Ask a grown-up to request it"
+        /// "Requested as Sam": a request from this screen went out as another couch member than the primary user.
+        static func requestedAs(_ name: String) -> String {
+            "Requested as \(name)"
+        }
 
         /// "Requesting as Sam": the request goes out as another couch member than the primary user.
         static func requestingAs(_ name: String) -> String {

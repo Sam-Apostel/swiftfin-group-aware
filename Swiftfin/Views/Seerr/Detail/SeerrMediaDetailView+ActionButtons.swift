@@ -13,10 +13,16 @@ import SwiftUI
 extension SeerrMediaDetailView {
 
     /// Play / Request / Requested ✓, plus "Who's it for?", styled like `PlayButton` and `ItemActionButtons`.
+    ///
+    /// On a kids-only couch Request becomes "Ask a grown-up" (then "Asked ✓"), and with a child on the couch
+    /// a title above kid level shows "Not while Tuur is on the couch" instead (`requestGate`).
     struct ActionButtons: View {
 
         private enum PrimaryAction {
+            case askAGrownUp
+            case asked
             case available
+            case notWithChild
             case play(BaseItemDto)
             case request
             case requested(by: String?)
@@ -39,7 +45,14 @@ extension SeerrMediaDetailView {
             }
 
             if viewModel.canRequest {
-                return .request
+                switch viewModel.requestGate {
+                case .allowed:
+                    return .request
+                case .askAGrownUp:
+                    return viewModel.hasAskedAGrownUp ? .asked : .askAGrownUp
+                case .notWithChild:
+                    return .notWithChild
+                }
             }
 
             switch viewModel.status {
@@ -47,13 +60,14 @@ extension SeerrMediaDetailView {
                 return .available
             case .processing, .requested:
                 return .requested(by: viewModel.requesterName)
-            case .blocklisted, .notRequested:
+            case .blocklisted, .declined, .notRequested:
                 return .unavailable
             }
         }
 
+        /// Requesting, or signing the requester in to Seerr first.
         private var isRequesting: Bool {
-            viewModel.background.is(.requesting)
+            viewModel.background.is(.requesting) || viewModel.signingInName != nil
         }
 
         /// Busy while requesting, or while checking whether the title is already in the library.
@@ -67,7 +81,21 @@ extension SeerrMediaDetailView {
 
         /// A partially available show can be played and still have seasons left to request.
         private var showsRequestMore: Bool {
-            viewModel.libraryItem != nil && viewModel.canRequest
+            viewModel.libraryItem != nil && viewModel.canRequest && viewModel.requestGate == .allowed
+        }
+
+        /// The line under the primary button: who the request goes (or went) out as, or the "asked" confirmation.
+        private var footnote: String? {
+            switch primaryAction {
+            case .request:
+                viewModel.requestingAsName.map(L10n.SeerrTVDetail.requestingAs)
+            case .requested:
+                viewModel.requestedAsName.map(L10n.SeerrTVDetail.requestedAs)
+            case .asked:
+                L10n.SeerrDetail.askedConfirmation
+            case .askAGrownUp, .available, .notWithChild, .play, .unavailable:
+                nil
+            }
         }
 
         // MARK: - Primary
@@ -75,6 +103,26 @@ extension SeerrMediaDetailView {
         @ViewBuilder
         private var primaryButton: some View {
             switch primaryAction {
+            case .askAGrownUp:
+                capsuleButton(
+                    title: L10n.SeerrDetail.askAGrownUp,
+                    systemImage: "figure.child",
+                    isProminent: true,
+                    isLoading: isUpdatingAudience
+                ) {
+                    viewModel.saveForAGrownUp()
+                }
+                .disabled(isUpdatingAudience)
+
+            case .asked:
+                capsuleButton(
+                    title: L10n.SeerrDetail.asked,
+                    systemImage: "hand.raised.fill",
+                    isProminent: false,
+                    action: {}
+                )
+                .disabled(true)
+
             case .available:
                 capsuleButton(
                     title: L10n.SeerrDetail.available,
@@ -93,9 +141,18 @@ extension SeerrMediaDetailView {
                     onPlay(item)
                 }
 
+            case .notWithChild:
+                capsuleButton(
+                    title: viewModel.notWithChildMessage,
+                    systemImage: "hand.raised.slash.fill",
+                    isProminent: false,
+                    action: {}
+                )
+                .disabled(true)
+
             case .request:
                 capsuleButton(
-                    title: L10n.SeerrDetail.request,
+                    title: viewModel.signingInName.map(L10n.SeerrTVDetail.signingIn) ?? L10n.SeerrDetail.request,
                     systemImage: "plus",
                     isProminent: true,
                     isLoading: isRequestBusy,
@@ -169,6 +226,14 @@ extension SeerrMediaDetailView {
         var body: some View {
             VStack(spacing: 8) {
                 primaryButton
+
+                if let footnote {
+                    Text(footnote)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity)
+                }
 
                 if showsRequestMore {
                     capsuleButton(

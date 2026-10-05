@@ -7,7 +7,6 @@
 //
 
 import Defaults
-import FactoryKit
 import JellyfinAPI
 import SwiftUI
 
@@ -15,8 +14,8 @@ import SwiftUI
 /// play it when it's in the library, request it otherwise (as a grown-up on a kid-safe couch),
 /// and tag who it's for, pre-selected with the current couch.
 ///
-/// Every behaviour lives in the shared `SeerrMediaDetailViewModel`. This view adds the layout,
-/// the Siri Remote focus and the Quick Connect sign-in before a request.
+/// Every behaviour lives in the shared `SeerrMediaDetailViewModel` (including who a request goes out as,
+/// the kid gate and the Quick Connect sign-in before a request). This view adds the layout and the Siri Remote focus.
 struct SeerrMediaDetailView: View {
 
     /// The focusable buttons of the left column.
@@ -29,9 +28,6 @@ struct SeerrMediaDetailView: View {
     @Default(.accentColor)
     private var accentColor
 
-    @InjectedObject(\.seerrService)
-    private var seerrService: SeerrService
-
     @Router
     private var router
 
@@ -41,9 +37,6 @@ struct SeerrMediaDetailView: View {
     private var isPresentingRequestOffer = false
     @State
     private var isPresentingSeasonPicker = false
-    /// The name of the person being signed in to Seerr before a request.
-    @State
-    private var signingInName: String?
 
     @StateObject
     private var viewModel: SeerrMediaDetailViewModel
@@ -57,71 +50,32 @@ struct SeerrMediaDetailView: View {
         )
     }
 
-    // MARK: - Requester
-
-    /// The couch member a request goes out as (see `SeerrService.requesterJellyfinUserID(for:)`).
-    private var requester: UserState? {
-        guard let requesterID = viewModel.requesterJellyfinUserID else { return nil }
-
-        return viewModel.userSession?.couch.members.first { $0.id == requesterID }
-    }
-
-    /// Only kids on the couch: the request would go out as a kid, so there's no Request button.
-    private var isRequestBlocked: Bool {
-        requester?.isKid ?? false
-    }
-
-    /// The requester's name when it isn't the primary user ("Requesting as Sam").
-    private var requestingAsName: String? {
-        guard let requester,
-              let primary = viewModel.userSession?.couch.primary,
-              requester.id != primary.id
-        else { return nil }
-
-        return requester.username
-    }
-
     // MARK: - Actions
 
     private func play(_ item: BaseItemDto) {
         router.route(to: .item(item: item))
     }
 
+    /// Request and "Request it too?": the season picker for a show, else straight to the view model,
+    /// which requests as a grown-up on the couch (signing them in to Seerr first when needed).
     private func request() {
-        guard signingInName == nil, !viewModel.background.is(.requesting) else { return }
+        guard viewModel.requestGate == .allowed,
+              viewModel.signingInName == nil,
+              !viewModel.background.is(.requesting)
+        else { return }
 
         if viewModel.mediaType == .tv, viewModel.requestableSeasons.isNotEmpty {
             isPresentingSeasonPicker = true
         } else {
-            submitRequest(seasons: nil)
+            viewModel.submitRequest(seasons: nil)
         }
     }
 
-    /// Requests the title, first signing the requester in to Seerr with Quick Connect
-    /// when there is no API key and they have no Seerr session yet. Nothing to type.
-    private func submitRequest(seasons: [Int]?) {
-        guard !isRequestBlocked, signingInName == nil else { return }
-        guard let requester,
-              !seerrService.hasAPIKey,
-              !seerrService.signedInUserIDs.contains(requester.id)
-        else {
-            viewModel.requestMedia(seasons: seasons)
-            return
-        }
-
-        signingInName = requester.username
-
+    /// "Request it too?" → Request: let the dialog finish dismissing before the season picker opens.
+    private func requestFromOffer() {
         Task { @MainActor in
-            do {
-                try await seerrService.signInWithQuickConnect(jellyfinUserID: requester.id)
-                signingInName = nil
-
-                // In this async context the generated async overload is picked: it needs `await`.
-                await viewModel.requestMedia(seasons: seasons)
-            } catch {
-                signingInName = nil
-                actionError = error
-            }
+            try? await Task.sleep(for: .milliseconds(400))
+            request()
         }
     }
 
@@ -165,7 +119,7 @@ struct SeerrMediaDetailView: View {
             break
 
         case let .audienceSaved(offerRequest):
-            guard offerRequest, !isRequestBlocked, viewModel.canRequest else { return }
+            guard offerRequest, viewModel.requestGate == .allowed, viewModel.canRequest else { return }
 
             // Let the full-screen picker finish dismissing before showing the dialog.
             Task { @MainActor in
@@ -213,9 +167,9 @@ struct SeerrMediaDetailView: View {
                     Header(
                         viewModel: viewModel,
                         details: details,
-                        requestingAsName: requestingAsName,
-                        isRequestBlocked: isRequestBlocked,
-                        signingInName: signingInName,
+                        requestingAsName: viewModel.requestingAsName,
+                        isRequestBlocked: viewModel.requestGate != .allowed,
+                        signingInName: viewModel.signingInName,
                         onPlay: play,
                         onRequest: request,
                         onWhoIsItFor: presentAudiencePicker
@@ -277,7 +231,7 @@ struct SeerrMediaDetailView: View {
                 title: details.title,
                 seasons: viewModel.requestableSeasons
             ) { seasons in
-                submitRequest(seasons: seasons)
+                viewModel.submitRequest(seasons: seasons)
             }
         }
     }
@@ -316,7 +270,7 @@ struct SeerrMediaDetailView: View {
             titleVisibility: .visible
         ) {
             Button(L10n.SeerrDetail.request) {
-                submitRequest(seasons: nil)
+                requestFromOffer()
             }
 
             Button(L10n.cancel, role: .cancel) {}

@@ -17,6 +17,9 @@ import Logging
 ///
 /// Request and audience actions run in the background and report through
 /// `events`; only a failed `refresh` turns the screen into an error.
+///
+/// Kid safety (#50): a request never goes out as a restricted member while a grown-up is on the couch,
+/// and never for a title above kid level while a child is on the couch (`requestGate`).
 @MainActor
 @Stateful
 final class SeerrMediaDetailViewModel: ViewModel {
@@ -85,11 +88,20 @@ final class SeerrMediaDetailViewModel: ViewModel {
     private(set) var submittedRequest: SeerrRequest?
     @Published
     private(set) var hasSubmittedRequest: Bool = false
+    /// The requester's name when a request from this screen went out as someone other than the primary user.
+    @Published
+    private(set) var requestedAsName: String?
+    /// The person being signed in to Seerr (Quick Connect) before a request, if any.
+    @Published
+    private(set) var signingInName: String?
     @Published
     private(set) var watchlistEntry: AudienceWatchlistEntry?
 
     private var isSubmittingRequest = false
     private var libraryLookupTask: Task<Void, Never>?
+    /// The latest Seerr watchlist mirror. Each new one waits for it, so a quick save-then-remove
+    /// reaches Seerr in that order. Retained so it isn't tied to the screen's lifetime.
+    private var watchlistSyncTask: Task<Void, Never>?
 
     private var seerrService: SeerrService {
         Container.shared.seerrService()
@@ -138,6 +150,15 @@ final class SeerrMediaDetailViewModel: ViewModel {
                 self.refresh()
             }
             .store(in: &cancellables)
+
+        // The requester (and so the request gate) follows Seerr sign-ins and the API key
+        Container.shared
+            .seerrService()
+            .objectWillChange
+            .sink { [weak self] _ in
+                self?.objectWillChange.send()
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Derived State
@@ -162,6 +183,10 @@ final class SeerrMediaDetailViewModel: ViewModel {
         }
     }
 
+    private var hasDeclinedRequest: Bool {
+        details?.mediaInfo?.requests?.contains { $0.status == .declined } ?? false
+    }
+
     var status: SeerrMediaDetailStatus {
         if libraryItem != nil {
             return mediaStatus == .partiallyAvailable ? .partiallyAvailable : .available
@@ -179,14 +204,22 @@ final class SeerrMediaDetailViewModel: ViewModel {
         case .processing:
             return .processing
         case .deleted, .unknown:
-            return hasSubmittedRequest || activeRequest != nil ? .requested : .notRequested
+            if let request = submittedRequest ?? activeRequest {
+                return request.status == .approved ? .processing : .requested
+            }
+
+            if hasSubmittedRequest {
+                return .requested
+            }
+
+            return hasDeclinedRequest ? .declined : .notRequested
         }
     }
 
-    /// Whether the primary action should offer to request the title.
+    /// Whether the title is in a state that can be requested (before the couch's `requestGate`).
     var canRequest: Bool {
         switch status {
-        case .notRequested:
+        case .declined, .notRequested:
             true
         case .partiallyAvailable:
             mediaType == .tv && !hasSubmittedRequest
@@ -199,19 +232,86 @@ final class SeerrMediaDetailViewModel: ViewModel {
         submittedRequest?.requestedBy?.displayName ?? activeRequest?.requestedBy?.displayName
     }
 
+    // MARK: - Requester
+
     /// The Jellyfin user a request is made as; `nil` without a user session.
     ///
-    /// - iOS: the primary user.
-    /// - tvOS: a grown-up on the couch when the primary is a kid (kid-safe browsing),
-    ///   see `SeerrService.requesterJellyfinUserID(for:)`.
+    /// A grown-up on the couch when the primary is restricted (e.g. kid-safe browsing),
+    /// see `SeerrService.requesterJellyfinUserID(for:)`.
     var requesterJellyfinUserID: String? {
         guard let userSession else { return nil }
 
-        #if os(tvOS)
         return seerrService.requesterJellyfinUserID(for: userSession.couch)
-        #else
-        return userSession.user.id
-        #endif
+    }
+
+    /// The couch member a request goes out as.
+    var requester: UserState? {
+        guard let requesterID = requesterJellyfinUserID else { return nil }
+
+        return userSession?.couch.members.first { $0.id == requesterID }
+    }
+
+    /// Nobody on the couch who may request can act on Seerr: the request would go out as a restricted member.
+    var isRequestBlocked: Bool {
+        requester?.isRestricted ?? false
+    }
+
+    /// The requester's name when it isn't the primary user ("Requesting as Sam").
+    var requestingAsName: String? {
+        guard let requester,
+              let primary = userSession?.couch.primary,
+              requester.id != primary.id
+        else { return nil }
+
+        return requester.username
+    }
+
+    // MARK: - Kids
+
+    /// The children on the couch (`UserState.isChildAudience`), in couch order.
+    var childMembers: [UserState] {
+        userSession?.couch.members.filter(\.isChildAudience) ?? []
+    }
+
+    /// Kid mode: a child is on the couch, whatever the kid-safe browsing setting.
+    var isKidMode: Bool {
+        userSession?.couch.hasChild ?? false
+    }
+
+    /// The title's certification is above kid level (or unknown).
+    var isAboveKidLevel: Bool {
+        SeerrCertification.isAboveKidLevel(details?.certification)
+    }
+
+    /// Whether Request may be offered to this couch.
+    var requestGate: SeerrRequestGate {
+        if isKidMode, isAboveKidLevel {
+            return .notWithChild
+        }
+
+        return isRequestBlocked ? .askAGrownUp : .allowed
+    }
+
+    /// "Not while Tuur is on the couch".
+    var notWithChildMessage: String {
+        let names = childMembers.map(\.username)
+
+        return L10n.SeerrDetail.notWhileOnTheCouch(
+            ListFormatter.localizedString(byJoining: names),
+            count: names.count
+        )
+    }
+
+    /// The restricted members on the couch: who "Ask a grown-up" saves the title for.
+    private var restrictedMemberIDs: Set<String> {
+        Set(userSession?.couch.members.filter(\.isRestricted).map(\.id) ?? [])
+    }
+
+    /// "Ask a grown-up" was pressed (or someone already tagged it for them): the entry contains a kid.
+    var hasAskedAGrownUp: Bool {
+        guard let watchlistEntry else { return false }
+
+        return !watchlistEntry.audience.isDisjoint(with: restrictedMemberIDs)
     }
 
     /// Seasons that can be picked in the TV request sheet (specials and empty seasons are skipped, like Seerr does).
@@ -222,12 +322,82 @@ final class SeerrMediaDetailViewModel: ViewModel {
     }
 
     /// The picker's pre-selection: the saved audience, else the current couch.
+    ///
+    /// With a child on the couch and a title above kid level, the children are left out.
     var suggestedAudience: Set<String> {
         if let watchlistEntry {
             return watchlistEntry.audience
         }
 
-        return userSession?.couch.memberIDs ?? []
+        return couchAudience
+    }
+
+    /// The couch members, minus the children when the title is above kid level.
+    private var couchAudience: Set<String> {
+        guard let couch = userSession?.couch else { return [] }
+        guard isAboveKidLevel else { return couch.memberIDs }
+
+        return Set(couch.members.filter { !$0.isChildAudience }.map(\.id))
+    }
+
+    // MARK: - Request Helpers
+
+    /// Requests the title as `requester`, first signing them in to Seerr with Quick Connect
+    /// when there is no API key and they have no Seerr session yet. Nothing to type.
+    ///
+    /// Both platforms' Request and "Request it too?" (after the season picker) go through here.
+    /// Failures are reported as `.failed` events. Does nothing unless `requestGate` is `.allowed`.
+    func submitRequest(seasons: [Int]?) {
+        guard requestGate == .allowed,
+              signingInName == nil,
+              !background.is(.requesting)
+        else { return }
+        guard let requester,
+              !seerrService.hasAPIKey,
+              !seerrService.signedInUserIDs.contains(requester.id)
+        else {
+            requestMedia(seasons: seasons)
+            return
+        }
+
+        let service = seerrService
+        signingInName = requester.username
+
+        // Keeps the view model alive until the request went out: the person pressed Request.
+        Task { @MainActor in
+            do {
+                try await service.signInWithQuickConnect(jellyfinUserID: requester.id)
+                self.signingInName = nil
+
+                // In this async context the generated async overload is picked: it needs `await`.
+                await self.requestMedia(seasons: seasons)
+            } catch {
+                self.signingInName = nil
+                self.logger.error(
+                    "Failed to sign the requester in to Seerr",
+                    metadata: [
+                        "jellyfinUserID": .string(requester.id),
+                        "error": .string(error.localizedDescription),
+                    ]
+                )
+                self.events.send(.failed(error.localizedDescription))
+            }
+        }
+    }
+
+    /// "Ask a grown-up": saves the title for the kids on the couch (the existing audience plus the kids),
+    /// so a grown-up sees it on the watchlist. Repeat presses do nothing.
+    func saveForAGrownUp() {
+        guard requestGate == .askAGrownUp,
+              !hasAskedAGrownUp,
+              !background.is(.updatingAudience)
+        else { return }
+
+        let audience = (watchlistEntry?.audience ?? suggestedAudience).union(restrictedMemberIDs)
+
+        guard audience.isNotEmpty else { return }
+
+        saveAudience(audience)
     }
 
     // MARK: - Refresh
@@ -329,6 +499,11 @@ final class SeerrMediaDetailViewModel: ViewModel {
 
     @Function(\Action.Cases.requestMedia)
     private func _requestMedia(_ seasons: [Int]?) async {
+        // Kid safety: never as a restricted member while a grown-up is here, never above kid level with a child.
+        guard requestGate == .allowed else {
+            logger.warning("Refused a Seerr request the couch may not make")
+            return
+        }
         guard !isSubmittingRequest else { return }
 
         isSubmittingRequest = true
@@ -342,6 +517,7 @@ final class SeerrMediaDetailViewModel: ViewModel {
         do {
             let session = try requireUserSession()
             let requestedSeasons = mediaType == .tv ? seasons : nil
+            let requestingAsName = requestingAsName
 
             // The requester's own Quick Connect session, else the API key as them
             // (or as the key owner when they have no Seerr account).
@@ -358,7 +534,10 @@ final class SeerrMediaDetailViewModel: ViewModel {
 
             submittedRequest = request
             hasSubmittedRequest = true
+            requestedAsName = requestingAsName
             events.send(.requested)
+
+            await tagForCouch(session: session)
 
             // `perform` may have renewed an expired browsing session: prefer the current client
             await reloadDetails(client: seerrService.client ?? client)
@@ -367,6 +546,10 @@ final class SeerrMediaDetailViewModel: ViewModel {
             if case let .server(status, _)? = error as? SeerrError, status == 409 {
                 hasSubmittedRequest = true
                 events.send(.requested)
+
+                if let session = userSession {
+                    await tagForCouch(session: session)
+                }
 
                 await reloadDetails(client: seerrService.client ?? client)
                 return
@@ -380,6 +563,34 @@ final class SeerrMediaDetailViewModel: ViewModel {
                 ]
             )
             events.send(.failed(error.localizedDescription))
+        }
+    }
+
+    /// After a group request: tags the title for the couch, so "Just arrived" and the
+    /// ready banner show it to everyone who was there (not only the requester).
+    ///
+    /// Only without an existing entry, and only on a group couch. Children are left out above kid level.
+    /// Best effort: no `audienceSaved` event, and the Seerr watchlist mirror runs in the background.
+    private func tagForCouch(session: UserSession) async {
+        guard watchlistEntry == nil, session.couch.isGroup, let details else { return }
+
+        let audience = couchAudience
+
+        guard audience.isNotEmpty else { return }
+
+        let entry = updatedEntry(audience: audience, details: details, session: session)
+
+        do {
+            try await watchlistStore.upsert(entry, sessions: session.householdSessions())
+
+            watchlistEntry = watchlistStore.entry(id: entry.id) ?? entry
+
+            mirrorSeerrWatchlists(adding: audience, removing: [], title: details.title)
+        } catch {
+            logger.warning(
+                "Failed to tag a request for the couch",
+                metadata: ["error": .string(error.localizedDescription)]
+            )
         }
     }
 
@@ -400,26 +611,19 @@ final class SeerrMediaDetailViewModel: ViewModel {
             }
 
             let previousAudience = watchlistEntry?.audience ?? []
-
-            var entry = watchlistEntry ?? makeEntry(
-                details: details,
-                audience: audience,
-                addedBy: session.user.id,
-                jellyfinItemID: libraryItem?.id
-            )
-            entry.audience = audience
-            entry.title = details.title
-            entry.year = Self.releaseYear(from: details.releaseDate) ?? entry.year
-            entry.posterPath = details.posterPath ?? entry.posterPath
-            entry.jellyfinItemID = libraryItem?.id ?? entry.jellyfinItemID
-            entry.isDeleted = false
+            let entry = updatedEntry(audience: audience, details: details, session: session)
 
             try await watchlistStore.upsert(entry, sessions: session.householdSessions())
 
             watchlistEntry = watchlistStore.entry(id: entry.id) ?? entry
-            events.send(.audienceSaved(offerRequest: status == .notRequested && !isLookingUpLibraryItem))
+            events.send(
+                .audienceSaved(
+                    offerRequest: status == .notRequested && !isLookingUpLibraryItem && requestGate == .allowed
+                )
+            )
 
-            await syncSeerrWatchlists(
+            // Not awaited: the "Who's it for?" spinner stops after the Jellyfin save.
+            mirrorSeerrWatchlists(
                 adding: audience,
                 removing: previousAudience.subtracting(audience),
                 title: details.title
@@ -442,19 +646,15 @@ final class SeerrMediaDetailViewModel: ViewModel {
         do {
             let session = try requireUserSession()
             let previousAudience = watchlistEntry?.audience ?? []
+            let title = details?.title ?? watchlistEntry?.title
 
             try await watchlistStore.remove(entryID: entryID, sessions: session.householdSessions())
 
             watchlistEntry = nil
             events.send(.audienceRemoved)
 
-            if let details {
-                await syncSeerrWatchlists(
-                    adding: [],
-                    removing: previousAudience,
-                    title: details.title
-                )
-            }
+            // Not awaited: the "Who's it for?" spinner stops after the Jellyfin save.
+            mirrorSeerrWatchlists(adding: [], removing: previousAudience, title: title)
         } catch {
             logger.error(
                 "Failed to remove the watchlist entry",
@@ -464,44 +664,54 @@ final class SeerrMediaDetailViewModel: ViewModel {
         }
     }
 
-    /// Best effort: mirror the audience into each member's own Seerr watchlist, so Seerr matches.
-    private func syncSeerrWatchlists(
+    /// Best effort, in the background: mirrors the audience into each member's own Seerr watchlist
+    /// (`SeerrService.syncWatchlists`), after any earlier mirror from this screen finished.
+    private func mirrorSeerrWatchlists(
         adding: Set<String>,
         removing: Set<String>,
-        title: String
-    ) async {
-        guard seerrService.isConfigured else { return }
+        title: String?
+    ) {
+        guard adding.isNotEmpty || removing.isNotEmpty else { return }
 
-        for jellyfinUserID in adding.union(removing).sorted() {
-            let isAdding = adding.contains(jellyfinUserID)
+        let previousTask = watchlistSyncTask
+        let service = seerrService
+        let tmdbID = tmdbID
+        let mediaType = mediaType
 
-            // Each member's own Quick Connect session, else the API key as them.
-            // Throws when the person can't act on Seerr (not signed in / no account).
-            do {
-                try await seerrService.perform(asJellyfinUserID: jellyfinUserID) { userClient in
-                    if isAdding {
-                        try await userClient.addToWatchlist(
-                            mediaType: mediaType,
-                            tmdbID: tmdbID,
-                            title: title
-                        )
-                    } else {
-                        try await userClient.removeFromWatchlist(
-                            mediaType: mediaType,
-                            tmdbID: tmdbID
-                        )
-                    }
-                }
-            } catch {
-                logger.warning(
-                    "Failed to sync a Seerr watchlist",
-                    metadata: [
-                        "jellyfinUserID": .string(jellyfinUserID),
-                        "error": .string(error.localizedDescription),
-                    ]
-                )
-            }
+        watchlistSyncTask = Task { @MainActor in
+            await previousTask?.value
+
+            await service.syncWatchlists(
+                tmdbID: tmdbID,
+                mediaType: mediaType,
+                title: title,
+                adding: adding,
+                removing: removing
+            )
         }
+    }
+
+    /// The entry for this title with `audience`, refreshed from `details`: the existing entry,
+    /// else a new one added by a grown-up on the couch. Shared by saving the audience and tagging a request.
+    private func updatedEntry(
+        audience: Set<String>,
+        details: SeerrMediaDetails,
+        session: UserSession
+    ) -> AudienceWatchlistEntry {
+        var entry = watchlistEntry ?? makeEntry(
+            details: details,
+            audience: audience,
+            addedBy: AudienceWatchlistActions.addedByUserID(for: session.couch),
+            jellyfinItemID: libraryItem?.id
+        )
+        entry.audience = audience
+        entry.title = details.title
+        entry.year = Self.releaseYear(from: details.releaseDate) ?? entry.year
+        entry.posterPath = details.posterPath ?? entry.posterPath
+        entry.jellyfinItemID = libraryItem?.id ?? entry.jellyfinItemID
+        entry.isDeleted = false
+
+        return entry
     }
 
     private func makeEntry(
