@@ -131,6 +131,9 @@ extension L10n {
 
     static let swiftfin = "Swiftfin"
     static let jellyfin = "Jellyfin"
+    static let seerr = "Seerr"
+    static let jellyseerr = "Jellyseerr"
+    static let tmdb = "TMDB"
 
     // MARK: - Platforms
 
