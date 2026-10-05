@@ -222,7 +222,11 @@ extension NetworkLogger {
     /// A Pulse network logger for Seerr that redacts the admin API key.
     static func seerr() -> NetworkLogger {
         var configuration = NetworkLogger.Configuration()
-        configuration.sensitiveHeaders = ["X-Api-Key", "Cookie", "Set-Cookie"]
+        // Pulse 5.2.3 drops its `.caseInsensitive` option for these patterns, so list each casing
+        configuration.sensitiveHeaders = [
+            "X-Api-Key", "x-api-key", "X-API-Key", "X-API-KEY",
+            "Cookie", "cookie", "Set-Cookie", "set-cookie",
+        ]
         configuration.sensitiveDataFields = ["apiKey", "password", "plexToken", "jellyfinAuthToken"]
         return NetworkLogger(configuration: configuration)
     }
