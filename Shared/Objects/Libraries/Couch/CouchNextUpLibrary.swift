@@ -147,7 +147,8 @@ struct CouchNextUpLibrary: BaseItemKindLibrary {
     /// Episodes taken from another member's Next Up carry that member's user data.
     /// Fetch them again as the primary user, like every other row on the home screen.
     ///
-    /// If that request fails, the episodes are kept as they are.
+    /// If that request fails, only the primary user's own episodes are kept: an episode from another
+    /// member's list was never checked against the primary user's access (kid-safe browsing).
     private static func withPrimaryUserData(
         _ episodes: [BaseItemDto],
         primaryEpisodeIDs: Set<String>,
@@ -171,7 +172,11 @@ struct CouchNextUpLibrary: BaseItemKindLibrary {
         } catch {
             Logger.swiftfin().error("Couch: could not fetch next up episodes: \(error.localizedDescription)")
 
-            return episodes
+            return episodes.filter { episode in
+                guard let id = episode.id else { return false }
+
+                return primaryEpisodeIDs.contains(id)
+            }
         }
     }
 }
