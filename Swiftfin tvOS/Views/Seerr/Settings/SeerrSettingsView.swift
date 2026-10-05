@@ -183,7 +183,13 @@ struct SeerrSettingsView: View {
         Section {
             LabeledContent(L10n.SeerrTV.currentServer, value: currentHost)
 
-            if seerrService.isConfigured, let version = viewModel.version {
+            if hasServer, !viewModel.isReachable {
+                // `/status` just failed: orange instead of "Connected"
+                LabeledContent(L10n.status) {
+                    Label(L10n.SeerrSettings.unreachable, systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                }
+            } else if seerrService.isConfigured, let version = viewModel.version {
                 LabeledContent(L10n.status, value: L10n.SeerrSettings.connectedTo(version))
             }
 

@@ -232,13 +232,13 @@ private struct SeerrMediaPosterOverlay: View {
         case .pending:
             QuadrantItem(color: .orange) {
                 Text(Image(systemName: "hourglass"))
-                    .accessibilityLabel(L10n.SeerrDiscover.requested)
+                    .accessibilityLabel(L10n.Seerr.statusPending)
             }
 
         case .processing:
             QuadrantItem(color: .blue) {
                 Text(Image(systemName: "hourglass"))
-                    .accessibilityLabel(L10n.SeerrDiscover.processing)
+                    .accessibilityLabel(L10n.Seerr.statusProcessing)
             }
 
         case .unknown, .blocklisted, .deleted:

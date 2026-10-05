@@ -76,6 +76,12 @@ final class SeerrService: ObservableObject {
     /// Session users whose browsing session was checked since the last load.
     private var checkedBrowsingUserIDs: Set<String> = []
 
+    /// Jellyfin users whose last Quick Connect sign-in failed in a way that retrying won't fix:
+    /// Seerr denied them, Quick Connect is off, or Seerr is too old. Kept until the next load
+    /// (app launch, another Jellyfin server, Seerr reconfigured) or their next successful sign-in.
+    /// The silent couch sign-in (`signInCouch(_:)`) skips them; network failures are never added.
+    private(set) var hopelessSignInUserIDs: Set<String> = []
+
     init() {
         reload()
 
@@ -97,7 +103,7 @@ final class SeerrService: ObservableObject {
 
     /// Validates the server and API key, then persists them for the current Jellyfin server.
     ///
-    /// - Throws: `SeerrError.unauthorized` for a rejected key, `SeerrError.server` / `URLError`
+    /// - Throws: `SeerrError.unauthorized` for a rejected key, `SeerrError.unreachable` / `SeerrError.server`
     ///           when the server can't be reached, or an `ErrorMessage` for invalid input.
     func configure(url: URL, apiKey: String) async throws {
         guard let serverID = currentServerID else {
@@ -158,7 +164,7 @@ final class SeerrService: ObservableObject {
     ///
     /// A saved API key is kept unless the new server rejects it.
     ///
-    /// - Throws: `SeerrError.server` / `URLError` when the server can't be reached, or an
+    /// - Throws: `SeerrError.unreachable` / `SeerrError.server` when the server can't be reached, or an
     ///           `ErrorMessage` for invalid input or a server too old for Quick Connect.
     func configure(url: URL) async throws {
         guard let serverID = currentServerID else {
@@ -276,10 +282,10 @@ final class SeerrService: ObservableObject {
         if let memberClient = sessionClient(forJellyfinUserID: jellyfinUserID) {
             do {
                 return try await operation(memberClient)
-            } catch SeerrError.unauthorized {
+            } catch let error as SeerrError where error.isAuthenticationFailure {
                 // A 403 also means "missing permission": only an expired session fails `/auth/me`
                 guard await Self.isSessionExpired(memberClient) else {
-                    throw SeerrError.unauthorized
+                    throw error
                 }
 
                 if let renewedClient = await renewSession(jellyfinUserID: jellyfinUserID) {
@@ -430,6 +436,7 @@ final class SeerrService: ObservableObject {
         actingClients = [:]
         sessionClients = [:]
         checkedBrowsingUserIDs = []
+        hopelessSignInUserIDs = []
 
         guard let serverID,
               let urlString = Defaults[Self.serverURLKey(serverID: serverID)],
@@ -587,7 +594,10 @@ final class SeerrService: ObservableObject {
         let serverStatus = try await publicClient.status()
 
         guard SeerrClient.supportsQuickConnect(version: serverStatus.version) else {
-            throw ErrorMessage(L10n.SeerrQuickConnect.unsupportedVersion(serverStatus.version))
+            throw hopelessSignInFailure(
+                L10n.SeerrQuickConnect.unsupportedVersion(serverStatus.version),
+                jellyfinUserID: jellyfinUserID
+            )
         }
 
         // 1. Seerr asks Jellyfin for a Quick Connect code
@@ -604,10 +614,26 @@ final class SeerrService: ObservableObject {
             switch status {
             case 403:
                 // "Quick Connect is only supported by Jellyfin."
-                throw ErrorMessage(message ?? L10n.SeerrQuickConnect.errorQuickConnectDisabled)
+                throw hopelessSignInFailure(
+                    message ?? L10n.SeerrQuickConnect.errorQuickConnectDisabled,
+                    jellyfinUserID: jellyfinUserID
+                )
+
             case 404:
-                throw ErrorMessage(L10n.SeerrQuickConnect.unsupportedVersion(serverStatus.version))
+                throw hopelessSignInFailure(
+                    L10n.SeerrQuickConnect.unsupportedVersion(serverStatus.version),
+                    jellyfinUserID: jellyfinUserID
+                )
+
+            case 500:
+                // Jellyfin refused: Quick Connect is turned off
+                throw hopelessSignInFailure(
+                    L10n.SeerrQuickConnect.errorQuickConnectDisabled,
+                    jellyfinUserID: jellyfinUserID
+                )
+
             default:
+                // e.g. a proxy's 502 while Seerr restarts: worth retrying
                 throw ErrorMessage(L10n.SeerrQuickConnect.errorQuickConnectDisabled)
             }
         }
@@ -631,9 +657,10 @@ final class SeerrService: ObservableObject {
         }
 
         // 3. Seerr turns the approved request into a session
-        let signIn = try await authenticate(secret: quickConnect.secret, client: publicClient)
+        let signIn = try await authenticate(secret: quickConnect.secret, client: publicClient, jellyfinUserID: jellyfinUserID)
 
         keychain.set(signIn.cookie, forKey: Self.sessionKeychainKey(serverID: serverID, jellyfinUserID: jellyfinUserID))
+        hopelessSignInUserIDs.remove(jellyfinUserID)
 
         logger.info(
             "Signed in to Seerr with Quick Connect",
@@ -656,24 +683,28 @@ final class SeerrService: ObservableObject {
     }
 
     /// Step 3, retried once: Jellyfin may need a moment to mark the request as authorized.
-    private func authenticate(secret: String, client publicClient: SeerrClient) async throws -> SeerrSignIn {
+    private func authenticate(
+        secret: String,
+        client publicClient: SeerrClient,
+        jellyfinUserID: String
+    ) async throws -> SeerrSignIn {
         do {
             return try await publicClient.authenticateQuickConnect(secret: secret)
         } catch SeerrError.unauthorized {
             try await Task.sleep(nanoseconds: 1_000_000_000)
         } catch {
-            throw Self.signInError(error)
+            throw signInError(error, jellyfinUserID: jellyfinUserID)
         }
 
         do {
             return try await publicClient.authenticateQuickConnect(secret: secret)
         } catch {
-            throw Self.signInError(error)
+            throw signInError(error, jellyfinUserID: jellyfinUserID)
         }
     }
 
-    /// Readable errors for `authenticateQuickConnect(secret:)`.
-    private static func signInError(_ error: Error) -> Error {
+    /// Readable errors for `authenticateQuickConnect(secret:)`. "Access denied" is remembered as hopeless.
+    private func signInError(_ error: Error, jellyfinUserID: String) -> Error {
         switch error {
         case SeerrError.unauthorized:
             // `INVALID_CREDENTIALS`: the request wasn't (yet) authorized
@@ -682,13 +713,19 @@ final class SeerrService: ObservableObject {
         case let SeerrError.server(status, message) where status == 403:
             // "Access denied.": not imported and new Jellyfin sign-in is off
             if let message, message != "Access denied." {
-                return ErrorMessage(message)
+                return hopelessSignInFailure(message, jellyfinUserID: jellyfinUserID)
             }
-            return ErrorMessage(L10n.SeerrQuickConnect.errorAccessDenied)
+            return hopelessSignInFailure(L10n.SeerrQuickConnect.errorAccessDenied, jellyfinUserID: jellyfinUserID)
 
         default:
             return error
         }
+    }
+
+    /// Remembers a sign-in failure that retrying won't fix (`hopelessSignInUserIDs`) and returns its error.
+    private func hopelessSignInFailure(_ message: String, jellyfinUserID: String) -> ErrorMessage {
+        hopelessSignInUserIDs.insert(jellyfinUserID)
+        return ErrorMessage(message)
     }
 
     /// Forgets a session locally, then ends it on the server in the background.
@@ -750,7 +787,7 @@ final class SeerrService: ObservableObject {
         do {
             _ = try await client.me()
             return false
-        } catch SeerrError.unauthorized {
+        } catch let error as SeerrError where error.isAuthenticationFailure {
             return true
         } catch {
             return false

@@ -27,6 +27,7 @@ extension SeerrService {
     }
 
     /// Signs the members above in one by one. Returns failures by Jellyfin user id; never throws.
+    /// Skips members in `hopelessSignInUserIDs` (denied, Quick Connect off, Seerr too old); network failures retry.
     ///
     /// Concurrent sign-ins of the same person share one attempt (`signInWithQuickConnect(jellyfinUserID:)`).
     func signInCouch(_ couch: CouchGroup) async -> [String: Error] {
@@ -35,8 +36,8 @@ extension SeerrService {
         for member in couchMembersNeedingSignIn(couch) {
             guard !Task.isCancelled else { break }
 
-            // Signed in meanwhile (e.g. by a silent sign-in)
-            guard !signedInUserIDs.contains(member.id) else { continue }
+            // Signed in meanwhile (e.g. by a silent sign-in), or denied before: retrying won't help (#55)
+            guard !signedInUserIDs.contains(member.id), !hopelessSignInUserIDs.contains(member.id) else { continue }
 
             do {
                 try await signInWithQuickConnect(jellyfinUserID: member.id)

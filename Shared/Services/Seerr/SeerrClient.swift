@@ -517,7 +517,7 @@ final class SeerrClient: Sendable {
             let user: SeerrUser = try await send(Request(path: "/user/jellyfin/\(normalizedID)"))
             return user.id
         } catch let error as SeerrError {
-            if case .unauthorized = error {
+            if error.isAuthenticationFailure || error.isUnreachable {
                 throw error
             }
         }
@@ -560,7 +560,12 @@ final class SeerrClient: Sendable {
             request.headers = headers
         }
 
-        return try await apiClient.data(for: request)
+        do {
+            return try await apiClient.data(for: request)
+        } catch let error as URLError where SeerrError.isUnreachable(error) {
+            // "Seerr is down" instead of raw URLError text
+            throw SeerrError.unreachable(host: SeerrError.displayHost(of: baseURL))
+        }
     }
 
     private func decode<Value: Decodable>(_ type: Value.Type, from data: Data) throws -> Value {
@@ -724,6 +729,10 @@ private struct SeerrClientDelegate: APIClientDelegate, Sendable {
         // The auth middleware answers `403 { status, error }` for unknown keys or users;
         // route errors (missing permission, quota, ...) use `{ message }`.
         if statusCode == 401 || (statusCode == 403 && body?.message == nil) {
+            // A session client's sign-in ran out; never blame an API key it doesn't use
+            if auth?.isSession == true {
+                throw SeerrError.sessionExpired
+            }
             throw SeerrError.unauthorized
         }
 

@@ -223,7 +223,21 @@ struct SeerrSettingsView: View {
     @ViewBuilder
     private var statusSection: some View {
         Section(L10n.status) {
-            if seerrService.isConfigured {
+            if !viewModel.isReachable {
+                // `/status` just failed: never a green "Connected"
+                Label {
+                    Text(L10n.SeerrSettings.unreachable)
+                } icon: {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange)
+                }
+
+                Button(L10n.retry) {
+                    viewModel.load()
+                }
+                .foregroundStyle(accentColor)
+                .disabled(isBusy)
+            } else if seerrService.isConfigured {
                 Label {
                     if let version = viewModel.version {
                         Text(L10n.SeerrSettings.connectedTo(version))

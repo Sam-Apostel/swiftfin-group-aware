@@ -58,6 +58,64 @@ struct DiscoverView: View {
         }
     }
 
+    // MARK: - Error
+
+    /// Seerr is down, or rejected us: what happened, Retry, and a way to the Seerr settings.
+    private var errorView: some View {
+        ContentUnavailableView {
+            Label(errorTitle, systemImage: errorSystemImage)
+        } description: {
+            if let recoverySuggestion = (viewModel.error as? LocalizedError)?.recoverySuggestion {
+                Text(recoverySuggestion)
+            }
+        } actions: {
+            Button {
+                viewModel.refresh()
+            } label: {
+                Text(L10n.retry)
+                    .frame(maxWidth: .infinity)
+            }
+            .fontWeight(.semibold)
+            .backport
+            .buttonStyle(.glassProminent.shadow(false))
+            .tint(accentColor)
+            .controlSize(.large)
+            .frame(maxWidth: 300)
+
+            Button {
+                router.route(to: .seerrSettings)
+            } label: {
+                Text(L10n.Seerr.seerrSettings)
+                    .frame(maxWidth: .infinity)
+            }
+            .fontWeight(.semibold)
+            .buttonStyle(.bordered)
+            .tint(accentColor)
+            .controlSize(.large)
+            .frame(maxWidth: 300)
+        }
+    }
+
+    private var errorTitle: String {
+        viewModel.error?.localizedDescription ?? L10n.unknownError
+    }
+
+    private var errorSystemImage: String {
+        guard let seerrError = viewModel.error as? SeerrError else {
+            return "exclamationmark.triangle"
+        }
+
+        if seerrError.isUnreachable {
+            return "wifi.exclamationmark"
+        }
+
+        if seerrError.isAuthenticationFailure {
+            return "person.crop.circle.badge.exclamationmark"
+        }
+
+        return "exclamationmark.triangle"
+    }
+
     // MARK: - Rows
 
     private var rowsView: some View {
@@ -100,7 +158,7 @@ struct DiscoverView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
         case .error:
-            viewModel.error.map(ErrorView.init)
+            errorView
 
         case .content:
             rowsView

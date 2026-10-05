@@ -38,6 +38,15 @@ extension L10n {
         }
 
         static let update = "Update"
+        /// Shown instead of "Connected" when `/status` just failed.
+        static let unreachable = "Can't reach Seerr right now"
+
+        // MARK: - Sign In
+
+        /// "Couldn't sign Tuur in: Access denied."
+        static func couldNotSignIn(_ name: String, _ message: String) -> String {
+            "Couldn't sign \(name) in: \(message)"
+        }
 
         // MARK: - People
 
@@ -54,7 +63,7 @@ extension L10n {
 
         static let asEachPerson = "Requests as each person"
         static let asEachPersonDescription =
-            "Requests and watchlists are made as each person (through the admin API key), so Seerr shows who asked for what."
+            "Requests and watchlists are made as each person, so Seerr shows who asked for what — with Quick Connect, or the API key if you added one."
 
         // MARK: - Disconnect
 

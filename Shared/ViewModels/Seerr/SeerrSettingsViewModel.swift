@@ -50,6 +50,9 @@ final class SeerrSettingsViewModel: ObservableObject {
     private(set) var people: [Person] = []
     @Published
     private(set) var version: String?
+    /// Whether the last `GET /status` worked. `true` until checked, so "Connected" doesn't flash orange.
+    @Published
+    private(set) var isReachable: Bool = true
     /// The Jellyfin user ids currently signing in with Quick Connect.
     @Published
     private(set) var signingInUserIDs: Set<String> = []
@@ -90,6 +93,7 @@ final class SeerrSettingsViewModel: ObservableObject {
         guard seerrService.serverURL != nil else {
             refreshTask?.cancel()
             version = nil
+            isReachable = true
             people = []
             return
         }
@@ -101,8 +105,9 @@ final class SeerrSettingsViewModel: ObservableObject {
 
     /// Validates and saves the Seerr connection.
     ///
-    /// Without an API key the server is saved for Quick Connect, and the current
-    /// user is signed in right away when nobody is signed in yet.
+    /// Without an API key the server is saved for Quick Connect, and when nobody is signed in yet
+    /// the couch's grown-up requester (`requesterJellyfinUserID(for:)`) is signed in right away,
+    /// never a child: when the requester would be a child, nobody is signed in automatically.
     ///
     /// Returns `true` on success; on failure `error` is set.
     func connect(url: String, apiKey: String) async -> Bool {
@@ -140,12 +145,29 @@ final class SeerrSettingsViewModel: ObservableObject {
         seerrService.publishHouseholdServer()
 
         if !seerrService.hasAPIKey, seerrService.signedInUserIDs.isEmpty,
-           let currentUserID = Container.shared.currentUserSession()?.user.id
+           let requesterID = automaticSignInUserID()
         {
-            return await signIn(jellyfinUserID: currentUserID)
+            return await signIn(jellyfinUserID: requesterID)
         }
 
         return true
+    }
+
+    /// Who Connect signs in by itself: the couch's grown-up requester. `nil` (fail closed) when that
+    /// would be a child (`isChildAudience`), e.g. a kid alone on the couch: people then sign in from the list.
+    private func automaticSignInUserID() -> String? {
+        guard let couch = Container.shared.currentUserSession()?.couch else { return nil }
+
+        let requesterID = seerrService.requesterJellyfinUserID(for: couch)
+
+        guard let requester = couch.members.first(where: { $0.id == requesterID }),
+              !requester.isChildAudience
+        else {
+            logger.info("Seerr: no grown-up on the couch to sign in automatically")
+            return nil
+        }
+
+        return requester.id
     }
 
     // MARK: - Quick Connect
@@ -154,15 +176,82 @@ final class SeerrSettingsViewModel: ObservableObject {
     /// Returns `true` on success; on failure `error` is set.
     @discardableResult
     func signIn(jellyfinUserID: String) async -> Bool {
-        guard !signingInUserIDs.contains(jellyfinUserID) else { return false }
+        switch await performSignIn(jellyfinUserID: jellyfinUserID) {
+        case .signedIn:
+            refresh()
+            return true
+
+        case let .failed(error):
+            self.error = error
+            return false
+
+        case .skipped:
+            return false
+        }
+    }
+
+    /// Signs in everyone who can sign in from this device, one after the other (sequential:
+    /// parallel Quick Connect sign-ins race). A failure doesn't stop the others; every failure
+    /// is named in `error` ("Couldn't sign Tuur in: …").
+    ///
+    /// Returns `true` when everyone was signed in.
+    func signInEveryone() async -> Bool {
+        var failures: [String] = []
+        var didSignIn = false
+        var isComplete = true
+
+        for person in peopleToSignIn {
+            guard !Task.isCancelled else {
+                isComplete = false
+                break
+            }
+
+            // Signed in meanwhile (e.g. by Discover)
+            guard !seerrService.signedInUserIDs.contains(person.id) else { continue }
+
+            switch await performSignIn(jellyfinUserID: person.id) {
+            case .signedIn:
+                didSignIn = true
+
+            case let .failed(error):
+                failures.append(L10n.SeerrSettings.couldNotSignIn(person.user.username, error.localizedDescription))
+
+            case .skipped:
+                isComplete = false
+            }
+        }
+
+        if didSignIn {
+            refresh()
+        }
+
+        if failures.isNotEmpty {
+            error = ErrorMessage(failures.joined(separator: "\n"))
+            return false
+        }
+
+        return isComplete
+    }
+
+    private enum SignInResult {
+        case signedIn
+        case failed(Error)
+        /// Already signing in, or cancelled: nothing to show.
+        case skipped
+    }
+
+    /// One Quick Connect sign-in, logged. Doesn't touch `error`.
+    private func performSignIn(jellyfinUserID: String) async -> SignInResult {
+        guard !signingInUserIDs.contains(jellyfinUserID) else { return .skipped }
 
         signingInUserIDs.insert(jellyfinUserID)
         defer { signingInUserIDs.remove(jellyfinUserID) }
 
         do {
             try await seerrService.signInWithQuickConnect(jellyfinUserID: jellyfinUserID)
+            return .signedIn
         } catch is CancellationError {
-            return false
+            return .skipped
         } catch {
             logger.error(
                 "Failed to sign in to Seerr with Quick Connect",
@@ -171,22 +260,8 @@ final class SeerrSettingsViewModel: ObservableObject {
                     "error": .string(error.localizedDescription),
                 ]
             )
-            self.error = error
-            return false
+            return .failed(error)
         }
-
-        refresh()
-        return true
-    }
-
-    /// Signs in everyone who can sign in from this device, one after the other.
-    /// Stops at the first failure, which is shown through `error`.
-    func signInEveryone() async -> Bool {
-        for person in peopleToSignIn {
-            guard await signIn(jellyfinUserID: person.id) else { return false }
-        }
-
-        return true
     }
 
     func signOut(jellyfinUserID: String) {
@@ -208,6 +283,7 @@ final class SeerrSettingsViewModel: ObservableObject {
         seerrService.disconnect()
 
         version = nil
+        isReachable = true
         people = []
     }
 
@@ -224,6 +300,7 @@ final class SeerrSettingsViewModel: ObservableObject {
     private func refreshVersion() async {
         guard seerrService.serverURL != nil else {
             version = nil
+            isReachable = true
             return
         }
 
@@ -233,6 +310,9 @@ final class SeerrSettingsViewModel: ObservableObject {
             guard !Task.isCancelled else { return }
 
             version = status.version
+            isReachable = true
+        } catch is CancellationError {
+            return
         } catch {
             guard !Task.isCancelled else { return }
 
@@ -241,6 +321,8 @@ final class SeerrSettingsViewModel: ObservableObject {
                 metadata: ["error": .string(error.localizedDescription)]
             )
             version = nil
+            // `/status` is public: when it fails, "Connected" would be a lie
+            isReachable = false
         }
     }
 
