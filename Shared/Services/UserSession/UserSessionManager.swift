@@ -86,6 +86,14 @@ final class UserSessionManager: ObservableObject {
             }
 
             try await updateCurrentSession(with: resolveStoredSession())
+
+            // A restored couch keeps its stored primary: on a cold launch (no foreground
+            // notification) sync the kid flags too, so it turns stricter by itself
+            if currentSession != nil {
+                Task { @MainActor [weak self] in
+                    await self?.refreshKidsAndApplyStricterPrimary()
+                }
+            }
         } catch {
             logger.error(
                 "Unable to restore launch session",
@@ -129,7 +137,19 @@ final class UserSessionManager: ObservableObject {
     ///   so the pick order is kept and a kid never becomes the first pick.
     @MainActor
     func signIn(userIDs: [String]) async throws {
-        await refreshKidsBeforeSignIn(userIDs: userIDs)
+        try await signIn(userIDs: userIDs, refreshingKids: true)
+    }
+
+    /// `signIn(userIDs:)`, optionally without the bounded kids refresh first.
+    ///
+    /// `applyStricterPrimaryIfNeeded()` passes `false`: it has just checked the fresh flags
+    /// and that nothing is playing, so it must switch right away (no network wait in between,
+    /// during which playback could start and then be torn down by the session change).
+    @MainActor
+    private func signIn(userIDs: [String], refreshingKids: Bool) async throws {
+        if refreshingKids {
+            await refreshKidsBeforeSignIn(userIDs: userIDs)
+        }
 
         let members = couchMembers(
             for: userIDs,
@@ -251,6 +271,13 @@ final class UserSessionManager: ObservableObject {
         }
 
         // Only while still signed in
+        await refreshKidsAndApplyStricterPrimary()
+    }
+
+    /// Refreshes the members' user data and the household kid flags when the last kids refresh
+    /// is older than 10 minutes, then makes the couch stricter if needed. Does nothing while signed out.
+    @MainActor
+    private func refreshKidsAndApplyStricterPrimary() async {
         guard let currentSession else { return }
 
         if Container.shared.couchKidsStore().lastRefreshDate?.isStale(with: .minutes(10)) ?? true {
@@ -516,7 +543,8 @@ extension UserSessionManager {
         )
 
         do {
-            try await signIn(userIDs: orderedIDs)
+            // No kids refresh in between: the flags were just read and nothing is playing right now
+            try await signIn(userIDs: orderedIDs, refreshingKids: false)
             return true
         } catch {
             logger.error(
