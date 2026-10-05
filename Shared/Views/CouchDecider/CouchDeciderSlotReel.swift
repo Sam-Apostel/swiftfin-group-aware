@@ -178,7 +178,7 @@ struct CouchDeciderSlotReel: View {
             let interval = 0.06 + 0.29 * progress * progress
 
             #if os(iOS)
-            blurRadius = 3 * (1 - progress)
+            blurRadius = CGFloat(3 * (1 - progress))
             #endif
 
             show(others[index % others.count], animation: .linear(duration: interval * 0.85))

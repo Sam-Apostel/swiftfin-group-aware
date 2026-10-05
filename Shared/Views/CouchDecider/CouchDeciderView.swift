@@ -541,13 +541,19 @@ struct CouchDeciderView: View {
 
             try await Task.sleep(for: .milliseconds(200))
 
-            pendingAnimation = .appear
+            finishSwipe(direction: direction)
+        }
+    }
 
-            if direction < 0 {
-                viewModel.notTonight()
-            } else {
-                viewModel.shuffle()
-            }
+    /// Synchronous on purpose: in an async context `viewModel.shuffle()` would resolve to
+    /// the generated `async` overload and need an `await`.
+    private func finishSwipe(direction: CGFloat) {
+        pendingAnimation = .appear
+
+        if direction < 0 {
+            viewModel.notTonight()
+        } else {
+            viewModel.shuffle()
         }
     }
     #endif
