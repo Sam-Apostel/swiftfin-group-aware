@@ -169,6 +169,14 @@ extension Notifications.Key {
         Key("didAddServerUser")
     }
 
+    /// Posted after every user session change.
+    ///
+    /// - Payload: The IDs of the couch members, primary user first.
+    ///            Empty when signed out.
+    static var didChangeCouch: Key<[String]> {
+        Key("didChangeCouch")
+    }
+
     // MARK: - Playback
 
     static var didStartPlayback: Key<Void> {

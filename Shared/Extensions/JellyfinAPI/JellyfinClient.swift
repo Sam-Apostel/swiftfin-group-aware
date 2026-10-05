@@ -13,9 +13,13 @@ import UIKit
 
 extension JellyfinClient.Configuration {
 
+    /// - Parameter deviceIDSuffix: When set, it is appended to the device ID so that
+    ///   the client gets its own server session. Used by couch member sessions, so their
+    ///   calls never take over the primary user's server session on this device.
     static func swiftfinConfiguration(
         url: URL,
-        accessToken: String? = nil
+        accessToken: String? = nil,
+        deviceIDSuffix: String? = nil
     ) -> Self {
 
         let client = "Swiftfin \(UIDevice.platform)"
@@ -25,7 +29,12 @@ extension JellyfinClient.Configuration {
             .unicodeScalars
             .filter { CharacterSet.urlQueryAllowed.contains($0) }
             .description
-        let deviceID = "\(UIDevice.platform)_\(UIDevice.vendorUUIDString)"
+        var deviceID = "\(UIDevice.platform)_\(UIDevice.vendorUUIDString)"
+
+        if let deviceIDSuffix {
+            deviceID += "_\(deviceIDSuffix)"
+        }
+
         let version = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "0.0.1"
 
         return .init(

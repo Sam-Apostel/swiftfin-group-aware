@@ -33,7 +33,8 @@ struct UserSessionRootView: View {
                 PosterPreferencesEnvironment {
                     MainTabView()
                 }
-                .id(userSessionManager.currentSession?.user.id)
+                // Rebuild tabs and home whenever the people on the couch change
+                .id(userSessionManager.currentSession?.couch.id)
             }
         }
         .animation(.linear(duration: 0.1), value: userSessionManager.state)

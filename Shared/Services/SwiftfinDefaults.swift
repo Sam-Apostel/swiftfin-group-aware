@@ -91,6 +91,28 @@ extension Defaults.Keys {
 
     static let signOutOnBackground: Key<Bool> = AppKey("signOutOnBackground", default: true)
     static let signOutOnClose: Key<Bool> = AppKey("signOutOnClose", default: false)
+
+    // MARK: Couch
+
+    enum Couch {
+
+        /// The IDs of the users on the current couch, primary user first.
+        ///
+        /// Cleared on sign out.
+        static let memberIDs: Key<[String]> = AppKey("couchMemberIDs", default: [])
+
+        /// The IDs of the users on the last couch, in the order they were picked.
+        ///
+        /// Not cleared on sign out, used to pre-select the couch picker.
+        static let lastMemberIDs: Key<[String]> = AppKey("couchLastMemberIDs", default: [])
+
+        /// When a restricted member (kid or parental rating) is on the couch,
+        /// browse as the most restricted member.
+        static let kidSafeBrowsing: Key<Bool> = AppKey("couchKidSafeBrowsing", default: true)
+
+        /// Hide items from couch home rows that any member has already watched.
+        static let hideWatchedByAnyMember: Key<Bool> = AppKey("couchHideWatchedByAnyMember", default: true)
+    }
 }
 
 // MARK: User

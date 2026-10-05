@@ -82,6 +82,7 @@ final class UserSessionManager: ObservableObject {
         do {
             if Defaults[.signOutOnClose] {
                 Defaults[.lastSignedInUserID] = .signedOut
+                Defaults[.Couch.memberIDs] = []
             }
 
             try await updateCurrentSession(with: resolveStoredSession())
@@ -108,9 +109,41 @@ final class UserSessionManager: ObservableObject {
         }
     }
 
+    /// Signs in a single user, as a couch of one.
     @MainActor
     func signIn(userID: String) async throws {
-        Defaults[.lastSignedInUserID] = .signedIn(userID: userID)
+        try await signIn(userIDs: [userID])
+    }
+
+    /// Signs in everyone on the couch, in the order they were picked.
+    ///
+    /// Users that are not stored, are on another server than the first
+    /// picked user, or have no stored access token are dropped. The primary
+    /// user is the first picked user, unless kid-safe browsing is enabled
+    /// and a member is restricted: then the most restricted member is the primary.
+    @MainActor
+    func signIn(userIDs: [String]) async throws {
+        let members = couchMembers(
+            for: userIDs,
+            in: StoredValues[.User.users]
+        )
+
+        if let primary = couchPrimary(of: members) {
+            let otherMemberIDs = members.map(\.id).filter { $0 != primary.id }
+
+            Defaults[.Couch.memberIDs] = [primary.id] + otherMemberIDs
+            Defaults[.Couch.lastMemberIDs] = members.map(\.id)
+            Defaults[.lastSignedInUserID] = .signedIn(userID: primary.id)
+        } else {
+            // No usable couch members, keep the single user sign in behavior
+            guard let userID = userIDs.first else {
+                throw UserSessionError.missingCurrentSession
+            }
+
+            Defaults[.Couch.memberIDs] = []
+            Defaults[.lastSignedInUserID] = .signedIn(userID: userID)
+        }
+
         try await updateCurrentSession(with: resolveStoredSession())
 
         Task {
@@ -123,6 +156,7 @@ final class UserSessionManager: ObservableObject {
         guard currentSession != nil else { return }
 
         Defaults[.lastSignedInUserID] = .signedOut
+        Defaults[.Couch.memberIDs] = []
         await refreshCurrentSession()
 
         logger.info(
@@ -267,6 +301,18 @@ final class UserSessionManager: ObservableObject {
                 metadata: ["error": .string(error.localizedDescription)]
             )
         }
+
+        // Keep the other couch members' policies fresh
+        for member in currentSession.couch.otherMembers where member.storedAccessToken != nil {
+            do {
+                try await member.updateUserData(server: currentSession.server)
+            } catch {
+                logger.error(
+                    "Unable to refresh couch member information",
+                    metadata: ["error": .string(error.localizedDescription)]
+                )
+            }
+        }
     }
 
     private func setupObservations() {
@@ -310,7 +356,11 @@ final class UserSessionManager: ObservableObject {
         currentSession = newSession
         Container.shared.currentUserSession.reset()
 
-        if previousSession?.server.id != newSession?.server.id || previousSession?.user.id != newSession?.user.id {
+        let didChangeServer = previousSession?.server.id != newSession?.server.id
+        let didChangeUser = previousSession?.user.id != newSession?.user.id
+        let didChangeCouch = previousSession?.couch.id != newSession?.couch.id
+
+        if didChangeServer || didChangeUser || didChangeCouch {
             Container.shared.mediaPlayerManager.reset()
         }
 
@@ -321,22 +371,94 @@ final class UserSessionManager: ObservableObject {
         }
 
         newSession?.didStart()
+
+        Notifications[.didChangeCouch].post(newSession?.couch.members.map(\.id) ?? [])
     }
 
     private func resolveStoredSession() throws -> UserSession? {
         guard case let .signedIn(userId) = Defaults[.lastSignedInUserID] else { return nil }
-        guard let user = StoredValues[.User.users].first(where: { $0.id == userId }) else {
+
+        let storedUsers = StoredValues[.User.users]
+
+        guard let user = storedUsers.first(where: { $0.id == userId }) else {
             Defaults[.lastSignedInUserID] = .signedOut
+            Defaults[.Couch.memberIDs] = []
             throw UserSessionError.invalidStoredSession(userID: userId)
         }
         guard let server = StoredValues[.Server.servers].first(where: { $0.id == user.serverID }) else {
             Defaults[.lastSignedInUserID] = .signedOut
+            Defaults[.Couch.memberIDs] = []
             throw UserSessionError.invalidStoredSession(userID: userId)
         }
 
         return .init(
             server: server,
-            user: user
+            user: user,
+            couch: storedCouch(primary: user, in: storedUsers)
+        )
+    }
+}
+
+// MARK: - Couch
+
+extension UserSessionManager {
+
+    /// The stored users for the given IDs, in order, that can be on the same couch.
+    ///
+    /// Drops IDs that are not stored users, are on another server than the
+    /// first stored user, have no stored access token, or are duplicates.
+    private func couchMembers(for userIDs: [String], in storedUsers: [UserState]) -> [UserState] {
+        var couchServerID: String?
+        var seenIDs: Set<String> = []
+        var members: [UserState] = []
+
+        for userID in userIDs {
+            guard let user = storedUsers.first(where: { $0.id == userID }) else { continue }
+
+            let serverID = couchServerID ?? user.serverID
+            couchServerID = serverID
+
+            guard user.serverID == serverID,
+                  user.storedAccessToken != nil,
+                  seenIDs.insert(user.id).inserted
+            else { continue }
+
+            members.append(user)
+        }
+
+        return members
+    }
+
+    /// The member the app should browse as.
+    ///
+    /// The first member, unless kid-safe browsing is enabled and a member
+    /// is restricted: then the most restricted member.
+    private func couchPrimary(of members: [UserState]) -> UserState? {
+        guard let firstMember = members.first else { return nil }
+        guard members.count > 1, Defaults[.Couch.kidSafeBrowsing] else { return firstMember }
+        guard members.contains(where: \.isRestricted) else { return firstMember }
+
+        return members.min { $0.restrictionScore < $1.restrictionScore } ?? firstMember
+    }
+
+    /// Rebuilds the current couch from `Defaults[.Couch.memberIDs]`,
+    /// with the given primary user first.
+    ///
+    /// Falls back to a couch of only the primary user when the stored
+    /// members don't belong to the primary user.
+    private func storedCouch(primary: UserState, in storedUsers: [UserState]) -> CouchGroup {
+        let memberIDs = Defaults[.Couch.memberIDs]
+
+        guard memberIDs.contains(primary.id) else { return .solo(primary) }
+
+        let members = couchMembers(
+            for: [primary.id] + memberIDs,
+            in: storedUsers
+        )
+
+        return CouchGroup(
+            primary: primary,
+            members: members
         )
     }
 }
