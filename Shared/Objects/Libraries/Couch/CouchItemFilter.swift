@@ -34,7 +34,7 @@ enum CouchItemFilter {
     /// Keeps the items that every member can access and that weren't watched, following `excludePlayedBy`.
     ///
     /// An item counts as watched by a member when it is marked played for them,
-    /// or when they have a resume position in it.
+    /// when they have a resume position in it, or (a series) when they played some of its episodes.
     ///
     /// - Parameters:
     ///   - items: The items to filter. Their order is kept.
@@ -55,7 +55,8 @@ enum CouchItemFilter {
         let memberResults = await fetchItems(
             ids: ids,
             seenBy: memberSessions,
-            fields: nil,
+            // Jellyfin 10.10 only fills a series' `playedPercentage` with this field.
+            fields: [.recursiveItemCount],
             enableImages: false
         )
 
@@ -109,10 +110,15 @@ enum CouchItemFilter {
     }
 
     /// Whether the item's user data says it was played or started.
+    ///
+    /// A series is only marked played once every episode is played, so a partly watched
+    /// series is recognized by its `playedPercentage` (only filled for folders and started videos).
     static func hasWatched(_ item: BaseItemDto) -> Bool {
         guard let userData = item.userData else { return false }
 
-        return userData.isPlayed == true || (userData.playbackPositionTicks ?? 0) > 0
+        return userData.isPlayed == true
+            || (userData.playbackPositionTicks ?? 0) > 0
+            || (userData.playedPercentage ?? 0) > 0
     }
 
     /// Fetches the items with these ids as seen by `session`, in chunks.
