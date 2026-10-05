@@ -20,6 +20,11 @@ import JellyfinAPI
 /// instead of blanking the home.
 struct JustArrivedLibrary: BaseItemKindLibrary {
 
+    /// The home shows nothing until every row loaded, so a slow refresh (an unreachable Seerr
+    /// times out after 20 s per person) isn't awaited longer than this. It keeps running,
+    /// and the row uses the arrivals the service already had.
+    private static let refreshWaitLimit: Duration = .seconds(4)
+
     let couch: CouchGroup
     let libraryItemTypes: [BaseItemKind] = [.movie, .series]
     let parent: TitledLibraryParent
@@ -41,17 +46,27 @@ struct JustArrivedLibrary: BaseItemKindLibrary {
 
         // The service throttles itself, so a home refresh doesn't hit the server every time.
         if pageState.pageOffset == 0 {
-            await service.refresh(session: session)
+            let refresh = Task {
+                await service.refresh(session: session)
+            }
+
+            await Self.wait(for: refresh, atMost: Self.refreshWaitLimit)
         }
 
         var seenItemIDs: Set<String> = []
         var items: [BaseItemDto] = []
+        // Series that were already in the library when wished for: a new season arrived
+        var newMediaSeriesIDs: Set<String> = []
 
         for arrival in service.arrivals(forMembers: couch.memberIDs) {
             guard let item = service.item(for: arrival),
                   let itemID = item.id,
                   seenItemIDs.insert(itemID).inserted
             else { continue }
+
+            if item.type == .series, let dateCreated = item.dateCreated, dateCreated <= arrival.wishedAt {
+                newMediaSeriesIDs.insert(itemID)
+            }
 
             items.append(item)
         }
@@ -62,12 +77,80 @@ struct JustArrivedLibrary: BaseItemKindLibrary {
         // on the couch can't access (library access, parental controls).
         let sessions = [session] + CouchHomeSupport.memberSessions(for: couch, primary: session)
 
-        let unplayedItems = await CouchItemFilter.filter(
+        let memberResults = await CouchItemFilter.fetchItems(
+            ids: CouchItemFilter.uniqueIDs(of: items),
+            seenBy: sessions,
+            // Jellyfin 10.10 only fills a series' `playedPercentage` with this field
+            fields: [.recursiveItemCount],
+            enableImages: false
+        )
+        .map { memberItems in
+            memberItems?.map { Self.ignoringEarlierSeasons($0, newMediaSeriesIDs: newMediaSeriesIDs) }
+        }
+
+        let unplayedItems = CouchItemFilter.filter(
             items,
-            memberSessions: sessions,
+            memberResults: memberResults,
             excludePlayedBy: .allMembers
         )
 
         return CouchHomeSupport.page(unplayedItems, pageState)
+    }
+
+    /// A new season of a series someone already started: the earlier seasons don't make it watched,
+    /// only a series played to the end does.
+    private static func ignoringEarlierSeasons(
+        _ item: BaseItemDto,
+        newMediaSeriesIDs: Set<String>
+    ) -> BaseItemDto {
+        guard let id = item.id,
+              newMediaSeriesIDs.contains(id),
+              item.userData?.isPlayed != true
+        else { return item }
+
+        var item = item
+        item.userData = nil
+        return item
+    }
+
+    /// Waits until `task` finished or `limit` passed, whichever comes first. `task` keeps running.
+    private static func wait(for task: Task<Void, Never>, atMost limit: Duration) async {
+        let resumeState = JustArrivedResumeState()
+
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            let timer = Task {
+                try? await Task.sleep(for: limit)
+
+                if resumeState.resume() {
+                    continuation.resume()
+                }
+            }
+
+            Task {
+                await task.value
+                timer.cancel()
+
+                if resumeState.resume() {
+                    continuation.resume()
+                }
+            }
+        }
+    }
+}
+
+/// Lets only the first of several callers resume a continuation.
+private final class JustArrivedResumeState: @unchecked Sendable {
+
+    private let lock = NSLock()
+    private var didResume = false
+
+    func resume() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard !didResume else { return false }
+
+        didResume = true
+        return true
     }
 }
