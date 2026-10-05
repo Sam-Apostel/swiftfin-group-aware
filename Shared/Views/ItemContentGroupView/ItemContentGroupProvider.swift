@@ -447,6 +447,7 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
         let response = try await send(request)
         Notifications[.itemUserDataDidChange].post(response.value)
         Notifications[.itemShouldRefreshMetadata].post(itemID)
+        userSession?.couchPlaybackService.mirrorPlayed(itemID: itemID, isPlayed: isPlayed)
     }
 
     private func setIsFavorite(_ isFavorite: Bool) async throws {

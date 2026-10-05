@@ -287,6 +287,7 @@ private struct BaseItemDtoPosterContextMenu: View {
         }
     }
 
+    @MainActor
     private func setIsPlayed(_ isPlayed: Bool) async throws {
         guard let itemID = item.id,
               let userSession = Container.shared.currentUserSession()
@@ -308,6 +309,7 @@ private struct BaseItemDtoPosterContextMenu: View {
         item.userData = response.value
         Notifications[.itemUserDataDidChange].post(response.value)
         Notifications[.itemShouldRefreshMetadata].post(itemID)
+        userSession.couchPlaybackService.mirrorPlayed(itemID: itemID, isPlayed: isPlayed)
     }
 
     private func setIsFavorite(_ isFavorite: Bool) async throws {
