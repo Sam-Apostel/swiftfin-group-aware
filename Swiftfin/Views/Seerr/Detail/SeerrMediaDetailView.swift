@@ -20,9 +20,6 @@ struct SeerrMediaDetailView: View {
     @Router
     private var router
 
-    @Toaster
-    private var toaster
-
     @State
     private var actionError: Error?
     @State
@@ -77,11 +74,14 @@ struct SeerrMediaDetailView: View {
         )
     }
 
+    // No toasts here: the app's `ToastProxy` is injected above `PreferencesView`'s
+    // UIHostingController, so `@Toaster` would crash outside the video player.
+    // The audience label and the status pill show the outcome instead.
     private func handle(_ event: SeerrMediaDetailViewModel._Event) {
         switch event {
         // The picker already plays the success haptic when it's tapped.
         case .audienceRemoved:
-            toaster.present(L10n.SeerrDetail.removedFromWatchlist, systemName: "checkmark.circle.fill")
+            break
 
         case let .audienceSaved(offerRequest):
             if offerRequest {
@@ -90,8 +90,6 @@ struct SeerrMediaDetailView: View {
                     try? await Task.sleep(for: .milliseconds(400))
                     isPresentingRequestOffer = true
                 }
-            } else {
-                toaster.present(L10n.SeerrDetail.savedToWatchlist, systemName: "checkmark.circle.fill")
             }
 
         case let .failed(message):
@@ -99,7 +97,6 @@ struct SeerrMediaDetailView: View {
 
         case .requested:
             UIDevice.feedback(.success)
-            toaster.present(L10n.SeerrDetail.requestSent, systemName: "checkmark.circle.fill")
         }
     }
 
@@ -169,7 +166,13 @@ struct SeerrMediaDetailView: View {
         .navigationTitle(viewModel.details?.title ?? .empty)
         .toolbarTitleDisplayMode(.inline)
         .refreshable {
-            viewModel.background.refresh()
+            // A background refresh never leaves `.error`, so Retry on the error view
+            // needs a foreground refresh.
+            if viewModel.state == .error {
+                viewModel.refresh()
+            } else {
+                viewModel.background.refresh()
+            }
         }
         .onFirstAppear {
             viewModel.refresh()
