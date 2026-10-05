@@ -1,51 +1,28 @@
 # TestFlight Action
 
-Use this guide to configure the required secrets for the TestFlight action.
+`.github/workflows/testflight.yml` archives the `Swiftfin` and `Swiftfin tvOS` schemes on the self-hosted Mac runner (`swiftfin-mac`) and uploads them to TestFlight with `xcodebuild`.
 
-> [!IMPORTANT]
-> A common cause of errors is erroneous new and empty lines in the base 64 encoded values and then again when they are put into GitHub Secrets. Try to strip strings whenever possible.
+Signing uses Xcode's automatic signing authenticated with an App Store Connect API key (`-allowProvisioningUpdates`): Xcode creates the cloud-managed distribution certificate and App Store profiles itself. No `.p12` or `.mobileprovision` secrets are needed.
 
 ## App Store Connect API Key
 
-Follow Apple’s guide to create an API Key: [Creating API keys for App Store Connect API](https://developer.apple.com/documentation/appstoreconnectapi/creating_api_keys_for_app_store_connect_api)
+App Store Connect ▸ Users and Access ▸ Integrations ▸ App Store Connect API ▸ ➕, with role **Admin** (cloud-managed signing needs Admin). Download the `.p8` (only possible once).
 
-Add these secrets:
+Add these repository secrets:
 
-- `APP_STORE_ISSUER_ID`: Issuer ID (plain text)
-- `APP_STORE_KEY_ID`: Key ID (plain text)
-- `APP_STORE_KEY_CONTENTS`: contents of the downloaded `.p8` key file (plain text)
+- `APP_STORE_KEY_ID`: Key ID
+- `APP_STORE_ISSUER_ID`: Issuer ID
+- `APP_STORE_KEY_CONTENTS`: the `.p8` file, as-is or base64-encoded
 
-## Certificate and Provisioning Profile
+```sh
+gh secret set APP_STORE_KEY_ID --body XXXXXXXXXX
+gh secret set APP_STORE_ISSUER_ID --body xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+gh secret set APP_STORE_KEY_CONTENTS < AuthKey_XXXXXXXXXX.p8
+```
 
-> [!IMPORTANT]
-> Assumes that the same certificate is used for the provisioning profiles of all platforms.
+## Running
 
-Follow GitHub’s guide to get the signing certificate: [Installing an Apple certificate on macOS runners](https://docs.github.com/en/actions/use-cases-and-examples/deploying/installing-an-apple-certificate-on-macos-runners-for-xcode-development)
+- Manually: Actions ▸ TestFlight ✈️ ▸ Run workflow (platform, optional version and build number).
+- On every push to `main`: set the repository variable `TESTFLIGHT_ON_PUSH` to `true`.
 
-Add these secrets:
-
-- `BUILD_CERTIFICATE_BASE64`: base64 of the `.p12` certificate file
-- `P12_PASSWORD`: password used when exporting the `.p12`
-- `CODE_SIGN_BASE64`: base64 of the certificate identity string  
-  - Example: `Apple Distribution Firstname Lastname (ABCD123456)`
-- `BUILD_PROVISION_PROFILE_IOS_BASE64`: base64 of the iOS `.mobileprovision`
-- `BUILD_PROVISION_PROFILE_TVOS_BASE64`: base64 of the tvOS `.mobileprovision`
-- `PROFILE_NAME_IOS_BASE64`: base64 of the iOS provisioning profile name
-- `PROFILE_NAME_TVOS_BASE64`: base64 of the tvOS provisioning profile name
-
-## Required secrets checklist
-
-- `APP_STORE_ISSUER_ID`
-- `APP_STORE_KEY_ID`
-- `APP_STORE_KEY_CONTENTS`
-- `BUILD_CERTIFICATE_BASE64`
-- `P12_PASSWORD`
-- `CODE_SIGN_BASE64`
-- `BUILD_PROVISION_PROFILE_IOS_BASE64`
-- `BUILD_PROVISION_PROFILE_TVOS_BASE64`
-- `PROFILE_NAME_IOS_BASE64`
-- `PROFILE_NAME_TVOS_BASE64`
-
-### Debugging
-
-Debug the deployment action through repository dispatch by having payload keys match the expected secret values.
+The build number defaults to the workflow run number, so it always increases. The version defaults to the project's `MARKETING_VERSION`.
