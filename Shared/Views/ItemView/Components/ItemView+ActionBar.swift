@@ -51,6 +51,8 @@ extension ItemView {
                 )
 
                 ItemAudienceLabel(item: provider.item)
+
+                CouchLanguageLabel(provider: provider)
             }
             .focusSection()
             .defaultFocus(

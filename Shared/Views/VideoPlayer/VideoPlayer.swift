@@ -104,7 +104,7 @@ struct VideoPlayer: View {
                 router.dismiss()
             }
         }
-
+        .couchLanguageAnnouncements(manager: manager, toastProxy: viewState.toastProxy)
         .alert(
             L10n.error,
             isPresented: .constant(manager.error != nil)

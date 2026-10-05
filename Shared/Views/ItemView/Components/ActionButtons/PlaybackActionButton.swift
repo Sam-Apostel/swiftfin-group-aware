@@ -7,6 +7,7 @@
 //
 
 import Defaults
+import FactoryKit
 import JellyfinAPI
 import SwiftUI
 
@@ -22,6 +23,9 @@ extension ItemActionButtons {
 
         @ViewContextContains(.isInMenu)
         private var isInMenu
+
+        @InjectedObject(\.couchLanguageStore)
+        private var couchLanguageStore: CouchLanguageStore
 
         private var mediaSources: [MediaSourceInfo] {
             provider.mediaPlayerItemProvider?.item.mediaSources ?? []
@@ -40,10 +44,28 @@ extension ItemActionButtons {
             provider.mediaPlayerItemProvider?.mediaSource?.supportedBitrates ?? []
         }
 
+        /// The couch's pick for the axes the user hasn't picked, so the pickers show what will play.
+        /// `nil` for a solo couch, which keeps today's behaviour.
+        private var couchDecision: CouchLanguageDecision? {
+            _ = couchLanguageStore.revision
+
+            guard let itemProvider = provider.mediaPlayerItemProvider,
+                  let mediaSource = itemProvider.mediaSource
+            else { return nil }
+
+            return CouchLanguages.decision(
+                for: mediaSource,
+                item: itemProvider.item,
+                audioStreamIndex: itemProvider.audioStreamIndex,
+                subtitleStreamIndex: itemProvider.subtitleStreamIndex
+            )
+        }
+
         private var audioStreamSelection: Binding<Int?> {
             Binding(
                 get: {
                     provider.mediaPlayerItemProvider?.audioStreamIndex
+                        ?? couchDecision?.audioStreamIndex
                         ?? provider.mediaPlayerItemProvider?.mediaSource?.defaultAudioStreamIndex
                         ?? audioStreams.first?.index
                 },
@@ -55,6 +77,7 @@ extension ItemActionButtons {
             Binding(
                 get: {
                     provider.mediaPlayerItemProvider?.subtitleStreamIndex
+                        ?? couchDecision?.subtitleStreamIndex
                         ?? provider.mediaPlayerItemProvider?.mediaSource?.defaultSubtitleStreamIndex
                         ?? -1
                 },
