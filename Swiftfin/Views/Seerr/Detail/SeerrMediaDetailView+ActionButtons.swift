@@ -200,8 +200,10 @@ extension SeerrMediaDetailView {
                         Image(systemName: systemImage)
                     }
 
+                    // Shrinks rather than truncates long labels ("Not while Tuur and Lien are on the couch")
                     Text(title)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                 }
                 .font(.callout)
                 .fontWeight(.semibold)
@@ -231,7 +233,8 @@ extension SeerrMediaDetailView {
                     Text(footnote)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                        .lineLimit(2)
+                        .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity)
                 }
 
