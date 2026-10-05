@@ -62,6 +62,8 @@ final class AudienceWatchlistStore: ObservableObject {
 
     private var refreshTask: Task<Void, Never>?
     private var writeChain: Task<Void, Never>?
+    /// Bumped by every local change, so a refresh can tell that a write landed while it was fetching.
+    private var writeGeneration = 0
 
     private var tmdbIndexes: [String: TMDBIndex] = [:]
 
@@ -340,6 +342,7 @@ extension AudienceWatchlistStore {
 
     /// Merges `changed` into the local state (newest wins) and publishes.
     private func apply(_ changed: [AudienceWatchlistEntry]) {
+        writeGeneration += 1
         for entry in changed {
             allEntries[entry.id] = AudienceWatchlistSync.newest(allEntries[entry.id], entry)
         }
@@ -400,7 +403,7 @@ extension AudienceWatchlistStore {
     }
 
     private func performRefresh(accounts: [Account]) async {
-        let startedAt = Date.now
+        let startGeneration = writeGeneration
         let fetched = await Self.fetchAll(accounts)
         let reachable = logFailures(fetched)
 
@@ -409,13 +412,12 @@ extension AudienceWatchlistStore {
 
         let remote = AudienceWatchlistSync.merge(reachable.map { AudienceWatchlistSync.entries(in: $0.customPrefs ?? [:]) })
 
-        if reachable.count == fetched.count {
-            // Complete picture: the server state replaces ours (drops entries whose tombstones were pruned),
-            // except for local writes that finished while this refresh was in flight
-            let localWrites = allEntries.filter { $0.value.updatedAt >= startedAt }
-            allEntries = AudienceWatchlistSync.merge([remote, localWrites])
+        if reachable.count == fetched.count, writeGeneration == startGeneration {
+            // Complete picture: the server state replaces ours (drops entries whose tombstones were pruned)
+            allEntries = remote
         } else {
-            // Partial: keep what we know about unreachable accounts
+            // Partial, or a local write landed while fetching (the fetched prefs may predate it):
+            // keep what we know, newest wins
             allEntries = AudienceWatchlistSync.merge([allEntries, remote])
         }
 
@@ -529,6 +531,10 @@ extension AudienceWatchlistStore {
 
         try await post(writes)
 
+        // The user switched servers while this was saving: don't mix it into the other server's list
+        guard serverID == accounts.first?.serverID else { return }
+
+        writeGeneration += 1
         allEntries = AudienceWatchlistSync.merge([allEntries, remote])
         allEntries[prepared.id] = prepared
         publish()
@@ -550,6 +556,8 @@ extension AudienceWatchlistStore {
         let existing = remote[entryID] ?? allEntries[entryID]
 
         guard let existing else {
+            guard serverID == accounts.first?.serverID else { return }
+
             allEntries.removeValue(forKey: entryID)
             publish()
             saveCache()
@@ -573,6 +581,9 @@ extension AudienceWatchlistStore {
             try await post(writes)
         }
 
+        guard serverID == accounts.first?.serverID else { return }
+
+        writeGeneration += 1
         allEntries = AudienceWatchlistSync.merge([allEntries, remote])
         allEntries[entryID] = tombstone
         publish()
