@@ -184,6 +184,26 @@ jobs:
             fi
           done
 
+          # tvOS expects CFBundleAlternateIcons as an array of icon names, but actool writes the iOS
+          # dictionary form, which App Store validation rejects ("missing the Alternate Icon asset").
+          if [ "${{ matrix.platform }}" = "tvOS" ]; then
+            for plist in "$archive"/Products/Applications/*.app/Info.plist; do
+              /usr/bin/python3 - "$plist" <<'PY'
+          import plistlib, sys
+          path = sys.argv[1]
+          with open(path, "rb") as f:
+              info = plistlib.load(f)
+          icons = info.get("CFBundleIcons", {})
+          alternates = icons.get("CFBundleAlternateIcons")
+          if isinstance(alternates, dict):
+              icons["CFBundleAlternateIcons"] = sorted(alternates)
+              with open(path, "wb") as f:
+                  plistlib.dump(info, f, fmt=plistlib.FMT_BINARY)
+              print("Converted tvOS alternate icons to an array:", icons["CFBundleAlternateIcons"])
+          PY
+            done
+          fi
+
           xcodebuild -exportArchive \
             -archivePath "$archive" \
             -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
