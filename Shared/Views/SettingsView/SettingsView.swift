@@ -29,12 +29,18 @@ struct SettingsView: View {
     @Router
     private var router
 
+    #if os(iOS)
+    @InjectedObject(\.seerrService)
+    private var seerrService: SeerrService
+    #endif
+
     // MARK: - Body
 
     var body: some View {
         Form(image: .jellyfinBlobBlue) {
             couchSection
             serverSection
+            requestsSection
             customizeSection
             diagnosticsSection
         }
@@ -189,6 +195,37 @@ struct SettingsView: View {
             }
         }
     }
+
+    // MARK: - Requests Section
+
+    @ViewBuilder
+    private var requestsSection: some View {
+        #if os(iOS)
+        Section {
+            ChevronButton(
+                L10n.SeerrSettings.title,
+                content: seerrHostDescription,
+                systemName: "popcorn"
+            ) {
+                router.route(to: .seerrSettings)
+            }
+        } header: {
+            Text(L10n.SeerrSettings.requests)
+        } footer: {
+            Text(L10n.SeerrSettings.requestsFooter)
+        }
+        #endif
+    }
+
+    #if os(iOS)
+    private var seerrHostDescription: String {
+        guard seerrService.isConfigured, let serverURL = seerrService.serverURL else {
+            return L10n.SeerrSettings.notConnected
+        }
+
+        return serverURL.host() ?? serverURL.absoluteString
+    }
+    #endif
 
     // MARK: - Customization Section
 
