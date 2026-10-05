@@ -49,6 +49,15 @@ final class CouchSyncFeedback {
     /// How often to check whether the player has closed.
     private static let pollInterval: Duration = .seconds(1)
 
+    /// Long enough to read a sentence with names in it.
+    private static var toastDuration: TimeInterval {
+        #if os(tvOS)
+        6
+        #else
+        5
+        #endif
+    }
+
     private var cancellables = Set<AnyCancellable>()
     private var pending: [CouchSyncFailure] = []
     private var presentTask: Task<Void, Never>?
@@ -101,7 +110,7 @@ final class CouchSyncFeedback {
 
         Container.shared
             .appToastProxy()
-            .present(message, systemName: "exclamationmark.triangle")
+            .present(message, systemName: "exclamationmark.triangle", duration: Self.toastDuration)
     }
 
     /// "Couldn't save progress for Lisa", plus who needs to sign in again.
