@@ -40,7 +40,6 @@ extension L10n {
         // MARK: - Sections
 
         static let cast = "Cast"
-        static let moreLikeThis = "More like this"
 
         // MARK: - Feedback
 

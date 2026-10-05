@@ -6,7 +6,6 @@
 // Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
-import Defaults
 import JellyfinAPI
 import SwiftUI
 
@@ -22,8 +21,6 @@ struct SeerrMediaDetailView: View {
 
     @State
     private var actionError: Error?
-    @State
-    private var isPresentingAudiencePicker = false
     @State
     private var isPresentingRequestOffer = false
     @State
@@ -55,25 +52,34 @@ struct SeerrMediaDetailView: View {
         }
     }
 
-    /// `nil` hides the picker's remove button when the title isn't on the watchlist yet.
-    private var removeAction: (() -> Void)? {
-        guard viewModel.watchlistEntry != nil else { return nil }
+    private func presentAudiencePicker() {
+        guard let details = viewModel.details else { return }
 
-        return {
-            isPresentingAudiencePicker = false
+        let viewModel = viewModel
+        let onRemove: (() -> Void)? = viewModel.watchlistEntry == nil ? nil : {
             viewModel.removeAudience()
         }
+
+        router.route(
+            to: .audiencePicker(
+                title: details.title,
+                initialAudience: viewModel.suggestedAudience,
+                isExisting: viewModel.watchlistEntry != nil,
+                onSave: { audience in
+                    viewModel.saveAudience(audience)
+                },
+                onRemove: onRemove
+            )
+        )
     }
 
     private func handle(_ event: SeerrMediaDetailViewModel._Event) {
         switch event {
+        // The picker already plays the success haptic when it's tapped.
         case .audienceRemoved:
-            UIDevice.feedback(.success)
             toaster.present(L10n.SeerrDetail.removedFromWatchlist, systemName: "checkmark.circle.fill")
 
         case let .audienceSaved(offerRequest):
-            UIDevice.feedback(.success)
-
             if offerRequest {
                 // Let the picker sheet finish dismissing before showing the dialog.
                 Task { @MainActor in
@@ -109,25 +115,6 @@ struct SeerrMediaDetailView: View {
     }
 
     @ViewBuilder
-    private var audiencePicker: some View {
-        if let details = viewModel.details {
-            NavigationStack {
-                AudiencePickerView(
-                    title: details.title,
-                    initialAudience: viewModel.suggestedAudience,
-                    isExisting: viewModel.watchlistEntry != nil,
-                    onSave: { audience in
-                        isPresentingAudiencePicker = false
-                        viewModel.saveAudience(audience)
-                    },
-                    onRemove: removeAction
-                )
-            }
-            .presentationDetents([.medium, .large])
-        }
-    }
-
-    @ViewBuilder
     private var seasonPicker: some View {
         if let details = viewModel.details {
             SeasonRequestView(
@@ -150,9 +137,7 @@ struct SeerrMediaDetailView: View {
                         details: details,
                         onPlay: play,
                         onRequest: request,
-                        onWhoIsItFor: {
-                            isPresentingAudiencePicker = true
-                        }
+                        onWhoIsItFor: presentAudiencePicker
                     )
                 }
 
@@ -174,9 +159,6 @@ struct SeerrMediaDetailView: View {
         }
         .onReceive(viewModel.events) { event in
             handle(event)
-        }
-        .sheet(isPresented: $isPresentingAudiencePicker) {
-            audiencePicker
         }
         .sheet(isPresented: $isPresentingSeasonPicker) {
             seasonPicker

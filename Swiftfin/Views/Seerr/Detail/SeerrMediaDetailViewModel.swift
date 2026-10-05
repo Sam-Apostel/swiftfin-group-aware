@@ -204,13 +204,19 @@ final class SeerrMediaDetailViewModel: ViewModel {
     @Function(\Action.Cases.refresh)
     private func _refresh() async throws {
         let session = try requireUserSession()
-        let sessions = session.householdSessions()
 
-        householdUsers = sessions.map(\.user)
+        // Every stored user on this server (no keychain access), to name audience members.
+        let otherUsers = StoredValues[.User.users]
+            .filter { $0.serverID == session.server.id && $0.id != session.user.id }
+
+        householdUsers = [session.user] + otherUsers
         watchlistEntry = watchlistStore.entry(id: entryID)
 
+        // Pick up audiences tagged on other devices; `watchlistEntry` follows the store.
         if !watchlistStore.isRefreshing {
             let store = watchlistStore
+            let sessions = session.householdSessions()
+
             Task {
                 await store.refresh(sessions: sessions)
             }
