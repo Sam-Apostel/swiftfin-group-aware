@@ -11,20 +11,41 @@ import JellyfinAPI
 struct ResumeItemsLibrary: BaseItemKindLibrary {
 
     let mediaTypes: [MediaType]
-    let parent: TitledLibraryParent = .init(displayTitle: L10n.continue, id: "continue-watching")
+    let parent: TitledLibraryParent
+
+    /// When this is a group couch, the library shows what the whole couch
+    /// is in the middle of instead (see `CouchResumeLibrary`).
+    let couch: CouchGroup?
 
     var libraryItemTypes: [BaseItemKind] {
         mediaTypes.flatMap(\.supportedLibraryItemTypes)
     }
 
-    init(mediaTypes: [MediaType] = [.video]) {
+    init(
+        mediaTypes: [MediaType] = [.video],
+        couch: CouchGroup? = nil
+    ) {
         self.mediaTypes = mediaTypes
+        self.couch = couch
+
+        if let couch, couch.isGroup {
+            self.parent = CouchResumeLibrary(couch: couch).parent
+        } else {
+            self.parent = .init(displayTitle: L10n.continue, id: "continue-watching")
+        }
     }
 
     func retrievePage(
         environment: Empty,
         pageState: LibraryPageState
     ) async throws -> [BaseItemDto] {
+        if let couch, couch.isGroup {
+            return try await CouchResumeLibrary(couch: couch).retrievePage(
+                environment: environment,
+                pageState: pageState
+            )
+        }
+
         var parameters = Paths.GetResumeItemsParameters()
         parameters.enableUserData = true
         parameters.fields = PosterSubtitleField.itemFields

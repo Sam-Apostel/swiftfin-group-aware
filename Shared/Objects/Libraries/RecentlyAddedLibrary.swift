@@ -11,12 +11,33 @@ import JellyfinAPI
 struct RecentlyAddedLibrary: BaseItemKindLibrary {
 
     let libraryItemTypes: [BaseItemKind] = [.movie, .series]
-    let parent: TitledLibraryParent = .init(displayTitle: L10n.recentlyAdded.localizedCapitalized, id: "recently-added")
+    let parent: TitledLibraryParent
+
+    /// When this is a group couch, the library shows what's new for everyone
+    /// on the couch instead (see `CouchNewForEveryoneLibrary`).
+    let couch: CouchGroup?
+
+    init(couch: CouchGroup? = nil) {
+        self.couch = couch
+
+        if let couch, couch.isGroup {
+            self.parent = CouchNewForEveryoneLibrary(couch: couch).parent
+        } else {
+            self.parent = .init(displayTitle: L10n.recentlyAdded.localizedCapitalized, id: "recently-added")
+        }
+    }
 
     func retrievePage(
         environment: Empty,
         pageState: LibraryPageState
     ) async throws -> [BaseItemDto] {
+        if let couch, couch.isGroup {
+            return try await CouchNewForEveryoneLibrary(couch: couch).retrievePage(
+                environment: environment,
+                pageState: pageState
+            )
+        }
+
         var parameters = Paths.GetItemsParameters()
         parameters.enableUserData = true
         parameters.fields = PosterSubtitleField.itemFields
