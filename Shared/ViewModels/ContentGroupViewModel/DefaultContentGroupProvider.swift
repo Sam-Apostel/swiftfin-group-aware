@@ -133,6 +133,8 @@ struct DefaultContentGroupProvider: ContentGroupProvider {
         cinematicSelectionContentGroup
         #endif
 
+        CouchDeciderEntryGroup(couch: couch)
+
         PosterGroup(
             id: "couch-picked",
             library: CouchPickedLibrary(couch: couch),
