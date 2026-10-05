@@ -22,7 +22,10 @@ final class SeerrSettingsViewModel: ObservableObject {
 
         enum Mapping: Hashable {
             case loading
+            /// Already had a Seerr account.
             case mapped(seerrName: String)
+            /// Was just imported from Jellyfin into Seerr.
+            case imported(seerrName: String)
             case notFound
         }
 
@@ -177,40 +180,81 @@ final class SeerrSettingsViewModel: ObservableObject {
 
         people = users.map { Person(user: $0, mapping: .loading) }
 
+        // Seerr users that exist before mapping, to tell "found" from "imported".
+        // `nil` when the list can't be fetched: everyone mapped then shows as found.
+        let existingSeerrUsers: [SeerrUser]?
+
+        do {
+            existingSeerrUsers = try await client.users()
+        } catch {
+            logger.warning(
+                "Failed to list Seerr users",
+                metadata: ["error": .string(error.localizedDescription)]
+            )
+            existingSeerrUsers = nil
+        }
+
         // Sequential on purpose: mapping may import users into Seerr,
         // and the service caches each result.
         for user in users {
             guard !Task.isCancelled else { return }
 
-            let mapping = await mapping(for: user, client: client)
+            let existingSeerrUser = existingSeerrUsers?.first { $0.matches(jellyfinUserID: user.id) }
+            let newMapping = await resolveMapping(
+                for: user,
+                client: client,
+                existingSeerrUser: existingSeerrUser,
+                canDetectImport: existingSeerrUsers != nil
+            )
 
             guard !Task.isCancelled else { return }
 
             if let index = people.firstIndex(where: { $0.id == user.id }) {
-                people[index].mapping = mapping
+                people[index].mapping = newMapping
             }
         }
     }
 
-    private func mapping(for user: UserState, client: SeerrClient) async -> Person.Mapping {
+    private func resolveMapping(
+        for user: UserState,
+        client: SeerrClient,
+        existingSeerrUser: SeerrUser?,
+        canDetectImport: Bool
+    ) async -> Person.Mapping {
+
+        // Already in Seerr: no lookup or import needed.
+        if let existingSeerrUser {
+            return .mapped(seerrName: existingSeerrUser.displayName ?? user.username)
+        }
+
         guard let seerrUserID = await seerrService.seerrUserID(for: user) else {
             return .notFound
         }
 
+        let name = await seerrName(for: user, seerrUserID: seerrUserID, client: client)
+
+        if canDetectImport {
+            return .imported(seerrName: name)
+        } else {
+            return .mapped(seerrName: name)
+        }
+    }
+
+    private func seerrName(for user: UserState, seerrUserID: Int, client: SeerrClient) async -> String {
         do {
             let seerrUser = try await client.me(asUser: seerrUserID)
 
             if let displayName = seerrUser.displayName, displayName.isNotEmpty {
-                return .mapped(seerrName: displayName)
+                return displayName
             } else {
-                return .mapped(seerrName: user.username)
+                return user.username
             }
         } catch {
             logger.warning(
                 "Failed to get the Seerr user",
                 metadata: ["error": .string(error.localizedDescription)]
             )
-            return .mapped(seerrName: user.username)
+            return user.username
         }
     }
 }

@@ -42,6 +42,11 @@ extension L10n {
         // MARK: - People
 
         static let notFound = "Not found"
+        /// "Tuur (imported)": a Jellyfin user that was just imported into Seerr.
+        static func imported(_ seerrName: String) -> String {
+            "\(seerrName) (imported)"
+        }
+
         static let peopleFooter = "Everyone signed in on this Jellyfin server is matched to their Seerr account. Missing accounts are imported from Jellyfin."
         static let noPeople = "No one is signed in on this server."
 

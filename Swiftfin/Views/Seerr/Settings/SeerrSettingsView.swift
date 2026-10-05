@@ -96,12 +96,11 @@ struct SeerrSettingsView: View {
         Task { @MainActor in
             let didConnect = await viewModel.connect(url: url, apiKey: apiKey)
 
+            // On failure `.errorMessage` already plays the error haptic.
             if didConnect {
                 UIDevice.feedback(.success)
                 url = seerrService.serverURL?.absoluteString ?? url
                 apiKey = ""
-            } else {
-                UIDevice.feedback(.error)
             }
         }
     }
@@ -116,7 +115,7 @@ struct SeerrSettingsView: View {
                 text: $url,
                 prompt: Text(L10n.SeerrSettings.urlPrompt)
             )
-            .disableAutocorrection(true)
+            .autocorrectionDisabled()
             .textInputAutocapitalization(.never)
             .keyboardType(.URL)
             .textContentType(.URL)

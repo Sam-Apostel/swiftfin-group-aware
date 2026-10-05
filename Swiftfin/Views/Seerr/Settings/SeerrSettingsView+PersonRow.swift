@@ -61,6 +61,20 @@ extension SeerrSettingsView {
                         .foregroundStyle(.green)
                 }
 
+            case let .imported(seerrName):
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.right")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Text(L10n.SeerrSettings.imported(seerrName))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                }
+
             case .notFound:
                 HStack(spacing: 6) {
                     Text(L10n.SeerrSettings.notFound)
