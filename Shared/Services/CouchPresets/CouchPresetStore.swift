@@ -27,6 +27,9 @@ extension Defaults.Keys.Couch {
     ///
     /// Local to this device, used for the "last couches" chips on the picker.
     static let recentMemberIDs = Defaults.Key<[String]>("couchRecentMemberIDs", default: [], suite: .appSuite)
+
+    /// Whether the history was seeded from `lastMemberIDs` once, so forgotten couches don't come back.
+    static let hasSeededRecents = Defaults.Key<Bool>("couchHasSeededRecents", default: false, suite: .appSuite)
 }
 
 /// Named couches ("Date night", "With Tuur") and the last couches, for the one-tap chips on the picker.
@@ -92,6 +95,10 @@ final class CouchPresetStore: ObservableObject {
 
     /// Seeds the history with the last couch picked before presets existed.
     func seedRecentsIfNeeded() {
+        guard !Defaults[.Couch.hasSeededRecents] else { return }
+
+        Defaults[.Couch.hasSeededRecents] = true
+
         let lastMemberIDs = Defaults[.Couch.lastMemberIDs]
 
         guard Defaults[.Couch.recentMemberIDs].isEmpty, lastMemberIDs.isNotEmpty else { return }

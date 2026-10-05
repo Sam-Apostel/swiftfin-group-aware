@@ -9,7 +9,7 @@
 import SwiftUI
 
 /// What the "Save this couch" / "Edit couch" prompt is editing.
-struct CouchPresetDraft: Identifiable {
+struct CouchPresetDraft: Equatable, Identifiable {
 
     let id = UUID()
     /// `nil` for a new preset.
@@ -38,6 +38,13 @@ struct CouchPresetEditorModifier: ViewModifier {
     var draft: CouchPresetDraft?
 
     let onCommit: (CouchPresetDraft) -> Void
+
+    /// The latest value of `draft` while the prompt is shown.
+    ///
+    /// SwiftUI may reset `isPresented` (and so `draft`) before it runs an alert button's action,
+    /// so Save commits this copy when `draft` is already `nil`.
+    @State
+    private var lastDraft: CouchPresetDraft?
 
     private var isPresented: Binding<Bool> {
         Binding(
@@ -68,10 +75,6 @@ struct CouchPresetEditorModifier: ViewModifier {
         draft?.presetID == nil ? L10n.CouchPresets.saveCouchTitle : L10n.CouchPresets.editCouchTitle
     }
 
-    private var canSave: Bool {
-        CouchPreset.sanitizedName(draft?.name ?? "").isNotEmpty
-    }
-
     func body(content: Content) -> some View {
         content
             .alert(title, isPresented: isPresented) {
@@ -81,18 +84,26 @@ struct CouchPresetEditorModifier: ViewModifier {
 
                 Button(L10n.cancel, role: .cancel) {
                     draft = nil
+                    lastDraft = nil
                 }
 
+                // Never disabled: an alert may not update a disabled button while typing.
+                // An empty name falls back to the members' names when committed.
                 Button(L10n.save) {
-                    if let draft {
-                        onCommit(draft)
+                    if let committed = draft ?? lastDraft {
+                        onCommit(committed)
                     }
                     draft = nil
+                    lastDraft = nil
                 }
-                .disabled(!canSave)
             } message: {
                 if let draft {
                     Text(L10n.CouchPresets.members(draft.memberNames))
+                }
+            }
+            .onChange(of: draft, initial: true) {
+                if let draft {
+                    lastDraft = draft
                 }
             }
     }

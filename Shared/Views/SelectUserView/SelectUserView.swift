@@ -405,7 +405,9 @@ struct SelectUserView: View {
     }
 
     private func commitPresetDraft(_ draft: CouchPresetDraft) {
-        let name = CouchPreset.sanitizedName(draft.name)
+        // An empty name falls back to the members' names ("Sam & Lisa")
+        let typedName = CouchPreset.sanitizedName(draft.name)
+        let name = typedName.isNotEmpty ? typedName : CouchPreset.sanitizedName(L10n.CouchPresets.members(draft.memberNames))
 
         guard name.isNotEmpty,
               let server = viewModel.servers.keys.first(where: { $0.id == draft.serverID })
