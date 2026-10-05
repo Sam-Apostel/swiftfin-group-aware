@@ -23,6 +23,9 @@ extension SelectUserView {
         private let couchSelectionIDs: [String]
         private let kidUserIDs: Set<String>
         private let needsSignInUserIDs: Set<String>
+        private let kidWithoutLimitUserIDs: Set<String>
+        private let focusedUserID: FocusState<String?>.Binding?
+        private let onWatchAlone: (UserState) -> Void
         private let serverSelection: SelectUserServerSelection
         private let servers: OrderedSet<ServerState>
         private let action: (UserState) -> Void
@@ -36,6 +39,9 @@ extension SelectUserView {
         ///   - servers: The servers a person can be added to with the "Add person" row.
         ///   - action: Toggles a user on or off the couch. Not called in edit mode.
         ///   - onSignInAgain: Opens sign-in with the user's name filled in.
+        ///   - kidWithoutLimitUserIDs: The IDs of the kids whose server account has no age limit.
+        ///   - focusedUserID: The picker's focus on tvOS, to give the first person initial focus.
+        ///   - onWatchAlone: "Watch as just <name>": starts a couch of only this user.
         init(
             userItems: [UserItem],
             isEditing: Binding<Bool>,
@@ -48,7 +54,10 @@ extension SelectUserView {
             action: @escaping (UserState) -> Void,
             onToggleKid: @escaping (UserState) -> Void,
             onSignInAgain: @escaping (UserItem) -> Void,
-            onDelete: @escaping (UserState) -> Void
+            onDelete: @escaping (UserState) -> Void,
+            kidWithoutLimitUserIDs: Set<String> = [],
+            focusedUserID: FocusState<String?>.Binding? = nil,
+            onWatchAlone: @escaping (UserState) -> Void = { _ in }
         ) {
             self.users = userItems
             self._isEditing = isEditing
@@ -62,6 +71,9 @@ extension SelectUserView {
             self.onToggleKid = onToggleKid
             self.onSignInAgain = onSignInAgain
             self.onDelete = onDelete
+            self.kidWithoutLimitUserIDs = kidWithoutLimitUserIDs
+            self.focusedUserID = focusedUserID
+            self.onWatchAlone = onWatchAlone
         }
 
         private func needsSignIn(_ user: UserState) -> Bool {
@@ -74,6 +86,29 @@ extension SelectUserView {
 
         private func isDimmed(_ user: UserState) -> Bool {
             !isEditing && couchSelectionIDs.isNotEmpty && !isOnCouch(user)
+        }
+
+        private func isKid(_ user: UserState) -> Bool {
+            kidUserIDs.contains(user.id)
+        }
+
+        private func isKidWithoutServerLimit(_ user: UserState) -> Bool {
+            isKid(user) && kidWithoutLimitUserIDs.contains(user.id)
+        }
+
+        @ViewBuilder
+        private func kidGlyph(for user: UserState) -> some View {
+            if isKid(user) {
+                let isWithoutLimit = isKidWithoutServerLimit(user)
+
+                Image(systemName: "figure.child")
+                    .font(UIDevice.isTV ? .body : .footnote)
+                    .fontWeight(.bold)
+                    .foregroundStyle(isWithoutLimit ? CouchMemberButton.noAgeLimitColor : Color.orange)
+                    .accessibilityLabel(
+                        isWithoutLimit ? L10n.CouchStart.kidNoAgeLimitAccessibilityLabel : L10n.CouchPicker.kid
+                    )
+            }
         }
 
         @ViewBuilder
@@ -99,13 +134,21 @@ extension SelectUserView {
                             .fontWeight(.semibold)
                             .lineLimit(1)
 
-                        if kidUserIDs.contains(item.user.id) {
-                            Image(systemName: "figure.child")
-                                .font(UIDevice.isTV ? .body : .footnote)
-                                .fontWeight(.bold)
-                                .foregroundStyle(Color.orange)
-                                .accessibilityLabel(L10n.CouchPicker.kid)
+                        if item.user.accessPolicy != .none {
+                            Image(systemName: "lock.fill")
+                                .font(UIDevice.isTV ? .callout : .caption)
+                                .foregroundStyle(.secondary)
+                                .accessibilityLabel(L10n.CouchStart.locked)
                         }
+
+                        kidGlyph(for: item.user)
+                    }
+
+                    if isKidWithoutServerLimit(item.user) {
+                        Text(L10n.CouchStart.kidNoAgeLimit)
+                            .font(UIDevice.isTV ? .body : .footnote)
+                            .foregroundStyle(CouchMemberButton.noAgeLimitColor)
+                            .lineLimit(1)
                     }
 
                     if needsSignIn(item.user) {
@@ -140,8 +183,17 @@ extension SelectUserView {
             }
             .contextMenu {
                 if !isEditing {
+                    if !needsSignIn(item.user) {
+                        Button(
+                            L10n.CouchStart.watchAsJust(item.user.username),
+                            systemImage: "person.fill"
+                        ) {
+                            onWatchAlone(item.user)
+                        }
+                    }
+
                     Button(
-                        kidUserIDs.contains(item.user.id) ? L10n.CouchPicker.unmarkAsKid : L10n.CouchPicker.markAsKid,
+                        isKid(item.user) ? L10n.CouchPicker.unmarkAsKid : L10n.CouchPicker.markAsKid,
                         systemImage: "figure.child"
                     ) {
                         onToggleKid(item.user)
@@ -160,6 +212,7 @@ extension SelectUserView {
                     }
                 }
             }
+            .couchPickerFocused(focusedUserID, userID: item.user.id)
             // Outside of edit mode, the trailing checkbox shows the couch selection
             .isEditing(true)
             .isSelected(isEditing ? selectedUsers.contains(item.user) : isOnCouch(item.user))

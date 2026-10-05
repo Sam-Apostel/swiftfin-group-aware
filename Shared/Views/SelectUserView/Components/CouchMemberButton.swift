@@ -34,6 +34,31 @@ extension SelectUserView {
         var needsSignIn: Bool = false
         /// Opens sign-in with the user's name filled in.
         var onSignInAgain: () -> Void = {}
+        /// A kid whose server account has no age limit: the badge turns amber
+        /// and the subtitle says so, since only this app's filtering protects them.
+        var isKidWithoutServerLimit: Bool = false
+        /// "Watch as just <name>", the first context-menu item. Hidden when `nil`.
+        var onWatchAlone: (() -> Void)?
+
+        /// The kid badge color for a kid without a server age limit.
+        static let noAgeLimitColor = Color(red: 1, green: 0.75, blue: 0)
+
+        /// Whether starting asks this user for a PIN (or Face ID).
+        private var isLocked: Bool {
+            user.accessPolicy != .none
+        }
+
+        private var kidSubtitle: String {
+            isKidWithoutServerLimit ? L10n.CouchStart.kidNoAgeLimit : L10n.CouchPicker.kid
+        }
+
+        private var subtitleColor: Color {
+            if needsSignIn {
+                return .orange
+            }
+
+            return isKid && isKidWithoutServerLimit ? Self.noAgeLimitColor : .secondary
+        }
 
         private var checkmarkSize: CGFloat {
             UIDevice.isTV ? 75 : 40
@@ -50,9 +75,9 @@ extension SelectUserView {
 
             return switch (isKid, showServer) {
             case (true, true):
-                "\(L10n.CouchPicker.kid) · \(server.name)"
+                "\(kidSubtitle) · \(server.name)"
             case (true, false):
-                L10n.CouchPicker.kid
+                kidSubtitle
             case (false, true):
                 server.name
             case (false, false):
@@ -66,6 +91,14 @@ extension SelectUserView {
                 labelView
             }
             .contextMenu {
+                if let onWatchAlone, !needsSignIn {
+                    Button(
+                        L10n.CouchStart.watchAsJust(user.username),
+                        systemImage: "person.fill",
+                        action: onWatchAlone
+                    )
+                }
+
                 Button(
                     isKid ? L10n.CouchPicker.unmarkAsKid : L10n.CouchPicker.markAsKid,
                     systemImage: "figure.child",
@@ -148,21 +181,32 @@ extension SelectUserView {
             Image(systemName: "figure.child")
                 .font(UIDevice.isTV ? .title3 : .footnote)
                 .fontWeight(.bold)
-                .foregroundStyle(.white)
+                .foregroundStyle(isKidWithoutServerLimit ? Color.black : Color.white)
                 .frame(width: checkmarkSize * 0.8, height: checkmarkSize * 0.8)
-                .background(Color.orange, in: .circle)
+                .background(isKidWithoutServerLimit ? Self.noAgeLimitColor : Color.orange, in: .circle)
                 .shadow(radius: 4)
                 .hoverEffect(.lift)
-                .accessibilityLabel(L10n.CouchPicker.kid)
+                .accessibilityLabel(
+                    isKidWithoutServerLimit ? L10n.CouchStart.kidNoAgeLimitAccessibilityLabel : L10n.CouchPicker.kid
+                )
         }
 
         @ViewBuilder
         private var titleView: some View {
-            Text(user.username)
-                .font(.headline)
-                .fontWeight(.semibold)
-                .foregroundStyle(titleForegroundStyle)
-                .lineLimit(1)
+            HStack(spacing: UIDevice.isTV ? 8 : 4) {
+                Text(user.username)
+                    .lineLimit(1)
+
+                if isLocked {
+                    Image(systemName: "lock.fill")
+                        .font(UIDevice.isTV ? .callout : .caption2)
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel(L10n.CouchStart.locked)
+                }
+            }
+            .font(.headline)
+            .fontWeight(.semibold)
+            .foregroundStyle(titleForegroundStyle)
 
             AlternateLayoutView {
                 // Setting the subtitle here ensures that we reserve the horizonal spacing
@@ -172,10 +216,27 @@ extension SelectUserView {
             } content: {
                 if let subtitle {
                     Marquee(subtitle)
-                        .foregroundStyle(needsSignIn ? Color.orange : Color.secondary)
+                        .foregroundStyle(subtitleColor)
                 }
             }
             .font(.footnote)
         }
+    }
+}
+
+extension View {
+
+    /// Binds the picker's focus to a user, on tvOS, when a binding is given.
+    @ViewBuilder
+    func couchPickerFocused(_ binding: FocusState<String?>.Binding?, userID: String) -> some View {
+        #if os(tvOS)
+        if let binding {
+            focused(binding, equals: userID)
+        } else {
+            self
+        }
+        #else
+        self
+        #endif
     }
 }

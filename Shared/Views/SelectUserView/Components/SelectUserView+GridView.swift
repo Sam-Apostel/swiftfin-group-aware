@@ -39,6 +39,9 @@ extension SelectUserView {
         private let couchSelectionIDs: [String]
         private let kidUserIDs: Set<String>
         private let needsSignInUserIDs: Set<String>
+        private let kidWithoutLimitUserIDs: Set<String>
+        private let focusedUserID: FocusState<String?>.Binding?
+        private let onWatchAlone: (UserState) -> Void
         private let onDelete: (UserState) -> Void
         private let onToggleKid: (UserState) -> Void
         private let onSignInAgain: (UserItem) -> Void
@@ -53,6 +56,9 @@ extension SelectUserView {
         ///   - servers: The servers a person can be added to with the "Add person" tile.
         ///   - action: Toggles a user on or off the couch. Not called in edit mode.
         ///   - onSignInAgain: Opens sign-in with the user's name filled in.
+        ///   - kidWithoutLimitUserIDs: The IDs of the kids whose server account has no age limit.
+        ///   - focusedUserID: The picker's focus on tvOS, to give the first person initial focus.
+        ///   - onWatchAlone: "Watch as just <name>": starts a couch of only this user.
         init(
             userItems: [UserItem],
             isEditing: Binding<Bool>,
@@ -65,7 +71,10 @@ extension SelectUserView {
             action: @escaping (UserState) -> Void,
             onToggleKid: @escaping (UserState) -> Void,
             onSignInAgain: @escaping (UserItem) -> Void,
-            onDelete: @escaping (UserState) -> Void
+            onDelete: @escaping (UserState) -> Void,
+            kidWithoutLimitUserIDs: Set<String> = [],
+            focusedUserID: FocusState<String?>.Binding? = nil,
+            onWatchAlone: @escaping (UserState) -> Void = { _ in }
         ) {
             self.userItems = userItems
             self._isEditing = isEditing
@@ -79,6 +88,9 @@ extension SelectUserView {
             self.onToggleKid = onToggleKid
             self.onSignInAgain = onSignInAgain
             self.onDelete = onDelete
+            self.kidWithoutLimitUserIDs = kidWithoutLimitUserIDs
+            self.focusedUserID = focusedUserID
+            self.onWatchAlone = onWatchAlone
         }
 
         /// The users, then "Add person" outside of edit mode.
@@ -121,8 +133,13 @@ extension SelectUserView {
                     needsSignIn: needsSignInUserIDs.contains(item.user.id),
                     onSignInAgain: {
                         onSignInAgain(item)
+                    },
+                    isKidWithoutServerLimit: kidWithoutLimitUserIDs.contains(item.user.id),
+                    onWatchAlone: {
+                        onWatchAlone(item.user)
                     }
                 )
+                .couchPickerFocused(focusedUserID, userID: item.user.id)
             }
         }
 

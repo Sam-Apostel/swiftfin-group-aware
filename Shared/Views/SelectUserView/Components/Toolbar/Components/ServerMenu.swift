@@ -28,18 +28,7 @@ extension SelectUserView {
         var body: some View {
             Menu {
                 Section {
-                    Button(L10n.addServer, systemImage: "plus") {
-                        router.route(to: .connectToServer)
-                    }
-
-                    if let selectedServer = serverSelection.server(from: servers) {
-                        Button(L10n.editServer, systemImage: "server.rack") {
-                            router.route(
-                                to: .editLocalServer(server: selectedServer, isEditing: true),
-                                style: .sheet
-                            )
-                        }
-                    }
+                    ServerActionButtons(server: serverSelection.server(from: servers))
                 }
 
                 Picker(L10n.servers, selection: $serverSelection) {
@@ -82,6 +71,33 @@ extension SelectUserView {
             .symbolRenderingMode(.monochrome)
             .backport
             .glassEffect(in: .capsule)
+        }
+    }
+
+    /// "Add server" and, for a server, "Edit server".
+    ///
+    /// In the server menu, or in the gear menu of a household with one server,
+    /// where the server menu is hidden.
+    struct ServerActionButtons: View {
+
+        @Router
+        private var router
+
+        let server: ServerState?
+
+        var body: some View {
+            Button(L10n.addServer, systemImage: "plus") {
+                router.route(to: .connectToServer)
+            }
+
+            if let server {
+                Button(L10n.editServer, systemImage: "server.rack") {
+                    router.route(
+                        to: .editLocalServer(server: server, isEditing: true),
+                        style: .sheet
+                    )
+                }
+            }
         }
     }
 }

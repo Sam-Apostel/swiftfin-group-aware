@@ -7,6 +7,7 @@
 //
 
 import Defaults
+import OrderedCollections
 import SwiftUI
 
 extension SelectUserView {
@@ -23,6 +24,9 @@ extension SelectUserView {
 
         let hasUsers: Bool
         let isEditing: Binding<Bool>
+        /// With exactly one server the server menu is hidden, and "Add server"
+        /// and "Edit server" are shown here instead.
+        var servers: OrderedSet<ServerState> = []
 
         var body: some View {
             if hasUsers {
@@ -56,6 +60,12 @@ extension SelectUserView {
                 Image(systemName: userSortOrder.systemImage)
             }
             .pickerStyle(.menu)
+
+            if servers.count == 1 {
+                Section {
+                    ServerActionButtons(server: servers.first)
+                }
+            }
 
             Section {
                 Button(L10n.advanced, systemImage: "gearshape.fill") {

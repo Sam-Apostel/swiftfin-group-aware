@@ -8,7 +8,6 @@
 
 import FactoryKit
 import Foundation
-import KeychainSwift
 import OrderedCollections
 
 @MainActor
@@ -52,9 +51,6 @@ final class SelectUserViewModel: ViewModel {
         case content
     }
 
-    @Injected(\.keychainService)
-    private var keychain
-
     @Published
     private(set) var servers: OrderedDictionary<ServerState, [UserState]> = [:]
 
@@ -91,12 +87,11 @@ final class SelectUserViewModel: ViewModel {
 
     /// Checks the PIN entered for a user that requires one.
     ///
-    /// Used for each member when starting a couch, before signing in.
+    /// The same rule as `CouchMemberAuthenticator.isValidPin(_:for:)`, which confirms
+    /// each member when starting a couch.
     func validatePin(_ pin: String, for user: UserState) throws {
-        if user.accessPolicy == .requirePin, let storedPin = keychain.get("\(user.id)-pin") {
-            guard pin == storedPin else {
-                throw ErrorMessage(L10n.incorrectPinForUser(user.username))
-            }
+        guard CouchMemberAuthenticator.isValidPin(pin, for: user) else {
+            throw ErrorMessage(L10n.incorrectPinForUser(user.username))
         }
     }
 }

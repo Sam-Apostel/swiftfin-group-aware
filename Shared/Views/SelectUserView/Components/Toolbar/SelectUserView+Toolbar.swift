@@ -57,17 +57,28 @@ extension SelectUserView {
         private var startButtonTitle: String {
             if couchMembers.count > 1 {
                 L10n.CouchPicker.startWatchingTogether(couchMembers.count)
+            } else if let member = couchMembers.first {
+                L10n.CouchStart.watchAs(member.username)
             } else {
                 L10n.CouchPicker.startWatching
             }
         }
 
-        private var defaultFocusedButton: FocusedButton {
-            if !isEditing, couchMembers.isNotEmpty {
-                .start
-            } else {
-                .center
+        /// With exactly one server there is no server menu: "Add server" and
+        /// "Edit server" are in the gear menu.
+        private var isSingleServer: Bool {
+            servers.count == 1
+        }
+
+        /// Start when someone is on the couch, Cancel while editing.
+        ///
+        /// Otherwise `nil`: the picker gives the first person initial focus (`SelectUserView`).
+        private var defaultFocusedButton: FocusedButton? {
+            if isEditing {
+                return .center
             }
+
+            return couchMembers.isNotEmpty ? .start : nil
         }
 
         /// - Parameters:
@@ -114,13 +125,15 @@ extension SelectUserView {
         private var compactView: some View {
             if !isEditing {
                 VStack(spacing: 16) {
-                    HStack(spacing: 16) {
-                        ServerMenu(servers: servers)
-                            .frame(height: buttonHeight)
-                            .frame(maxWidth: 400)
+                    if !isSingleServer {
+                        HStack(spacing: 16) {
+                            ServerMenu(servers: servers)
+                                .frame(height: buttonHeight)
+                                .frame(maxWidth: 400)
 
-                        AddUserMenu(servers: servers)
-                            .frame(width: buttonHeight, height: buttonHeight)
+                            AddUserMenu(servers: servers)
+                                .frame(width: buttonHeight, height: buttonHeight)
+                        }
                     }
 
                     if allUsers.isNotEmpty {
@@ -129,8 +142,14 @@ extension SelectUserView {
                                 .frame(height: startButtonHeight)
 
                             saveCouchButton(size: startButtonHeight)
+
+                            // One server: Start and "+" share one row
+                            if isSingleServer {
+                                AddUserMenu(servers: servers)
+                                    .frame(width: startButtonHeight, height: startButtonHeight)
+                            }
                         }
-                        .frame(maxWidth: 400 + 16 + buttonHeight)
+                        .frame(maxWidth: isSingleServer ? 400 + 2 * (16 + startButtonHeight) : 400 + 16 + buttonHeight)
                     }
                 }
                 .animation(.linear(duration: 0.1), value: couchMembers.map(\.id))
@@ -159,8 +178,8 @@ extension SelectUserView {
                 priority: .userInitiated
             )
             .onChange(of: couchMembers.isEmpty) { _, isEmpty in
-                // The last couch is restored one update after the users load, so
-                // initial focus may already sit on the server menu. Hand it to Start.
+                // The picker restores the last couch before it shows anyone, but a couch
+                // picked from a chip may leave focus on the server menu. Hand it to Start.
                 // Never steals focus from the user grid, where `focusedButton` is nil.
                 #if os(tvOS)
                 if !isEmpty, !isEditing, focusedButton == .center {
@@ -257,7 +276,8 @@ extension SelectUserView {
             Menu {
                 AdvancedMenuContent(
                     hasUsers: allUsers.isNotEmpty,
-                    isEditing: $isEditing
+                    isEditing: $isEditing,
+                    servers: servers
                 )
             } label: {
                 Label(L10n.advanced, systemImage: "gearshape.fill")
@@ -272,10 +292,12 @@ extension SelectUserView {
             .backport
             .glassEffect(in: .circle)
 
-            ServerMenu(servers: servers)
-                .frame(maxWidth: UIDevice.isTV ? 600 : 400)
-                .frame(height: buttonHeight)
-                .focused($focusedButton, equals: .center)
+            if !isSingleServer {
+                ServerMenu(servers: servers)
+                    .frame(maxWidth: UIDevice.isTV ? 600 : 400)
+                    .frame(height: buttonHeight)
+                    .focused($focusedButton, equals: .center)
+            }
 
             if allUsers.isNotEmpty {
                 startButton

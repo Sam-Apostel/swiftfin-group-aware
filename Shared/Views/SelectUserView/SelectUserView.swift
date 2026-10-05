@@ -39,6 +39,8 @@ struct SelectUserView: View {
 
     @InjectedObject(\.couchPresetStore)
     private var couchPresetStore
+    @InjectedObject(\.couchKidsStore)
+    private var couchKidsStore
 
     @Router
     private var router
@@ -52,6 +54,12 @@ struct SelectUserView: View {
     private var isStartingCouch = false
     @State
     private var kidUserIDs: Set<String> = []
+    /// The IDs of the kids whose server account has no age limit, for the amber badge.
+    @State
+    private var kidWithoutLimitUserIDs: Set<String> = []
+    /// The servers whose kid flags and user data are being refreshed.
+    @State
+    private var refreshingKidServerIDs: Set<String> = []
     /// The IDs of the stored users without an access token, who need to sign in again.
     @State
     private var needsSignInUserIDs: Set<String> = []
@@ -72,6 +80,12 @@ struct SelectUserView: View {
     @State
     private var presetDraft: CouchPresetDraft?
 
+    /// The first person gets initial focus on tvOS when nobody is on the couch yet.
+    @FocusState
+    private var focusedUserID: String?
+
+    @StateObject
+    private var memberAuthenticator = CouchMemberAuthenticator()
     @StateObject
     private var viewModel = SelectUserViewModel()
 
@@ -264,11 +278,52 @@ struct SelectUserView: View {
     private func refreshUserFlags() {
         let users = storedUsers
         kidUserIDs = Set(users.filter(\.isKid).map(\.id))
+        kidWithoutLimitUserIDs = Set(users.filter(\.isKidWithoutServerLimit).map(\.id))
         needsSignInUserIDs = Set(users.filter { $0.storedAccessToken == nil }.map(\.id))
     }
 
+    /// Syncs the household kid flags and the server age limits of the shown users.
+    ///
+    /// The picker runs signed out, so otherwise synced kid flags only arrive at sign-in.
+    private func refreshKidFlags() {
+        let shownServerIDs = Set(userItems.map(\.server.id))
+
+        for (server, users) in viewModel.servers where users.isNotEmpty && shownServerIDs.contains(server.id) {
+            guard refreshingKidServerIDs.insert(server.id).inserted else { continue }
+
+            Task { @MainActor in
+                await UserState.refreshUserData(users, server: server)
+                await couchKidsStore.refresh(server: server, users: users)
+
+                refreshingKidServerIDs.remove(server.id)
+                refreshUserFlags()
+            }
+        }
+    }
+
+    /// "Mark as kid" never asks. "Unmark as kid" loosens kid protection, so a grown-up confirms first.
     private func toggleKid(user: UserState) {
-        let isKid = !user.isKid
+        guard user.isKid else {
+            setKid(true, for: user)
+            return
+        }
+
+        // The context menu is still closing
+        memberAuthenticator.didDismissPresentation()
+
+        Task { @MainActor in
+            let isConfirmed = await memberAuthenticator.confirmGrownUp(
+                grownUps: grownUps(serverID: user.serverID, first: couchSelection),
+                authenticationAction: authenticationAction
+            )
+
+            guard isConfirmed else { return }
+
+            setKid(false, for: user)
+        }
+    }
+
+    private func setKid(_ isKid: Bool, for user: UserState) {
         user.isKid = isKid
 
         if isKid {
@@ -277,7 +332,20 @@ struct SelectUserView: View {
             kidUserIDs.remove(user.id)
         }
 
+        refreshUserFlags()
         UIDevice.impact(.light)
+    }
+
+    /// The stored users of a server for `CouchGrownUpCheck`, the given members first.
+    /// The check itself skips restricted users.
+    private func grownUps(serverID: String, first members: [UserState]) -> [UserState] {
+        let serverUsers = StoredValues[.User.users].filter { $0.serverID == serverID }
+        let firstUsers = members.compactMap { member in
+            serverUsers.first { $0.id == member.id }
+        }
+        let firstIDs = Set(firstUsers.map(\.id))
+
+        return firstUsers + serverUsers.filter { !firstIDs.contains($0.id) }
     }
 
     /// Keeps the couch selection in sync with the stored users and
@@ -289,6 +357,15 @@ struct SelectUserView: View {
         if !hasRestoredLastCouch, users.isNotEmpty {
             hasRestoredLastCouch = true
             couchSelection = lastCouch(from: users)
+
+            // A household of one: keep them on the couch, so Start stays one tap
+            if couchSelection.isEmpty,
+               userItems.count == 1,
+               let onlyUser = userItems.first?.user,
+               onlyUser.storedAccessToken != nil
+            {
+                couchSelection = [onlyUser]
+            }
         } else {
             // Drop deleted users and pick up renamed users
             couchSelection = couchSelection.compactMap { member in
@@ -314,11 +391,31 @@ struct SelectUserView: View {
         return members.filter { $0.serverID == serverID }
     }
 
-    /// Runs each member's local access policy one after another, since only
-    /// one PIN prompt can be presented at a time, then signs in as the couch.
+    /// Starts watching as everyone on the couch.
     private func startCouch() {
-        let members = couchSelection
+        startCouch(members: couchSelection)
+    }
 
+    /// "Watch as just <name>": puts only this user on the couch and starts.
+    private func watchAlone(user: UserState) {
+        guard !isStartingCouch else { return }
+
+        UIDevice.impact(.light)
+
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            couchSelection = [user]
+        }
+
+        // The context menu is still closing
+        memberAuthenticator.didDismissPresentation()
+        startCouch(members: [user])
+    }
+
+    /// Confirms each member one at a time (`CouchMemberAuthenticator`), asks a grown-up when
+    /// the couch drops a child of the last couch, then signs in as the confirmed members.
+    ///
+    /// Only the members who actually sign in are recorded as a recent couch.
+    private func startCouch(members: [UserState]) {
         guard members.isNotEmpty, !isStartingCouch else { return }
 
         isStartingCouch = true
@@ -329,31 +426,40 @@ struct SelectUserView: View {
             }
 
             do {
-                guard let authenticationAction else { return }
+                // Read before signing in, which replaces it
+                let lastMemberIDs = Defaults[.Couch.lastMemberIDs]
 
-                var isAfterPrompt = false
+                let result = try await memberAuthenticator.authenticate(
+                    members,
+                    authenticationAction: authenticationAction
+                )
 
-                for member in members {
-                    let policy = member.accessPolicy
+                // The members that really sign in (same server, a stored token), in pick order
+                let storedUsers = StoredValues[.User.users]
+                let signInMembers = userSessionManager.couchMembers(
+                    for: result.memberIDs,
+                    in: storedUsers
+                )
 
-                    if policy != .none, isAfterPrompt {
-                        // Let the previous prompt dismiss before presenting the next one
-                        try await Task.sleep(for: .milliseconds(600))
-                    }
+                guard let firstMember = signInMembers.first else { return }
 
-                    let evaluatedPolicy = try await authenticationAction(
-                        policy: policy,
-                        reason: policy.authenticateReason(user: member)
+                // Dropping a child from the last couch loosens kid protection. A grown-up
+                // whose PIN was just checked counts, otherwise ask one.
+                if !result.verifiedGrownUp,
+                   Self.dropsChild(lastMemberIDs: lastMemberIDs, newMembers: signInMembers, storedUsers: storedUsers)
+                {
+                    let isConfirmed = await memberAuthenticator.confirmGrownUp(
+                        grownUps: grownUps(serverID: firstMember.serverID, first: signInMembers),
+                        authenticationAction: authenticationAction
                     )
-                    let pin = (evaluatedPolicy as? PinEvaluatedUserAccessPolicy)?.pin ?? ""
 
-                    try viewModel.validatePin(pin, for: member)
-
-                    isAfterPrompt = policy != .none
+                    guard isConfirmed else { return }
                 }
 
-                try await userSessionManager.signIn(userIDs: members.map(\.id))
-                couchPresetStore.recordRecent(memberIDs: members.map(\.id))
+                let memberIDs = signInMembers.map(\.id)
+
+                try await userSessionManager.signIn(userIDs: memberIDs)
+                couchPresetStore.recordRecent(memberIDs: memberIDs)
                 UIDevice.feedback(.success)
             } catch is CancellationError {
                 return
@@ -361,6 +467,22 @@ struct SelectUserView: View {
                 await viewModel.error(error)
             }
         }
+    }
+
+    /// Whether the last couch on the new couch's server had a child (`isChildAudience`)
+    /// and the new couch has none.
+    private static func dropsChild(
+        lastMemberIDs: [String],
+        newMembers: [UserState],
+        storedUsers: [UserState]
+    ) -> Bool {
+        guard let serverID = newMembers.first?.serverID else { return false }
+
+        let lastMembers = lastMemberIDs.compactMap { id in
+            storedUsers.first { $0.id == id && $0.serverID == serverID }
+        }
+
+        return lastMembers.contains(where: \.isChildAudience) && !newMembers.contains(where: \.isChildAudience)
     }
 
     // MARK: - Couch presets
@@ -628,7 +750,10 @@ struct SelectUserView: View {
                             action: { toggleCouch(user: $0) },
                             onToggleKid: { toggleKid(user: $0) },
                             onSignInAgain: { signInAgain($0) },
-                            onDelete: { delete(user: $0) }
+                            onDelete: { delete(user: $0) },
+                            kidWithoutLimitUserIDs: kidWithoutLimitUserIDs,
+                            focusedUserID: $focusedUserID,
+                            onWatchAlone: { watchAlone(user: $0) }
                         )
 
                     case .grid:
@@ -644,7 +769,10 @@ struct SelectUserView: View {
                             action: { toggleCouch(user: $0) },
                             onToggleKid: { toggleKid(user: $0) },
                             onSignInAgain: { signInAgain($0) },
-                            onDelete: { delete(user: $0) }
+                            onDelete: { delete(user: $0) },
+                            kidWithoutLimitUserIDs: kidWithoutLimitUserIDs,
+                            focusedUserID: $focusedUserID,
+                            onWatchAlone: { watchAlone(user: $0) }
                         )
                     }
                 }
@@ -701,6 +829,19 @@ struct SelectUserView: View {
             .focusSection()
         }
         .animation(.linear(duration: 0.1), value: isEditing)
+        #if os(tvOS)
+        // On a common ancestor of the people and the toolbar: with nobody on the couch,
+        // the first person gets initial focus (the toolbar defaults to Start otherwise)
+        .defaultFocus($focusedUserID, initialFocusedUserID)
+        #endif
+        .couchMemberAuthenticatorPrompts(memberAuthenticator)
+    }
+
+    /// The first person, while nobody is on the couch.
+    private var initialFocusedUserID: String? {
+        guard !isEditing, couchSelection.isEmpty else { return nil }
+
+        return userItems.first?.user.id
     }
 
     var body: some View {
@@ -711,6 +852,10 @@ struct SelectUserView: View {
             case .content:
                 if viewModel.servers.isEmpty {
                     ConnectToJellyfinView()
+                } else if !hasRestoredLastCouch, storedUsers.isNotEmpty {
+                    // For one update, until the last couch is restored, so initial focus
+                    // goes to Start (or the first person) and not to whatever showed first
+                    Color.clear
                 } else {
                     contentView
                 }
@@ -776,7 +921,8 @@ struct SelectUserView: View {
                         ) {
                             AdvancedMenuContent(
                                 hasUsers: userItems.isNotEmpty,
-                                isEditing: $isEditing
+                                isEditing: $isEditing,
+                                servers: viewModel.servers.keys
                             )
                         }
                         .backport
@@ -819,6 +965,10 @@ struct SelectUserView: View {
         .onChange(of: storedUsers, initial: true) {
             syncCouchSelection()
             refreshCouchPresets()
+            refreshKidFlags()
+        }
+        .onChange(of: couchKidsStore.revision) {
+            refreshUserFlags()
         }
         .onChange(of: serverSelection) {
             // Keep the couch visible: clear it when switching to another server
@@ -839,6 +989,11 @@ struct SelectUserView: View {
                     serverSelection = .all
                     selectUserAllServersSplashscreen = .all
                 }
+            } else if serverSelection == .all, newValue.count == 1, let onlyServer = newValue.first {
+                // One server: there is no server menu, and no server name under every person
+                let newSelection = SelectUserServerSelection.server(id: onlyServer.id)
+                serverSelection = newSelection
+                selectUserAllServersSplashscreen = newSelection
             }
         }
         .onReceive(viewModel.$error) { error in
