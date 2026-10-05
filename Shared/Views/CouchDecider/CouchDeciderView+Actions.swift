@@ -7,6 +7,8 @@
 //
 
 import Defaults
+import FactoryKit
+import JellyfinAPI
 import SwiftUI
 
 extension CouchDeciderView {
@@ -20,6 +22,7 @@ extension CouchDeciderView {
         case shuffle
         case watch
         case details
+        case vote
     }
 
     /// Not tonight · Shuffle · **Watch** · Details.
@@ -37,8 +40,29 @@ extension CouchDeciderView {
         let onShuffle: () -> Void
         let onWatch: () -> Void
         let onDetails: () -> Void
+        /// "Let everyone vote" (#33). `nil` hides the button (solo couch, fewer than 3 matches).
+        var onVote: (() -> Void)?
 
         var body: some View {
+            #if os(tvOS)
+            // The vote button gets its own row: five labelled buttons don't fit next to the poster
+            VStack(alignment: .leading, spacing: 30) {
+                buttonRow
+
+                if let onVote {
+                    voteButton(onVote)
+                }
+            }
+            .focusSection()
+            .defaultFocus(focusedAction, DeciderAction.watch, priority: .userInitiated)
+            #else
+            buttonRow
+                .focusSection()
+                .defaultFocus(focusedAction, DeciderAction.watch, priority: .userInitiated)
+            #endif
+        }
+
+        private var buttonRow: some View {
             HStack(spacing: UIDevice.isTV ? 30 : 12) {
                 secondaryButton(
                     L10n.CouchDecider.notTonight,
@@ -62,9 +86,25 @@ extension CouchDeciderView {
                     action: .details,
                     perform: onDetails
                 )
+
+                #if os(iOS)
+                if let onVote {
+                    voteButton(onVote)
+                }
+                #endif
             }
-            .focusSection()
-            .defaultFocus(focusedAction, DeciderAction.watch, priority: .userInitiated)
+        }
+
+        // MARK: - Vote
+
+        @ViewBuilder
+        private func voteButton(_ onVote: @escaping () -> Void) -> some View {
+            secondaryButton(
+                L10n.CouchVote.letEveryoneVote,
+                systemImage: "hand.raised.fill",
+                action: .vote,
+                perform: onVote
+            )
         }
 
         // MARK: - Watch
@@ -144,5 +184,52 @@ extension CouchDeciderView {
             .accessibilityLabel(title)
             #endif
         }
+    }
+}
+
+// MARK: - Vote (#33)
+
+extension CouchDeciderView {
+
+    /// "Let everyone vote" shows for a group couch with at least 3 matching titles.
+    @MainActor
+    static func isVoteAvailable(_ viewModel: CouchDeciderViewModel) -> Bool {
+        viewModel.couch.isGroup && viewModel.matchingCount >= 3
+    }
+
+    /// The vote screen for the current card and the next ones (up to 5; the screen picks 3, 4 or 5).
+    ///
+    /// Near the end of a lap the deck has fewer upcoming cards, so it tops up
+    /// with other matching titles in pool order.
+    @MainActor
+    static func voteRoute(_ viewModel: CouchDeciderViewModel) -> NavigationRoute? {
+        let maxCount = 5
+        var candidates = viewModel.upcomingCandidates(maxCount)
+
+        if candidates.count < maxCount {
+            let excluded = Container.shared.couchDeciderExclusions().excluded(couchID: viewModel.couch.id)
+
+            for candidate in viewModel.pool.candidates where candidates.count < maxCount {
+                guard !candidates.contains(where: { $0.id == candidate.id }),
+                      !excluded.contains(candidate.id),
+                      viewModel.filters.matches(candidate)
+                else { continue }
+
+                candidates.append(candidate)
+            }
+        }
+
+        guard candidates.count >= 2 else { return nil }
+
+        var items: [String: BaseItemDto] = [:]
+        for candidate in candidates {
+            items[candidate.id] = viewModel.item(for: candidate.id)
+        }
+
+        return .couchVote(
+            couch: viewModel.couch,
+            candidates: candidates,
+            items: items
+        )
     }
 }

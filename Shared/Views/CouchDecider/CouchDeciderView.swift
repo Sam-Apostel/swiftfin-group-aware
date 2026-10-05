@@ -420,7 +420,8 @@ struct CouchDeciderView: View {
             onNotTonight: notTonight,
             onShuffle: shuffle,
             onWatch: watch,
-            onDetails: details
+            onDetails: details,
+            onVote: Self.isVoteAvailable(viewModel) ? startVote : nil
         )
     }
 
@@ -574,6 +575,14 @@ struct CouchDeciderView: View {
 
         skipToLanding()
         viewModel.watch()
+    }
+
+    /// "Let everyone vote" (#33): the vote screen covers the decider.
+    private func startVote() {
+        guard let route = Self.voteRoute(viewModel) else { return }
+
+        skipToLanding()
+        router.route(to: route)
     }
 
     private func details() {
