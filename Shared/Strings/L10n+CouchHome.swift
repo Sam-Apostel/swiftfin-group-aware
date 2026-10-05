@@ -23,6 +23,18 @@ extension L10n {
         /// Home row: recently added movies and shows nobody on the couch has watched yet.
         static let newForAllOfYou = "New for All of You"
 
+        /// The primary user's own Continue Watching, as a title for `personalRow(name:title:)`.
+        static let continueWatching = "Continue Watching"
+
+        /// Home row of one person's own list on a group's home, e.g. "Sam's Continue Watching".
+        ///
+        /// - Parameters:
+        ///   - name: The person's name.
+        ///   - title: The row's usual title, e.g. `continueWatching` or `L10n.nextUp`.
+        static func personalRow(name: String, title: String) -> String {
+            "\(name)'s \(title)"
+        }
+
         /// Home row: watchlist picks tagged for exactly this couch.
         ///
         /// - Parameter names: A localized list of names, e.g. `CouchGroup.displayNames`.

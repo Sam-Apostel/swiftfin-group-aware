@@ -51,11 +51,12 @@ struct CouchNewForEveryoneLibrary: BaseItemKindLibrary {
         let response = try await primary.client.send(request)
         let recentlyAdded = response.value.items ?? []
 
-        let sessions = [primary] + CouchHomeSupport.memberSessions(for: couch, primary: primary)
-
+        // Fails closed: when a restricted member (a kid) couldn't be checked,
+        // only what an at least as restricted member verified is kept.
         let unwatched = await CouchItemFilter.filter(
             recentlyAdded,
-            memberSessions: sessions,
+            couch: couch,
+            primary: primary,
             excludePlayedBy: playedRule
         )
 

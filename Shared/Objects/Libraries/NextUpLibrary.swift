@@ -23,7 +23,12 @@ struct NextUpLibrary: BaseItemKindLibrary {
     }
 
     let libraryItemTypes: [BaseItemKind] = [.episode]
-    let parent: TitledLibraryParent = .init(displayTitle: L10n.nextUp, id: "next-up")
+    let parent: TitledLibraryParent
+
+    /// - Parameter title: Replaces the row title "Next Up", e.g. "Sam's Next Up" on a group's home.
+    init(title: String? = nil) {
+        self.parent = .init(displayTitle: title ?? L10n.nextUp, id: "next-up")
+    }
 
     func retrievePage(
         environment: Environment,

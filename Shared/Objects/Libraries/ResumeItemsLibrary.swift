@@ -21,9 +21,11 @@ struct ResumeItemsLibrary: BaseItemKindLibrary {
         mediaTypes.flatMap(\.supportedLibraryItemTypes)
     }
 
+    /// - Parameter title: Replaces the row title "Continue", e.g. "Sam's Continue Watching" on a group's home.
     init(
         mediaTypes: [MediaType] = [.video],
-        couch: CouchGroup? = nil
+        couch: CouchGroup? = nil,
+        title: String? = nil
     ) {
         self.mediaTypes = mediaTypes
         self.couch = couch
@@ -31,7 +33,7 @@ struct ResumeItemsLibrary: BaseItemKindLibrary {
         if let couch, couch.isGroup {
             self.parent = CouchResumeLibrary(couch: couch).parent
         } else {
-            self.parent = .init(displayTitle: L10n.continue, id: "continue-watching")
+            self.parent = .init(displayTitle: title ?? L10n.continue, id: "continue-watching")
         }
     }
 

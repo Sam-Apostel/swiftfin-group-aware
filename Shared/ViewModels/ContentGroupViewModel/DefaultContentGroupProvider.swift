@@ -115,7 +115,8 @@ struct DefaultContentGroupProvider: ContentGroupProvider {
         _makeTrailingGroups(userViews: userViews)
     }
 
-    /// The home of a group on the couch: the couch rows first, then the regular rows of the primary user.
+    /// The home of a group on the couch: the couch rows first, then the primary user's own rows,
+    /// named after them and only where they can't show anything a restricted member shouldn't see.
     ///
     /// Every couch row fetches each member's data with that member's own session,
     /// and a member that fails is skipped, so these rows never fail the whole home.
@@ -176,46 +177,52 @@ struct DefaultContentGroupProvider: ContentGroupProvider {
         )
         #endif
 
-        // The regular rows, as the primary user
-
-        PosterGroup(
-            library: ResumeItemsLibrary(mediaTypes: [.video]),
-            posterDisplayType: .landscape,
-            posterSize: .medium,
-            _viewContext: .isInResume
-        )
-
-        PosterGroup(
-            library: NextUpLibrary()
-        )
-
-        if Defaults[.Customization.Home.showRecentlyAdded] {
-            #if os(tvOS)
+        // The primary user's own rows, below the couch rows.
+        //
+        // Recently Added and Recently Played are left out: "New for All of You" and the couch rows
+        // cover them. Continue Watching and Next Up are the primary user's unfiltered lists,
+        // so they are named after them, and hidden whenever anyone on the couch is restricted
+        // (a kid, or a server age limit), whoever the primary user is.
+        if !couch.hasRestrictedMember {
             PosterGroup(
-                library: RecentlyAddedLibrary()
+                library: ResumeItemsLibrary(
+                    mediaTypes: [.video],
+                    title: L10n.CouchHome.personalRow(
+                        name: couch.primary.username,
+                        title: L10n.CouchHome.continueWatching
+                    )
+                ),
+                posterDisplayType: .landscape,
+                posterSize: .medium,
+                _viewContext: .isInResume
             )
-            #else
+
             PosterGroup(
-                library: ItemLibrary(
-                    parent: BaseItemDto(name: L10n.recentlyAdded.localizedCapitalized),
-                    filters: .init(
-                        itemTypes: [.movie, .series],
-                        sortBy: [.dateCreated],
-                        sortOrder: [.descending]
+                library: NextUpLibrary(
+                    title: L10n.CouchHome.personalRow(
+                        name: couch.primary.username,
+                        title: L10n.nextUp
                     )
                 )
             )
-            #endif
         }
 
-        _makeTrailingGroups(userViews: userViews)
+        _makeTrailingGroups(userViews: userViews, couch: couch)
     }
 
-    /// The rows after "Recently Added", the same for a single user and a group.
+    /// The rows after "Recently Added".
+    ///
+    /// - Parameter couch: A group on the couch, or `nil` on a single user's home (unchanged).
+    ///   A group gets no Recently Played, Live TV recommendations only without a restricted member,
+    ///   and Latest rows checked with every member's account (`CouchLatestInLibrary`).
     @ContentGroupBuilder
-    private func _makeTrailingGroups(userViews: [BaseItemDto]) -> [any ContentGroup] {
+    private func _makeTrailingGroups(userViews: [BaseItemDto], couch: CouchGroup? = nil) -> [any ContentGroup] {
 
-        if Defaults[.Customization.Home.showRecentlyPlayed] {
+        let groupCouch: CouchGroup? = couch?.isGroup == true ? couch : nil
+        let isGroup = groupCouch != nil
+        let hasRestrictedMember = groupCouch?.hasRestrictedMember ?? false
+
+        if !isGroup, Defaults[.Customization.Home.showRecentlyPlayed] {
             PosterGroup(
                 library: ItemLibrary(
                     parent: BaseItemDto(name: L10n.recentlyPlayed.localizedCapitalized),
@@ -229,20 +236,36 @@ struct DefaultContentGroupProvider: ContentGroupProvider {
             )
         }
 
-        PosterGroup(
-            id: "programs-recommended",
-            library: RecommendedProgramsLibrary(),
-            posterDisplayType: .landscape,
-            posterSize: .small
-        )
+        // The primary user's Live TV recommendations, which can't be checked against a member's access
+        if !hasRestrictedMember {
+            PosterGroup(
+                id: "programs-recommended",
+                library: RecommendedProgramsLibrary(),
+                posterDisplayType: .landscape,
+                posterSize: .small
+            )
+        }
 
-        userViews
-            .map(LatestInLibrary.init)
-            .map {
-                PosterGroup(
-                    library: $0,
-                    posterDisplayType: .landscape
-                )
-            }
+        if let groupCouch {
+            userViews
+                .map { CouchLatestInLibrary(library: $0, couch: groupCouch) }
+                .map {
+                    PosterGroup(
+                        library: $0,
+                        posterDisplayType: .landscape
+                    )
+                }
+        }
+
+        if !isGroup {
+            userViews
+                .map(LatestInLibrary.init)
+                .map {
+                    PosterGroup(
+                        library: $0,
+                        posterDisplayType: .landscape
+                    )
+                }
+        }
     }
 }

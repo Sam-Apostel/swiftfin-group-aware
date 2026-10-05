@@ -17,7 +17,8 @@ import JellyfinAPI
 /// or by every person on the couch, and the service ages it out after 14 days.
 ///
 /// Never throws: a failing service or member fetch yields fewer (or no) items, so the row is hidden
-/// instead of blanking the home.
+/// instead of blanking the home. A restricted member (a kid) that couldn't be checked fails closed
+/// (`CouchItemFilter.filter(_:members:memberResults:primaryID:excludePlayedBy:)`).
 struct JustArrivedLibrary: BaseItemKindLibrary {
 
     /// The home shows nothing until every row loaded, so a slow refresh (an unreachable Seerr
@@ -75,22 +76,27 @@ struct JustArrivedLibrary: BaseItemKindLibrary {
 
         // The primary user's own history counts too. This also drops what someone
         // on the couch can't access (library access, parental controls).
-        let sessions = [session] + CouchHomeSupport.memberSessions(for: couch, primary: session)
-
-        let memberResults = await CouchItemFilter.fetchItems(
+        let check = await CouchItemFilter.memberResults(
             ids: CouchItemFilter.uniqueIDs(of: items),
-            seenBy: sessions,
+            couch: couch,
+            primary: session,
             // Jellyfin 10.10 only fills a series' `playedPercentage` with this field
             fields: [.recursiveItemCount],
             enableImages: false
         )
-        .map { memberItems in
+
+        let memberResults = check.results.map { memberItems in
             memberItems?.map { Self.ignoringEarlierSeasons($0, newMediaSeriesIDs: newMediaSeriesIDs) }
         }
 
+        // Fails closed: when a restricted member (a kid) couldn't be checked,
+        // only what an at least as restricted member verified is kept.
         let unplayedItems = CouchItemFilter.filter(
             items,
+            members: check.members,
             memberResults: memberResults,
+            // The arrivals come from the service's cache, not from the primary user's own request
+            primaryID: nil,
             excludePlayedBy: .allMembers
         )
 

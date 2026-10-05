@@ -14,7 +14,8 @@ import Logging
 /// Helpers shared by the couch home rows.
 ///
 /// Every request made for a couch member other than the primary user is allowed to fail:
-/// that member is skipped and the error is logged, so a row never fails because of one member.
+/// that member is skipped and the failure is recorded in `CouchMemberHealth`,
+/// so a row never fails because of one member.
 @MainActor
 enum CouchHomeSupport {
 
@@ -36,7 +37,8 @@ enum CouchHomeSupport {
 
     /// The sessions of the couch members other than the primary user.
     ///
-    /// Members without a stored access token have no session and are skipped.
+    /// Members without a stored access token have no session and are skipped
+    /// (recorded in `CouchMemberHealth` as needing to sign in again).
     static func memberSessions(
         for couch: CouchGroup,
         primary: UserSession
@@ -44,14 +46,34 @@ enum CouchHomeSupport {
         couch.otherMembers.compactMap { member in
             guard member.id != primary.user.id else { return nil }
 
-            return primary.session(forMemberID: member.id)
+            return memberSession(for: member, primary: primary)
         }
+    }
+
+    /// The session of one couch member, or `nil` when no sign-in is stored for them
+    /// (recorded in `CouchMemberHealth` as needing to sign in again).
+    static func memberSession(
+        for member: UserState,
+        primary: UserSession
+    ) -> UserSession? {
+        if let session = primary.session(forMemberID: member.id) {
+            return session
+        }
+
+        Container.shared.couchMemberHealth().recordFailure(
+            userID: member.id,
+            kind: .unauthorized,
+            reason: "no stored sign-in"
+        )
+
+        return nil
     }
 
     /// Runs one request per session, concurrently.
     ///
     /// - Returns: One result per session, in the order of `sessions`.
-    ///   The result is `nil` for a session whose request failed; the error is logged.
+    ///   The result is `nil` for a session whose request failed. Failures and successes are recorded
+    ///   in `CouchMemberHealth`, which logs each failing member once per refresh.
     static func perSession(
         _ sessions: [UserSession],
         _ request: @escaping @MainActor (UserSession) async throws -> [BaseItemDto]
@@ -59,13 +81,14 @@ enum CouchHomeSupport {
         await withTaskGroup(of: (Int, [BaseItemDto]?).self) { group in
             for (index, session) in sessions.enumerated() {
                 group.addTask { @MainActor in
+                    let health = Container.shared.couchMemberHealth()
+
                     do {
                         let items = try await request(session)
+                        health.recordSuccess(userID: session.user.id)
                         return (index, items)
                     } catch {
-                        CouchHomeSupport.logger.error(
-                            "Couch: request failed for user \(session.user.id): \(error.localizedDescription)"
-                        )
+                        health.recordFailure(userID: session.user.id, error: error)
                         return (index, nil)
                     }
                 }
@@ -93,8 +116,22 @@ enum CouchHomeSupport {
 
     // MARK: - Picked for this couch
 
-    /// The watchlist picks tagged for exactly this couch, resolved to library items as seen by `session`
-    /// (the primary user), newest pick first.
+    /// The watchlist picks for this couch, the one definition used by Home and the decider.
+    ///
+    /// - A group: the picks tagged for exactly these people ("Picked for Sam & Lisa").
+    /// - Alone: every pick that includes this person ("Just Sam", "Sam & Lisa", …).
+    static func pickEntries(for couch: CouchGroup) -> [AudienceWatchlistEntry] {
+        let store = Container.shared.audienceWatchlistStore()
+
+        if couch.isGroup {
+            return store.entries(forExactAudience: couch.memberIDs)
+        }
+
+        return store.entries(including: couch.primary.id)
+    }
+
+    /// The picks for this couch (`pickEntries(for:)`), resolved to library items as seen by `session`
+    /// (the primary user): newest pick first, and the picks everyone on the couch already played last.
     ///
     /// Picks that aren't in the library, or that the primary user can't access, are left out.
     static func pickedItems(
@@ -102,6 +139,28 @@ enum CouchHomeSupport {
         session: UserSession,
         refreshStore: Bool
     ) async -> [BaseItemDto] {
+        let split = await pickedItemsSplit(
+            couch: couch,
+            session: session,
+            refreshStore: refreshStore
+        )
+
+        return split.fresh + split.watchedByEveryone
+    }
+
+    /// The picks for this couch, like `pickedItems(couch:session:refreshStore:)`, split by whether
+    /// everyone on the couch already played them.
+    ///
+    /// Played picks are kept (kids rewatch favourites), they only make way for the fresh ones.
+    /// Only members whose played state could be checked count. Picks stay exempt from the
+    /// access and "watched" filters of the other couch rows by design.
+    ///
+    /// - Returns: Both lists newest pick first.
+    static func pickedItemsSplit(
+        couch: CouchGroup,
+        session: UserSession,
+        refreshStore: Bool
+    ) async -> (fresh: [BaseItemDto], watchedByEveryone: [BaseItemDto]) {
         let store = Container.shared.audienceWatchlistStore()
 
         // The store shows its cached list right away. Refresh it from the household's
@@ -113,9 +172,9 @@ enum CouchHomeSupport {
             await store.refresh(sessions: session.householdSessions())
         }
 
-        let entries = store.entries(forExactAudience: couch.memberIDs)
+        let entries = pickEntries(for: couch)
 
-        guard entries.isNotEmpty else { return [] }
+        guard entries.isNotEmpty else { return (fresh: [], watchedByEveryone: []) }
 
         let resolvedItems = await store.libraryItems(for: entries, session: session)
 
@@ -132,31 +191,93 @@ enum CouchHomeSupport {
             orderedIDs.append(id)
         }
 
-        guard orderedIDs.isNotEmpty else { return [] }
+        guard orderedIDs.isNotEmpty else { return (fresh: [], watchedByEveryone: []) }
 
         // Fetch the items again as the primary user: full poster fields,
         // their own user data, and their parental controls.
-        do {
-            let items = try await CouchItemFilter.fetchItems(ids: orderedIDs, session: session)
-            let itemsByID = itemsKeyedByID(items)
+        let items: [BaseItemDto]
+        let primaryResult: [BaseItemDto]?
 
-            return orderedIDs.compactMap { itemsByID[$0] }
+        do {
+            let fetchedItems = try await CouchItemFilter.fetchItems(ids: orderedIDs, session: session)
+            let itemsByID = itemsKeyedByID(fetchedItems)
+
+            items = orderedIDs.compactMap { itemsByID[$0] }
+            primaryResult = items
         } catch {
             logger.error("Couch: could not fetch the picked items: \(error.localizedDescription)")
 
-            return orderedIDs.compactMap { resolvedItemsByID[$0] }
+            // Without the primary user's own user data, their played state is unknown
+            items = orderedIDs.compactMap { resolvedItemsByID[$0] }
+            primaryResult = nil
         }
+
+        // The other members' played state, as seen by their own accounts
+        let otherSessions = memberSessions(for: couch, primary: session)
+        var otherResults: [[BaseItemDto]?] = []
+
+        if otherSessions.isNotEmpty, items.isNotEmpty {
+            otherResults = await CouchItemFilter.fetchItems(
+                ids: CouchItemFilter.uniqueIDs(of: items),
+                seenBy: otherSessions,
+                fields: nil,
+                enableImages: false
+            )
+        }
+
+        return splitPlayedByEveryone(items, memberResults: [primaryResult] + otherResults)
+    }
+
+    /// Splits items into the ones that not every checked member played yet, and the ones they all played
+    /// (`isPlayed == true`), keeping the order within both.
+    ///
+    /// - Parameter memberResults: Per member, the items as that member sees them, or `nil` when that member
+    ///   couldn't be checked. An item a member can't see counts as not played by them.
+    /// - Returns: Every item as fresh when no member could be checked.
+    static func splitPlayedByEveryone(
+        _ items: [BaseItemDto],
+        memberResults: [[BaseItemDto]?]
+    ) -> (fresh: [BaseItemDto], watchedByEveryone: [BaseItemDto]) {
+        let checkedResults = memberResults.compactMap(\.self)
+
+        guard checkedResults.isNotEmpty else { return (fresh: items, watchedByEveryone: []) }
+
+        var playedCounts: [String: Int] = [:]
+
+        for memberItems in checkedResults {
+            var countedIDs: Set<String> = []
+
+            for memberItem in memberItems where memberItem.userData?.isPlayed == true {
+                guard let id = memberItem.id, countedIDs.insert(id).inserted else { continue }
+
+                playedCounts[id, default: 0] += 1
+            }
+        }
+
+        var fresh: [BaseItemDto] = []
+        var watchedByEveryone: [BaseItemDto] = []
+
+        for item in items {
+            if let id = item.id, playedCounts[id, default: 0] >= checkedResults.count {
+                watchedByEveryone.append(item)
+            } else {
+                fresh.append(item)
+            }
+        }
+
+        return (fresh: fresh, watchedByEveryone: watchedByEveryone)
     }
 
     // MARK: - Toddler content
 
-    /// Whether the couch has a kid and at least one adult.
+    /// Whether the couch has a child and at least one adult (`UserState.isChildAudience`:
+    /// marked as a kid, or a server age limit below 12).
     static func hasKidAndAdults(_ couch: CouchGroup) -> Bool {
-        couch.members.contains { $0.isKid } && couch.members.contains { !$0.isKid }
+        couch.members.contains { $0.isChildAudience } && couch.members.contains { !$0.isChildAudience }
     }
 
-    /// Drops toddler content when a kid and adults are on the couch together,
-    /// unless it was picked for exactly this couch.
+    /// Drops toddler content when a child and adults are on the couch together,
+    /// unless it was picked for this couch (`pickEntries(for:)`).
     ///
     /// Ratings can't tell a toddler show from a family film, so this uses genres
     /// ("Kids", "Children"). Episodes are judged by their series' genres too.
@@ -237,7 +358,7 @@ enum CouchHomeSupport {
     }
 }
 
-/// The watchlist picks for exactly one couch, matched against library items
+/// The watchlist picks for one couch (`CouchHomeSupport.pickEntries(for:)`), matched against library items
 /// by Jellyfin id or TMDB id, without any request.
 @MainActor
 private struct CouchPicks {
@@ -247,9 +368,7 @@ private struct CouchPicks {
     private var tmdbKeys: Set<String> = []
 
     init(couch: CouchGroup) {
-        let entries = Container.shared
-            .audienceWatchlistStore()
-            .entries(forExactAudience: couch.memberIDs)
+        let entries = CouchHomeSupport.pickEntries(for: couch)
 
         for entry in entries {
             if let jellyfinItemID = entry.jellyfinItemID {
