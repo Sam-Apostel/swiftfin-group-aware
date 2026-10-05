@@ -25,6 +25,9 @@ enum AudienceWatchlistActions {
     private static let logger = Logger.swiftfin()
     private static let refreshInterval: TimeInterval = 60
     private static var lastRefresh: Date?
+    /// The latest Seerr watchlist sync. Each new sync waits for it, so a quick save-then-remove
+    /// reaches Seerr in that order (each sync still runs its members concurrently).
+    private static var lastSeerrSync: Task<Void, Never>?
 
     // MARK: - Lookup
 
@@ -169,7 +172,10 @@ enum AudienceWatchlistActions {
         let seerrService = Container.shared.seerrService()
         guard seerrService.isConfigured else { return }
 
-        Task { @MainActor in
+        let previousSync = lastSeerrSync
+
+        lastSeerrSync = Task { @MainActor in
+            await previousSync?.value
             await seerrService.syncWatchlists(for: entry, adding: adding, removing: removing)
         }
     }

@@ -28,7 +28,9 @@ extension L10n {
         static let forEveryone = "For everyone"
         static let kid = "Kid"
         static let noPeople = "No signed-in users on this server"
-        static let missingSomeone = "Missing someone? Add them under Settings \u{203A} Change who\u{2019}s on the couch."
+        /// Points at Settings in general: the couch row / switcher there is renamed by #52, and today
+        /// "Change who's watching" is the way in. There is no row called "Change who's on the couch".
+        static let missingSomeone = "Missing someone? Add them to the couch in Settings."
 
         /// The poster menu title for a tagged title: "For Sam & Lisa…" (opens the picker).
         static func editAudience(_ sentence: String) -> String {
