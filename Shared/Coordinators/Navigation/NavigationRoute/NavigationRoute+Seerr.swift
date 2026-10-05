@@ -24,13 +24,12 @@ extension NavigationRoute {
         }
     }
 
-    // MARK: - Media (placeholder from #13; #14 replaces the destination with `SeerrMediaDetailView`)
+    // MARK: - Media Detail
 
+    @MainActor
     static func seerrMedia(mediaType: SeerrMediaType, tmdbID: Int) -> NavigationRoute {
-        NavigationRoute(
-            id: "seerr-media-\(mediaType.rawValue)-\(tmdbID)"
-        ) {
-            SeerrMediaPlaceholderView(mediaType: mediaType, tmdbID: tmdbID)
+        NavigationRoute(id: "seerr-media-\(mediaType.rawValue)-\(tmdbID)") {
+            SeerrMediaDetailView(mediaType: mediaType, tmdbID: tmdbID)
         }
     }
 

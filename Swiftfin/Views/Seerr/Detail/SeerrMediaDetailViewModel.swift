@@ -1,0 +1,482 @@
+//
+// Swiftfin is subject to the terms of the Mozilla Public
+// License, v2.0. If a copy of the MPL was not distributed with this
+// file, you can obtain one at https://mozilla.org/MPL/2.0/.
+//
+// Copyright (c) 2026 Jellyfin & Jellyfin Contributors
+//
+
+import Combine
+import FactoryKit
+import Foundation
+import JellyfinAPI
+import Logging
+
+/// Loads one Seerr title, resolves it against the Jellyfin library and handles
+/// requesting it and tagging who it's for.
+///
+/// Request and audience actions run in the background and report through
+/// `events`; only a failed `refresh` turns the screen into an error.
+@MainActor
+@Stateful
+final class SeerrMediaDetailViewModel: ViewModel {
+
+    @CasePathable
+    enum Action {
+        case refresh
+        case removeAudience
+        case requestMedia(seasons: [Int]?)
+        case saveAudience(Set<String>)
+
+        var transition: Transition {
+            switch self {
+            case .refresh:
+                .to(.refreshing, then: .content)
+                    .whenBackground(.refreshing)
+
+            case .removeAudience, .saveAudience:
+                .background(.updatingAudience)
+
+            case .requestMedia:
+                .background(.requesting)
+            }
+        }
+    }
+
+    enum BackgroundState {
+        case refreshing
+        case requesting
+        case updatingAudience
+    }
+
+    enum Event {
+        case audienceRemoved
+        case audienceSaved(offerRequest: Bool)
+        case failed(String)
+        case requested
+    }
+
+    enum State {
+        case content
+        case error
+        case initial
+        case refreshing
+    }
+
+    let mediaType: SeerrMediaType
+    let tmdbID: Int
+
+    @Published
+    private(set) var details: SeerrMediaDetails?
+    /// Every stored user on this server, used to name audience members.
+    @Published
+    private(set) var householdUsers: [UserState] = []
+    /// `false` when no Seerr server is configured for the current Jellyfin server.
+    @Published
+    private(set) var isSeerrConfigured: Bool = true
+    /// The Jellyfin item as seen by the current (primary) user, if it is in the library.
+    @Published
+    private(set) var libraryItem: BaseItemDto?
+    /// A request made from this screen, kept so the status flips before Seerr reports it.
+    @Published
+    private(set) var submittedRequest: SeerrRequest?
+    @Published
+    private(set) var hasSubmittedRequest: Bool = false
+    @Published
+    private(set) var watchlistEntry: AudienceWatchlistEntry?
+
+    private var isSubmittingRequest = false
+
+    private var seerrService: SeerrService {
+        Container.shared.seerrService()
+    }
+
+    private var watchlistStore: AudienceWatchlistStore {
+        Container.shared.audienceWatchlistStore()
+    }
+
+    var entryID: String {
+        AudienceWatchlistEntry.makeID(tmdbID: tmdbID, kind: entryKind, jellyfinItemID: nil)
+    }
+
+    private var entryKind: AudienceWatchlistEntry.MediaKind {
+        switch mediaType {
+        case .movie:
+            .movie
+        case .tv:
+            .tv
+        }
+    }
+
+    init(mediaType: SeerrMediaType, tmdbID: Int) {
+        self.mediaType = mediaType
+        self.tmdbID = tmdbID
+        super.init()
+
+        let entryID = entryID
+
+        Container.shared
+            .audienceWatchlistStore()
+            .$entries
+            .sink { [weak self] entries in
+                self?.watchlistEntry = entries.first { $0.id == entryID }
+            }
+            .store(in: &cancellables)
+    }
+
+    // MARK: - Derived State
+
+    var year: Int? {
+        Self.releaseYear(from: details?.releaseDate)
+    }
+
+    private static func releaseYear(from releaseDate: String?) -> Int? {
+        guard let releaseDate, releaseDate.count >= 4 else { return nil }
+
+        return Int(releaseDate.prefix(4))
+    }
+
+    private var mediaStatus: SeerrMediaStatus {
+        details?.mediaInfo?.status ?? .unknown
+    }
+
+    private var activeRequest: SeerrRequest? {
+        details?.mediaInfo?.requests?.first { request in
+            request.status == .pending || request.status == .approved
+        }
+    }
+
+    var status: SeerrMediaDetailStatus {
+        if libraryItem != nil {
+            return mediaStatus == .partiallyAvailable ? .partiallyAvailable : .available
+        }
+
+        switch mediaStatus {
+        case .available:
+            return .available
+        case .blocklisted:
+            return .blocklisted
+        case .partiallyAvailable:
+            return .partiallyAvailable
+        case .pending:
+            return .requested
+        case .processing:
+            return .processing
+        case .deleted, .unknown:
+            return hasSubmittedRequest || activeRequest != nil ? .requested : .notRequested
+        }
+    }
+
+    /// Whether the primary action should offer to request the title.
+    var canRequest: Bool {
+        switch status {
+        case .notRequested:
+            true
+        case .partiallyAvailable:
+            mediaType == .tv && !hasSubmittedRequest
+        case .available, .blocklisted, .processing, .requested:
+            false
+        }
+    }
+
+    var requesterName: String? {
+        submittedRequest?.requestedBy?.displayName ?? activeRequest?.requestedBy?.displayName
+    }
+
+    /// Seasons that can be picked in the TV request sheet (specials and empty seasons are skipped, like Seerr does).
+    var requestableSeasons: [SeerrSeason] {
+        (details?.seasons ?? [])
+            .filter { $0.seasonNumber > 0 && ($0.episodeCount ?? 1) > 0 }
+            .sorted { $0.seasonNumber < $1.seasonNumber }
+    }
+
+    /// The picker's pre-selection: the saved audience, else the current couch.
+    var suggestedAudience: Set<String> {
+        if let watchlistEntry {
+            return watchlistEntry.audience
+        }
+
+        return userSession?.couch.memberIDs ?? []
+    }
+
+    // MARK: - Refresh
+
+    @Function(\Action.Cases.refresh)
+    private func _refresh() async throws {
+        let session = try requireUserSession()
+        let sessions = session.householdSessions()
+
+        householdUsers = sessions.map(\.user)
+        watchlistEntry = watchlistStore.entry(id: entryID)
+
+        if !watchlistStore.isRefreshing {
+            let store = watchlistStore
+            Task {
+                await store.refresh(sessions: sessions)
+            }
+        }
+
+        guard let client = seerrService.client else {
+            isSeerrConfigured = false
+            throw SeerrError.notConfigured
+        }
+
+        isSeerrConfigured = true
+
+        let details = try await client.details(mediaType: mediaType, tmdbID: tmdbID)
+        let libraryItem = await resolveLibraryItem(details: details, session: session)
+
+        self.details = details
+        self.libraryItem = libraryItem
+    }
+
+    /// Resolves the title to a Jellyfin item visible to the current user: Seerr's `jellyfinMediaId`
+    /// first, then the watchlist store's TMDB → item map (covers titles Seerr hasn't synced yet).
+    private func resolveLibraryItem(details: SeerrMediaDetails, session: UserSession) async -> BaseItemDto? {
+        if let itemID = details.mediaInfo?.jellyfinMediaId, itemID.isNotEmpty {
+            do {
+                let request = Paths.getItem(itemID: itemID, userID: session.user.id)
+                return try await session.client.send(request).value
+            } catch {
+                logger.warning(
+                    "Seerr's Jellyfin item is not reachable for the current user",
+                    metadata: [
+                        "itemID": .string(itemID),
+                        "error": .string(error.localizedDescription),
+                    ]
+                )
+            }
+        }
+
+        let probe = makeEntry(
+            details: details,
+            audience: [],
+            addedBy: session.user.id,
+            jellyfinItemID: nil
+        )
+        let items = await watchlistStore.libraryItems(for: [probe], session: session)
+
+        return items[probe.id]
+    }
+
+    private func reloadDetails(client: SeerrClient) async {
+        do {
+            details = try await client.details(mediaType: mediaType, tmdbID: tmdbID)
+        } catch {
+            logger.warning(
+                "Failed to reload Seerr details",
+                metadata: ["error": .string(error.localizedDescription)]
+            )
+        }
+    }
+
+    // MARK: - Request
+
+    @Function(\Action.Cases.requestMedia)
+    private func _requestMedia(_ seasons: [Int]?) async {
+        guard !isSubmittingRequest else { return }
+
+        isSubmittingRequest = true
+        defer { isSubmittingRequest = false }
+
+        guard let client = seerrService.client else {
+            events.send(.failed(SeerrError.notConfigured.localizedDescription))
+            return
+        }
+
+        do {
+            let session = try requireUserSession()
+            let seerrUserID = await seerrService.seerrUserID(for: session.user)
+
+            if seerrUserID == nil {
+                logger.warning("No Seerr user for the primary user, requesting as the API key owner")
+            }
+
+            let request = try await client.request(
+                mediaType: mediaType,
+                tmdbID: tmdbID,
+                seasons: mediaType == .tv ? seasons : nil,
+                asUser: seerrUserID
+            )
+
+            submittedRequest = request
+            hasSubmittedRequest = true
+            events.send(.requested)
+
+            await reloadDetails(client: client)
+        } catch {
+            // 409: someone already requested it, which is what the user wanted.
+            if case let .server(status, _)? = error as? SeerrError, status == 409 {
+                hasSubmittedRequest = true
+                events.send(.requested)
+
+                await reloadDetails(client: client)
+                return
+            }
+
+            logger.error(
+                "Failed to request Seerr media",
+                metadata: [
+                    "tmdbID": .stringConvertible(tmdbID),
+                    "error": .string(error.localizedDescription),
+                ]
+            )
+            events.send(.failed(error.localizedDescription))
+        }
+    }
+
+    // MARK: - Audience
+
+    @Function(\Action.Cases.saveAudience)
+    private func _saveAudience(_ audience: Set<String>) async {
+        guard audience.isNotEmpty else {
+            await removeEntry()
+            return
+        }
+
+        do {
+            let session = try requireUserSession()
+
+            guard let details else {
+                throw ErrorMessage(L10n.unknownError)
+            }
+
+            let previousAudience = watchlistEntry?.audience ?? []
+
+            var entry = watchlistEntry ?? makeEntry(
+                details: details,
+                audience: audience,
+                addedBy: session.user.id,
+                jellyfinItemID: libraryItem?.id
+            )
+            entry.audience = audience
+            entry.title = details.title
+            entry.year = Self.releaseYear(from: details.releaseDate) ?? entry.year
+            entry.posterPath = details.posterPath ?? entry.posterPath
+            entry.jellyfinItemID = libraryItem?.id ?? entry.jellyfinItemID
+            entry.isDeleted = false
+
+            try await watchlistStore.upsert(entry, sessions: session.householdSessions())
+
+            watchlistEntry = watchlistStore.entry(id: entry.id) ?? entry
+            events.send(.audienceSaved(offerRequest: status == .notRequested))
+
+            await syncSeerrWatchlists(
+                adding: audience,
+                removing: previousAudience.subtracting(audience),
+                title: details.title
+            )
+        } catch {
+            logger.error(
+                "Failed to save the audience",
+                metadata: ["error": .string(error.localizedDescription)]
+            )
+            events.send(.failed(error.localizedDescription))
+        }
+    }
+
+    @Function(\Action.Cases.removeAudience)
+    private func _removeAudience() async {
+        await removeEntry()
+    }
+
+    private func removeEntry() async {
+        do {
+            let session = try requireUserSession()
+            let previousAudience = watchlistEntry?.audience ?? []
+
+            try await watchlistStore.remove(entryID: entryID, sessions: session.householdSessions())
+
+            watchlistEntry = nil
+            events.send(.audienceRemoved)
+
+            if let details {
+                await syncSeerrWatchlists(
+                    adding: [],
+                    removing: previousAudience,
+                    title: details.title
+                )
+            }
+        } catch {
+            logger.error(
+                "Failed to remove the watchlist entry",
+                metadata: ["error": .string(error.localizedDescription)]
+            )
+            events.send(.failed(error.localizedDescription))
+        }
+    }
+
+    /// Best effort: mirror the audience into each member's own Seerr watchlist, so Seerr matches.
+    private func syncSeerrWatchlists(
+        adding: Set<String>,
+        removing: Set<String>,
+        title: String
+    ) async {
+        guard let client = seerrService.client else { return }
+
+        for jellyfinUserID in adding.union(removing).sorted() {
+            let seerrUserID: Int?
+
+            do {
+                seerrUserID = try await client.seerrUserID(forJellyfinUserID: jellyfinUserID)
+            } catch {
+                logger.warning(
+                    "Failed to map a Jellyfin user to Seerr",
+                    metadata: ["error": .string(error.localizedDescription)]
+                )
+                continue
+            }
+
+            guard let seerrUserID else { continue }
+
+            do {
+                if adding.contains(jellyfinUserID) {
+                    try await client.addToWatchlist(
+                        mediaType: mediaType,
+                        tmdbID: tmdbID,
+                        title: title,
+                        asUser: seerrUserID
+                    )
+                } else {
+                    try await client.removeFromWatchlist(
+                        mediaType: mediaType,
+                        tmdbID: tmdbID,
+                        asUser: seerrUserID
+                    )
+                }
+            } catch {
+                logger.warning(
+                    "Failed to sync a Seerr watchlist",
+                    metadata: [
+                        "seerrUserID": .stringConvertible(seerrUserID),
+                        "error": .string(error.localizedDescription),
+                    ]
+                )
+            }
+        }
+    }
+
+    private func makeEntry(
+        details: SeerrMediaDetails,
+        audience: Set<String>,
+        addedBy: String,
+        jellyfinItemID: String?
+    ) -> AudienceWatchlistEntry {
+        let now = Date.now
+
+        return AudienceWatchlistEntry(
+            id: entryID,
+            tmdbID: tmdbID,
+            kind: entryKind,
+            jellyfinItemID: jellyfinItemID,
+            title: details.title,
+            year: Self.releaseYear(from: details.releaseDate),
+            posterPath: details.posterPath,
+            audience: audience,
+            addedBy: addedBy,
+            addedAt: now,
+            updatedAt: now,
+            isDeleted: false
+        )
+    }
+}
