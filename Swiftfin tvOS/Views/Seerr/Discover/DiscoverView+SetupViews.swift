@@ -108,7 +108,9 @@ extension DiscoverView {
     // MARK: - Sign In
 
     /// A server is known, but nobody on this Apple TV has a Seerr session yet:
-    /// one press signs the couch in with Jellyfin Quick Connect.
+    /// one press signs the couch in with Jellyfin Quick Connect. Right after adopting the
+    /// household's server it signs in by itself, showing only the status; a failure shows
+    /// inline with Try again.
     struct SignInView: View {
 
         private enum Action: Hashable {
@@ -151,22 +153,53 @@ extension DiscoverView {
             guard signingInName == nil else { return }
 
             Task {
-                await viewModel.signInCouch()
+                await viewModel.signInCouchManually()
             }
+        }
+
+        @ViewBuilder
+        private func signingInStatus(_ name: String) -> some View {
+            HStack(spacing: 20) {
+                ProgressView()
+
+                Text(L10n.SeerrTV.signingIn(name))
+            }
+            .frame(maxWidth: .infinity)
         }
 
         @ViewBuilder
         private var signInLabel: some View {
             if let signingInName {
-                HStack(spacing: 20) {
-                    ProgressView()
-
-                    Text(L10n.SeerrTV.signingIn(signingInName))
-                }
-                .frame(maxWidth: .infinity)
+                signingInStatus(signingInName)
             } else {
-                Text(L10n.SeerrTV.signIn)
+                Text(viewModel.signInFailure == nil ? L10n.SeerrTV.signIn : L10n.SeerrTV.tryAgain)
                     .frame(maxWidth: .infinity)
+            }
+        }
+
+        /// "Couldn't sign Tuur in: …", inline instead of an alert.
+        @ViewBuilder
+        private var failureView: some View {
+            if signingInName == nil, let failure = viewModel.signInFailure {
+                Label(
+                    L10n.SeerrTV.couldNotSignIn(failure.name, failure.message),
+                    systemImage: "exclamationmark.circle.fill"
+                )
+                .font(.callout)
+                .foregroundStyle(.orange)
+                .multilineTextAlignment(.center)
+                .lineLimit(4)
+            }
+        }
+
+        /// Signing in without a press: only the status, no buttons.
+        @ViewBuilder
+        private var actionsView: some View {
+            if viewModel.isSigningInAutomatically {
+                signingInStatus(signingInName ?? "")
+                    .frame(maxWidth: 600, minHeight: 75)
+            } else {
+                buttons
             }
         }
 
@@ -230,14 +263,26 @@ extension DiscoverView {
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
+
+                    failureView
                 }
                 .frame(maxWidth: 900)
 
-                buttons
+                actionsView
             }
             .edgePadding()
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .toolbar(.hidden, for: .navigationBar)
+            .onChange(of: viewModel.isSigningInAutomatically) {
+                // The buttons appear after a failed automatic sign-in: focus Try again
+                guard !viewModel.isSigningInAutomatically else { return }
+
+                // They only appear in this update: focus on the next one
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(100))
+                    focusedAction = .signIn
+                }
+            }
         }
     }
 }

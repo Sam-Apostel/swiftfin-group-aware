@@ -55,8 +55,40 @@ struct QuickConnectAuthorizeView: View {
         }
     }
 
-    var body: some View {
-        Form {
+    /// "Sign in as": one avatar per account on this device, the chosen one checked.
+    @ViewBuilder
+    private var personChooser: some View {
+        ScrollView(.horizontal) {
+            HStack(alignment: .top, spacing: EdgeInsets.itemSpacing) {
+                ForEach(viewModel.householdSessions, id: \.user.id) { session in
+                    AudiencePickerView.MemberButton(
+                        user: session.user,
+                        client: session.client,
+                        isKid: session.user.isChildAudience,
+                        isSelected: session.user.id == viewModel.chosenUserID
+                    ) {
+                        viewModel.select(session: session)
+                    }
+                    .frame(width: 76)
+                }
+            }
+            .padding(.vertical, 8)
+        }
+        .scrollIndicators(.hidden)
+        .disabled(viewModel.state == .authorizing)
+    }
+
+    @ViewBuilder
+    private var userSection: some View {
+        if viewModel.isChoosingPerson {
+            Section {
+                personChooser
+            } header: {
+                Text(L10n.TVSetup.signInAs)
+            } footer: {
+                Text(L10n.TVSetup.signInAsFooter(viewModel.user.name ?? L10n.unknown))
+            }
+        } else {
             Section {
                 loginUserRow
             } header: {
@@ -64,6 +96,12 @@ struct QuickConnectAuthorizeView: View {
             } footer: {
                 Text(L10n.quickConnectUserDisclaimer)
             }
+        }
+    }
+
+    var body: some View {
+        Form {
+            userSection
 
             Section {
                 TextField(L10n.quickConnectCode, text: $code)

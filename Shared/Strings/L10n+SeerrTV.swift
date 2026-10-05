@@ -17,7 +17,7 @@ extension L10n {
         // MARK: - Setup: No Server
 
         static let noServerDescription =
-            "Connect Seerr on your iPhone (Settings → Seerr) and it shows up here. Or enter its address on this Apple TV."
+            "Connect Seerr on your iPhone (Settings → Seerr). This screen updates by itself."
         static let enterAddress = "Enter address"
         static let checkAgain = "Check again"
 
@@ -40,6 +40,13 @@ extension L10n {
         /// "Signing in Lisa…"
         static func signingIn(_ name: String) -> String {
             "Signing in \(name)…"
+        }
+
+        static let tryAgain = "Try again"
+
+        /// "Couldn't sign Tuur in: Access denied."
+        static func couldNotSignIn(_ name: String, _ message: String) -> String {
+            "Couldn't sign \(name) in: \(message)"
         }
 
         /// "Sam", "Sam & Lisa", "Sam, Lisa & Tuur"

@@ -16,6 +16,8 @@ import Logging
 /// 1. `checking`: adopting the household's Seerr server (`adoptHouseholdServerIfNeeded()`).
 /// 2. `needsServer`: no server here and none (reachable) in the household.
 /// 3. `needsSignIn`: a server is known, but nobody on this Apple TV has a Seerr session yet.
+///    Right after adopting the household's server the couch is signed in without a press
+///    (`signingIn`), unless someone explicitly signed out in the Seerr settings.
 /// 4. `ready`: `SeerrService.client` is set.
 @MainActor
 final class SeerrTVSetupViewModel: ObservableObject {
@@ -29,6 +31,13 @@ final class SeerrTVSetupViewModel: ObservableObject {
         case ready
     }
 
+    /// The first failure of a couch sign-in, shown inline on the sign-in screen.
+    struct SignInFailure: Equatable {
+        /// Who couldn't be signed in.
+        let name: String
+        let message: String
+    }
+
     @Published
     private(set) var phase: Phase
     /// The household server adoption tried, when it failed.
@@ -38,9 +47,12 @@ final class SeerrTVSetupViewModel: ObservableObject {
     @Published
     private(set) var adoptionError: Error?
 
-    /// The first failure of an explicit couch sign-in, shown as an alert.
+    /// The first failure of the last couch sign-in (automatic or a press).
     @Published
-    var error: Error?
+    private(set) var signInFailure: SignInFailure?
+    /// The couch is being signed in without a press: the sign-in screen shows no buttons.
+    @Published
+    private(set) var isSigningInAutomatically: Bool = false
 
     @Injected(\.seerrService)
     private var seerrService: SeerrService
@@ -65,6 +77,12 @@ final class SeerrTVSetupViewModel: ObservableObject {
     /// The Jellyfin server of the current session, for avatars.
     var server: ServerState? {
         Container.shared.currentUserSession()?.server
+    }
+
+    /// Whether Discover should look for the household's server again by itself
+    /// (returning to the app, selecting the tab): nothing is set up yet, or adopting failed.
+    var shouldCheckAgain: Bool {
+        phase == .needsServer || adoptionError != nil
     }
 
     init() {
@@ -92,6 +110,8 @@ final class SeerrTVSetupViewModel: ObservableObject {
     /// Adopts (or follows) the household's Seerr server, then recomputes the phase.
     ///
     /// When Seerr already works here, the phase stays `ready` while the household is checked.
+    /// When this just adopted the household's server (or adopted it earlier and nobody here ever
+    /// had a Seerr session), the couch is signed in right away, unless someone explicitly signed out.
     func start() async {
         guard !isStarting else { return }
 
@@ -102,8 +122,10 @@ final class SeerrTVSetupViewModel: ObservableObject {
             phase = .checking
         }
 
+        var didAdopt = false
+
         do {
-            try await seerrService.adoptHouseholdServerIfNeeded()
+            didAdopt = try await seerrService.adoptHouseholdServerIfNeeded() != nil
             adoptionError = nil
             attemptedHost = nil
         } catch is CancellationError {
@@ -119,13 +141,48 @@ final class SeerrTVSetupViewModel: ObservableObject {
             attemptedHost = householdURL.map { $0.host() ?? $0.absoluteString }
         }
 
-        recomputePhase()
+        guard shouldSignInAutomatically(didAdopt: didAdopt) else {
+            recomputePhase()
+            return
+        }
+
+        logger.info("Seerr: signing the couch in with Quick Connect without a press")
+
+        isSigningInAutomatically = true
+        await signInCouch()
+        isSigningInAutomatically = false
+    }
+
+    /// The zero-click sign-in: a server without anyone signed in, no explicit sign-out, and either
+    /// the household's server was just adopted, or it was adopted earlier and nobody here ever had a session.
+    private func shouldSignInAutomatically(didAdopt: Bool) -> Bool {
+        guard seerrService.serverURL != nil,
+              seerrService.client == nil,
+              adoptionError == nil,
+              !SeerrTVSetupFlags.isSignedOutExplicitly,
+              membersToSignIn.isNotEmpty
+        else { return false }
+
+        if didAdopt {
+            return true
+        }
+
+        return SeerrTVSetupFlags.isHouseholdAdopted
+            && !SeerrTVSetupFlags.hadSession
+            && seerrService.signedInUserIDs.isEmpty
     }
 
     // MARK: - Sign In
 
+    /// A press on Sign in or Try again: also allows the zero-click sign-in again after an explicit sign-out.
+    func signInCouchManually() async {
+        SeerrTVSetupFlags.clearExplicitSignOut()
+
+        await signInCouch()
+    }
+
     /// Signs in every couch member that needs a session, one after the other.
-    /// The first failure is shown through `error`; the others are only logged.
+    /// The first failure is shown through `signInFailure`; the others are only logged.
     func signInCouch() async {
         if case .signingIn = phase {
             return
@@ -138,7 +195,7 @@ final class SeerrTVSetupViewModel: ObservableObject {
             return
         }
 
-        error = nil
+        signInFailure = nil
 
         for member in members {
             phase = .signingIn(member.username)
@@ -156,8 +213,11 @@ final class SeerrTVSetupViewModel: ObservableObject {
                     ]
                 )
 
-                if self.error == nil {
-                    self.error = error
+                if signInFailure == nil {
+                    signInFailure = SignInFailure(
+                        name: member.username,
+                        message: error.localizedDescription
+                    )
                 }
             }
         }
@@ -199,6 +259,10 @@ final class SeerrTVSetupViewModel: ObservableObject {
             attemptedHost = nil
         }
 
+        if hasClient {
+            SeerrTVSetupFlags.noteSession()
+        }
+
         // `start()` and `signInCouch()` recompute when they finish
         guard phase != .checking else { return }
 
@@ -210,9 +274,15 @@ final class SeerrTVSetupViewModel: ObservableObject {
     }
 
     private func recomputePhase() {
+        let hasClient = seerrService.client != nil
+
+        if hasClient {
+            SeerrTVSetupFlags.noteSession()
+        }
+
         phase = Self.phase(
             hasServer: seerrService.serverURL != nil,
-            hasClient: seerrService.client != nil
+            hasClient: hasClient
         )
     }
 

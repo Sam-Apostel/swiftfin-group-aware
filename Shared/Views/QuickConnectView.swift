@@ -25,9 +25,16 @@ struct QuickConnectView: View {
     private func pollingView(code: String) -> some View {
         VStack(spacing: 20) {
             BulletedList(spacing: 16) {
+                #if os(tvOS)
+                // Where to enter the code on the iPhone, and who it signs in
+                Text(L10n.TVSetup.quickConnectStepIPhone)
+
+                Text(L10n.TVSetup.quickConnectStepOtherApp)
+                #else
                 Text(L10n.quickConnectStep1)
 
                 Text(L10n.quickConnectStep2)
+                #endif
 
                 Text(L10n.quickConnectStep3)
             }

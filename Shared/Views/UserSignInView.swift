@@ -24,6 +24,9 @@ struct UserSignInView: View {
 
     @FocusState
     private var focusedTextField: Field?
+    /// tvOS: Quick Connect is the default focus when the server has it enabled.
+    @FocusState
+    private var isQuickConnectFocused: Bool
 
     @Router
     private var router
@@ -144,6 +147,11 @@ struct UserSignInView: View {
 
     @ViewBuilder
     private var signInSection: some View {
+        #if os(tvOS)
+        // Typing with a Siri Remote is slow: Quick Connect from the iPhone comes first
+        quickConnectSection
+        #endif
+
         Section {
             TextField(L10n.username, text: $username)
                 .autocorrectionDisabled()
@@ -235,43 +243,69 @@ struct UserSignInView: View {
             .disabled(username.isEmpty)
         }
 
-        if viewModel.isQuickConnectEnabled {
-            Section {
-                Button {
-                    didOpenQuickConnect = true
-
-                    router.route(
-                        to: .quickConnect(
-                            client: viewModel.server.client
-                        ) { secret in
-                            await viewModel.signInQuickConnect(secret: secret)
-                        }
-                    )
-                } label: {
-                    Text(L10n.quickConnect)
-                        .frame(maxWidth: .infinity)
-                }
-                .listRowInsets(.zero)
-                .listRowBackground(Color.clear)
-                .fontWeight(.semibold)
-                .backport
-                .buttonStyle(.glassProminent.shadow(false))
-                .tint(.jellyfinPurple)
-                #if os(iOS)
-                .controlSize(.large)
-                #endif
-                #if os(iOS)
-                .listRowSeparator(.hidden)
-                #endif
-                .disabled(viewModel.state == .signingIn)
-            }
-        }
+        #if os(iOS)
+        quickConnectSection
+        #endif
 
         if let disclaimer = viewModel.serverDisclaimer {
             Section(L10n.disclaimer) {
                 disclaimerText(disclaimer)
                     .font(.callout)
             }
+        }
+    }
+
+    // MARK: - Quick Connect Section
+
+    @ViewBuilder
+    private var quickConnectButton: some View {
+        Button {
+            didOpenQuickConnect = true
+
+            router.route(
+                to: .quickConnect(
+                    client: viewModel.server.client
+                ) { secret in
+                    await viewModel.signInQuickConnect(secret: secret)
+                }
+            )
+        } label: {
+            Text(L10n.quickConnect)
+                .frame(maxWidth: .infinity)
+        }
+        .listRowInsets(.zero)
+        .listRowBackground(Color.clear)
+        .fontWeight(.semibold)
+        .backport
+        .buttonStyle(.glassProminent.shadow(false))
+        .tint(.jellyfinPurple)
+        #if os(iOS)
+        .controlSize(.large)
+        #endif
+        #if os(iOS)
+        .listRowSeparator(.hidden)
+        #endif
+        #if os(tvOS)
+        .frame(maxHeight: 75)
+        .focused($isQuickConnectFocused)
+        #endif
+        .disabled(viewModel.state == .signingIn)
+    }
+
+    @ViewBuilder
+    private var quickConnectSection: some View {
+        if viewModel.isQuickConnectEnabled {
+            #if os(tvOS)
+            Section {
+                quickConnectButton
+            } footer: {
+                Text(L10n.TVSetup.quickConnectHint)
+            }
+            #else
+            Section {
+                quickConnectButton
+            }
+            #endif
         }
     }
 
@@ -384,6 +418,19 @@ struct UserSignInView: View {
                 focusedTextField = username.isEmpty ? .username : .password
                 viewModel.getPublicData()
             }
+            #if os(tvOS)
+            .onChange(of: viewModel.isQuickConnectEnabled) {
+                // Quick Connect is known once the public data arrived: make it the default,
+                // unless someone already started typing a password
+                guard viewModel.isQuickConnectEnabled, password.isEmpty else { return }
+
+                // The button only appears in this update: focus it on the next one
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(100))
+                    isQuickConnectFocused = true
+                }
+            }
+            #endif
             .errorMessage($viewModel.error)
     }
 }

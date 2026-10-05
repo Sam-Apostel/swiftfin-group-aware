@@ -22,6 +22,9 @@ struct DiscoverView: View {
     @StateObject
     private var viewModel = SeerrTVSetupViewModel()
 
+    @TabItemSelected
+    private var tabItemSelected
+
     init() {}
 
     /// Changes whenever Seerr is connected, disconnected or reconfigured, so the rows are rebuilt.
@@ -66,6 +69,20 @@ struct DiscoverView: View {
                 viewModel.signInRemainingCouchSilently()
             }
         }
-        .errorMessage($viewModel.error)
+        .onSceneWillEnterForeground {
+            checkAgainIfNeeded()
+        }
+        .onReceive(tabItemSelected) { _ in
+            checkAgainIfNeeded()
+        }
+    }
+
+    /// "Not set up" updates by itself: Seerr may have been connected on the iPhone meanwhile.
+    private func checkAgainIfNeeded() {
+        guard viewModel.shouldCheckAgain else { return }
+
+        Task {
+            await viewModel.start()
+        }
     }
 }

@@ -94,6 +94,8 @@ struct SeerrSettingsView: View {
             isPresented: $isDisconnectPresented
         ) {
             Button(L10n.SeerrSettings.disconnect, role: .destructive) {
+                // Discover no longer signs the couch in by itself
+                SeerrTVSetupFlags.noteExplicitSignOut()
                 viewModel.disconnect()
                 url = ""
             }
@@ -108,6 +110,7 @@ struct SeerrSettingsView: View {
         ) {
             Button(L10n.SeerrTV.signOut, role: .destructive) {
                 if let signOutPerson {
+                    SeerrTVSetupFlags.noteExplicitSignOut()
                     viewModel.signOut(jellyfinUserID: signOutPerson.id)
                 }
                 signOutPerson = nil
@@ -141,6 +144,7 @@ struct SeerrSettingsView: View {
             let didConnect = await viewModel.connect(url: address, apiKey: "")
 
             if didConnect {
+                SeerrTVSetupFlags.clearExplicitSignOut()
                 url = seerrService.serverURL?.absoluteString ?? address
             }
         }
@@ -149,6 +153,9 @@ struct SeerrSettingsView: View {
     private func personAction(_ person: SeerrSettingsViewModel.Person) {
         switch quickConnectState(for: person) {
         case .signedOut:
+            // A manual sign-in: Discover may sign the couch in by itself again
+            SeerrTVSetupFlags.clearExplicitSignOut()
+
             Task { @MainActor in
                 await viewModel.signIn(jellyfinUserID: person.id)
             }
@@ -162,6 +169,8 @@ struct SeerrSettingsView: View {
     }
 
     private func signInEveryone() {
+        SeerrTVSetupFlags.clearExplicitSignOut()
+
         Task { @MainActor in
             _ = await viewModel.signInEveryone()
         }
