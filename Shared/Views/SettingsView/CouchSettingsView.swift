@@ -36,6 +36,8 @@ struct CouchSettingsView: View {
         Form(systemImage: "sofa.fill") {
             browsingSection
 
+            CouchLanguagesSection()
+
             kidsSection
 
             ReadyAlertsSettingsSection()
