@@ -146,6 +146,16 @@ extension SelectUserView {
                 defaultFocusedButton,
                 priority: .userInitiated
             )
+            .onChange(of: couchMembers.isEmpty) { _, isEmpty in
+                // The last couch is restored one update after the users load, so
+                // initial focus may already sit on the server menu. Hand it to Start.
+                // Never steals focus from the user grid, where `focusedButton` is nil.
+                #if os(tvOS)
+                if !isEmpty, !isEditing, focusedButton == .center {
+                    focusedButton = .start
+                }
+                #endif
+            }
         }
 
         @ViewBuilder
