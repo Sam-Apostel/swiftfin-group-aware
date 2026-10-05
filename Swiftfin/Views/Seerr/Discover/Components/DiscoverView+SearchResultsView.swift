@@ -34,6 +34,21 @@ extension DiscoverView {
             viewModel.background.is(.searching)
         }
 
+        /// Kid mode (#49): "Showing family picks because Tuur is on the couch".
+        private var familyFilterMessage: String {
+            L10n.SeerrDiscover.familyPicksFooter(childNames: viewModel.childMemberNames)
+        }
+
+        private var familyFilterFooter: some View {
+            Label(familyFilterMessage, systemImage: "figure.and.child.holdinghands")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+                .edgePadding(.horizontal)
+                .padding(.bottom, EdgeInsets.edgePadding)
+        }
+
         private var gridView: some View {
             ScrollView {
                 LazyVGrid(columns: columns, spacing: EdgeInsets.itemSpacing) {
@@ -52,9 +67,21 @@ extension DiscoverView {
                     }
                 }
                 .edgePadding()
+
+                if viewModel.isFamilyFiltered {
+                    familyFilterFooter
+                }
             }
             .scrollIndicators(.hidden)
             .scrollDismissesKeyboard(.immediately)
+        }
+
+        private var familyFilterNoResultsView: some View {
+            ContentUnavailableView {
+                Label(L10n.noResults, systemImage: "magnifyingglass")
+            } description: {
+                Text(familyFilterMessage)
+            }
         }
 
         @ViewBuilder
@@ -70,6 +97,8 @@ extension DiscoverView {
                     systemImage: "exclamationmark.magnifyingglass",
                     description: Text(error.localizedDescription)
                 )
+            } else if viewModel.isFamilyFiltered {
+                familyFilterNoResultsView
             } else {
                 ContentUnavailableView.search(text: viewModel.searchQuery)
             }

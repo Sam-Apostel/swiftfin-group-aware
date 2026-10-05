@@ -11,7 +11,8 @@ import SwiftUI
 /// Searches TMDB through Seerr with the standard tvOS search keyboard (and dictation).
 ///
 /// A pushed screen, so the Discover hero keeps the initial focus. Reuses `DiscoverViewModel`
-/// for its debounced, paged and cancellable search; its rows (`refresh`) are never loaded here.
+/// for its debounced, paged and cancellable search (family picks only in kid mode, #49);
+/// its rows (`refresh`) are never loaded here.
 struct SeerrSearchView: View {
 
     @Router
@@ -23,7 +24,10 @@ struct SeerrSearchView: View {
     @StateObject
     private var viewModel = DiscoverViewModel()
 
-    init() {}
+    /// - Parameter query: Seeds the search field, e.g. from the library Search tab (#49).
+    init(query: String? = nil) {
+        _searchQuery = State(initialValue: query ?? "")
+    }
 
     private let columns: [GridItem] = Array(
         repeating: GridItem(.flexible(), spacing: EdgeInsets.itemSpacing, alignment: .top),
@@ -36,6 +40,31 @@ struct SeerrSearchView: View {
 
     private var isSearching: Bool {
         viewModel.background.is(.searching)
+    }
+
+    // MARK: - Kid Mode
+
+    /// Kid mode (#49): "Showing family picks because Tuur is on the couch".
+    private var familyFilterMessage: String {
+        L10n.SeerrDiscover.familyPicksFooter(childNames: viewModel.childMemberNames)
+    }
+
+    private var familyFilterFooter: some View {
+        Label(familyFilterMessage, systemImage: "figure.and.child.holdinghands")
+            .font(.callout)
+            .foregroundStyle(.secondary)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
+            .edgePadding(.horizontal)
+            .padding(.bottom, EdgeInsets.edgePadding)
+    }
+
+    private var familyFilterNoResultsView: some View {
+        ContentUnavailableView {
+            Label(L10n.noResults, systemImage: "magnifyingglass")
+        } description: {
+            Text(familyFilterMessage)
+        }
     }
 
     // MARK: - Results
@@ -59,6 +88,10 @@ struct SeerrSearchView: View {
             }
             .edgePadding()
             .focusSection()
+
+            if viewModel.isFamilyFiltered {
+                familyFilterFooter
+            }
         }
         .scrollClipDisabled()
         .scrollIndicators(.hidden)
@@ -82,6 +115,8 @@ struct SeerrSearchView: View {
                 systemImage: "exclamationmark.magnifyingglass",
                 description: Text(error.localizedDescription)
             )
+        } else if viewModel.isFamilyFiltered {
+            familyFilterNoResultsView
         } else {
             ContentUnavailableView.search(text: searchQuery)
         }
@@ -100,6 +135,12 @@ struct SeerrSearchView: View {
             )
             .onChange(of: searchQuery) {
                 viewModel.searchQuery = searchQuery
+            }
+            .onFirstAppear {
+                // A query handed over from the library Search tab searches right away
+                if !isQueryEmpty {
+                    viewModel.searchQuery = searchQuery
+                }
             }
             // Same chrome as the Search tab: no navigation bar, the native search field on top
             .toolbar(.hidden, for: .navigationBar)

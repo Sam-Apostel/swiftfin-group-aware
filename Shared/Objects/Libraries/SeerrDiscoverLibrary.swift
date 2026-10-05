@@ -12,17 +12,47 @@ import Foundation
 /// A Discover row backed by one of the paged Seerr discover endpoints.
 enum SeerrDiscoverCategory: String, CaseIterable, Hashable, Sendable {
 
+    /// Family movies rated PG or lower (kid-safe).
     case family
+    /// Animated movies rated PG or lower (kid-safe).
+    case animatedMovies
+    /// Family shows rated TV-PG or lower (kid-safe).
+    case familyTV
     case trending
     case popularMovies
     case popularTV
     case upcomingMovies
     case upcomingTV
 
+    /// The only rows shown in kid mode, i.e. while a child is on the couch (#49).
+    static let kidSafeRows: [SeerrDiscoverCategory] = [
+        .family,
+        .animatedMovies,
+        .familyTV,
+    ]
+
+    /// The rows shown when no child is on the couch, in the iOS order (#13).
+    static let grownUpRows: [SeerrDiscoverCategory] = [
+        .trending,
+        .popularMovies,
+        .popularTV,
+        .upcomingMovies,
+        .upcomingTV,
+    ]
+
+    /// The Discover rows for a couch: only `kidSafeRows` in kid mode.
+    static func rows(isKidMode: Bool) -> [SeerrDiscoverCategory] {
+        isKidMode ? kidSafeRows : grownUpRows
+    }
+
     var displayTitle: String {
         switch self {
         case .family:
             L10n.SeerrDiscover.familyMovieNight
+        case .animatedMovies:
+            L10n.SeerrDiscover.animatedMovies
+        case .familyTV:
+            L10n.SeerrDiscover.familyShows
         case .trending:
             L10n.SeerrDiscover.trending
         case .popularMovies:
@@ -40,6 +70,10 @@ enum SeerrDiscoverCategory: String, CaseIterable, Hashable, Sendable {
         switch self {
         case .family:
             "figure.and.child.holdinghands"
+        case .animatedMovies:
+            "sparkles"
+        case .familyTV:
+            "tv.fill"
         case .trending:
             "flame.fill"
         case .popularMovies:
@@ -55,6 +89,10 @@ enum SeerrDiscoverCategory: String, CaseIterable, Hashable, Sendable {
         switch self {
         case .family:
             try await client.familyMovies(page: page)
+        case .animatedMovies:
+            try await client.animatedMovies(page: page)
+        case .familyTV:
+            try await client.familyTV(page: page)
         case .trending:
             try await client.trending(page: page)
         case .popularMovies:

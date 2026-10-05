@@ -7,6 +7,7 @@
 //
 
 import Defaults
+import FactoryKit
 import SwiftUI
 
 struct SearchView: View {
@@ -20,6 +21,12 @@ struct SearchView: View {
     #if os(tvOS)
     @FocusState
     private var focusedFilter: FilterTrack.FocusTarget?
+
+    @InjectedObject(\.seerrService)
+    private var seerrService: SeerrService
+
+    @Router
+    private var router
     #endif
 
     @State
@@ -45,6 +52,62 @@ struct SearchView: View {
                     .foregroundStyle(.secondary)
                 #endif
             }
+        }
+    }
+
+    #if os(tvOS)
+
+    // MARK: - Find on Seerr
+
+    /// The query for "Find “Paddington” on Seerr" (#49), or `nil` when the button is hidden:
+    /// without Seerr, with a child on the couch (fails closed without a couch), or without a query.
+    private var seerrHandOffQuery: String? {
+        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard query.isNotEmpty,
+              seerrService.isConfigured,
+              let couch = Container.shared.currentUserSession()?.couch,
+              !couch.hasChild
+        else { return nil }
+
+        return query
+    }
+
+    @ViewBuilder
+    private var findOnSeerrButton: some View {
+        if let query = seerrHandOffQuery {
+            Button {
+                router.route(to: .seerrSearch(query: query))
+            } label: {
+                Label(L10n.SeerrDiscover.findOnSeerr(query), systemImage: "popcorn.fill")
+                    .lineLimit(1)
+                    .padding(.horizontal, 40)
+                    .frame(minWidth: 400)
+            }
+            .fontWeight(.semibold)
+            .backport
+            .buttonStyle(.glass)
+            .frame(height: 75)
+            .focusSection()
+            .padding(.vertical, EdgeInsets.edgePadding)
+        }
+    }
+    #endif
+
+    @ViewBuilder
+    private var resultsView: some View {
+        VStack(spacing: 0) {
+            if viewModel.isEmpty {
+                Text(L10n.noResults)
+            } else {
+                ContentGroupVStack(
+                    groups: viewModel.itemContentGroupViewModel.groups
+                )
+            }
+
+            #if os(tvOS)
+            findOnSeerrButton
+            #endif
         }
     }
 
@@ -78,13 +141,7 @@ struct SearchView: View {
 
                     case .initial:
                         if viewModel.canSearch {
-                            if viewModel.isEmpty {
-                                Text(L10n.noResults)
-                            } else {
-                                ContentGroupVStack(
-                                    groups: viewModel.itemContentGroupViewModel.groups
-                                )
-                            }
+                            resultsView
                         } else {
                             suggestionsView
                         }

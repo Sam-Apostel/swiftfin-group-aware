@@ -49,11 +49,12 @@ extension NavigationRoute {
 
     // MARK: - Search
 
-    static var seerrSearch: NavigationRoute {
+    /// Seerr search, optionally filled in with `query` (e.g. from the library Search tab).
+    static func seerrSearch(query: String? = nil) -> NavigationRoute {
         NavigationRoute(
             id: "seerr-search"
         ) {
-            SeerrSearchView()
+            SeerrSearchView(query: query)
         }
     }
     #endif

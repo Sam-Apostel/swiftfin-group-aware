@@ -11,9 +11,12 @@ import Foundation
 
 /// The tvOS Discover screen, rendered by `ContentGroupView` like Home:
 ///
-/// 1. a cinematic hero of Trending (Family movie night when a kid is on the couch),
-/// 2. Search and Seerr settings shortcuts,
+/// 1. a cinematic hero of Trending (Family movie night in kid mode),
+/// 2. Search and Seerr settings shortcuts (none on a kids-only couch),
 /// 3. poster rows for the other categories, each with a paged "see all" grid.
+///
+/// Kid mode (#49) is `CouchGroup.hasChild`, whatever the Kid-safe browsing setting:
+/// then only the kid-safe rows (`SeerrDiscoverCategory.kidSafeRows`) are shown.
 ///
 /// The hero fetch is the only `try`: when Seerr can't be reached, `ContentGroupView`
 /// shows the error with Retry. The rows load lazily through their own view models.
@@ -25,26 +28,18 @@ struct SeerrDiscoverContentGroupProvider: ContentGroupProvider {
         L10n.SeerrDiscover.title
     }
 
-    /// The iOS row order (#13).
-    private static let rowCategories: [SeerrDiscoverCategory] = [
-        .trending,
-        .popularMovies,
-        .popularTV,
-        .upcomingMovies,
-        .upcomingTV,
-    ]
-
     func makeGroups(environment: Empty) async throws -> [any ContentGroup] {
         guard let client = Container.shared.seerrService().client else {
             throw SeerrError.notConfigured
         }
 
-        let members = Container.shared.currentUserSession()?.couch.members ?? []
-        let isKidOnCouch = members.contains(where: \.isKid)
-        let isKidsOnlyCouch = members.isNotEmpty && members.allSatisfy(\.isKid)
+        // Fails closed: without a couch, Discover stays kid-safe and hides the shortcuts
+        let couch = Container.shared.currentUserSession()?.couch
+        let isKidMode = couch?.hasChild ?? true
+        let isKidsOnlyCouch = couch?.isChildrenOnly ?? true
 
-        // With a kid on the couch, the biggest image on screen should be a family pick
-        let heroCategory: SeerrDiscoverCategory = isKidOnCouch ? .family : .trending
+        // In kid mode, the biggest image on screen should be a family pick
+        let heroCategory: SeerrDiscoverCategory = isKidMode ? .family : .trending
         let heroPage = try await heroCategory.fetch(client: client, page: 1)
         let heroItems = Self.uniqued(heroPage.results)
 
@@ -54,39 +49,42 @@ struct SeerrDiscoverContentGroupProvider: ContentGroupProvider {
             groups.append(SeerrCinematicContentGroup(items: heroItems))
         }
 
-        let shortcuts: [SeerrDiscoverShortcut] = isKidsOnlyCouch ? [.settings] : [.search, .settings]
+        // A kids-only couch gets neither Search nor the Seerr settings (with Disconnect)
+        if !isKidsOnlyCouch {
+            let shortcuts: [SeerrDiscoverShortcut] = [.search, .settings]
 
-        groups.append(
-            PillGroup(
-                displayTitle: "",
-                id: "seerr-shortcuts",
-                elements: shortcuts
-            ) { router, shortcut in
-                switch shortcut {
-                case .search:
-                    router.route(to: .seerrSearch)
-                case .settings:
-                    router.route(to: .seerrSettings)
-                }
-            }
-        )
-
-        if isKidsOnlyCouch {
-            // The hero already shows the first page of family picks
             groups.append(
-                PosterGroup(
-                    id: "seerr-row-family-more",
-                    library: SeerrDiscoverMoreLibrary(category: .family, skippingPages: 1),
-                    posterDisplayType: .portrait,
-                    posterSize: .small
-                )
+                PillGroup(
+                    displayTitle: "",
+                    id: "seerr-shortcuts",
+                    elements: shortcuts
+                ) { router, shortcut in
+                    switch shortcut {
+                    case .search:
+                        router.route(to: .seerrSearch())
+                    case .settings:
+                        router.route(to: .seerrSettings)
+                    }
+                }
             )
-        } else {
-            for category in Self.rowCategories where category != heroCategory {
+        }
+
+        for category in SeerrDiscoverCategory.rows(isKidMode: isKidMode) {
+            if category != heroCategory {
                 groups.append(
                     PosterGroup(
                         id: "seerr-row-\(category.rawValue)",
                         library: SeerrDiscoverLibrary(category: category),
+                        posterDisplayType: .portrait,
+                        posterSize: .small
+                    )
+                )
+            } else if isKidMode, heroItems.isNotEmpty {
+                // The hero already shows the first page of family picks: continue below it
+                groups.append(
+                    PosterGroup(
+                        id: "seerr-row-\(category.rawValue)-more",
+                        library: SeerrDiscoverMoreLibrary(category: category, skippingPages: 1),
                         posterDisplayType: .portrait,
                         posterSize: .small
                     )

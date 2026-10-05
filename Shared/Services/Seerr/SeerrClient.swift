@@ -317,6 +317,36 @@ final class SeerrClient: Sendable {
         return try await send(Request(path: "/discover/movies", query: query))
     }
 
+    /// Popular animated movies rated PG or lower in the US (#49).
+    ///
+    /// `GET /discover/movies?genre=16&certificationCountry=US&certificationLte=PG&sortBy=popularity.desc`
+    func animatedMovies(page: Int = 1) async throws -> SeerrPage<SeerrMedia> {
+        let query: [(String, String?)] = [
+            ("page", String(page)),
+            ("genre", "16"),
+            ("certificationCountry", "US"),
+            ("certificationLte", "PG"),
+            ("sortBy", "popularity.desc"),
+        ]
+        return try await send(Request(path: "/discover/movies", query: query))
+    }
+
+    /// Popular family shows rated TV-PG or lower in the US (#49).
+    ///
+    /// TMDB's TV certifications are sparse, so this row can be short: that is the safe direction.
+    ///
+    /// `GET /discover/tv?genre=10751&certificationCountry=US&certificationLte=TV-PG&sortBy=popularity.desc`
+    func familyTV(page: Int = 1) async throws -> SeerrPage<SeerrMedia> {
+        let query: [(String, String?)] = [
+            ("page", String(page)),
+            ("genre", "10751"),
+            ("certificationCountry", "US"),
+            ("certificationLte", "TV-PG"),
+            ("sortBy", "popularity.desc"),
+        ]
+        return try await send(Request(path: "/discover/tv", query: query))
+    }
+
     /// `GET /search` (movies and TV; persons and collections are dropped).
     func search(query: String, page: Int = 1) async throws -> SeerrPage<SeerrMedia> {
         try await send(Request(path: "/search", query: [("query", query), ("page", String(page))]))

@@ -83,25 +83,32 @@ final class DiscoverViewModel: ViewModel {
         searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isNotEmpty
     }
 
-    /// Whether anyone on the current couch is flagged as a kid (#4).
-    var isKidOnCouch: Bool {
-        userSession?.couch.members.contains(where: \.isKid) ?? false
+    /// Whether the current search results went through the kid-mode filter
+    /// (`SeerrFamilySearchFilter`), so the screen can say why titles are missing.
+    @Published
+    private(set) var isFamilyFiltered: Bool = false
+
+    /// The couch of the current session, read live so a couch change is picked up.
+    private var couch: CouchGroup? {
+        Container.shared.currentUserSession()?.couch ?? userSession?.couch
     }
 
+    /// Kid mode (#49): a child is on the couch (`CouchGroup.hasChild`: marked as a kid,
+    /// or a server age limit below 12). Deliberately independent of Kid-safe browsing.
+    ///
+    /// Fails closed: without a couch, Discover stays kid-safe.
+    var isKidMode: Bool {
+        couch?.hasChild ?? true
+    }
+
+    /// The names of the children on the couch, in couch order, for the kid-mode footer.
+    var childMemberNames: [String] {
+        couch?.members.filter(\.isChildAudience).map(\.username) ?? []
+    }
+
+    /// Kid mode shows only the kid-safe rows; the grown-up rows come back once no child is on the couch.
     private var categories: [SeerrDiscoverCategory] {
-        var categories: [SeerrDiscoverCategory] = [
-            .trending,
-            .popularMovies,
-            .popularTV,
-            .upcomingMovies,
-            .upcomingTV,
-        ]
-
-        if isKidOnCouch {
-            categories.insert(.family, at: 0)
-        }
-
-        return categories
+        SeerrDiscoverCategory.rows(isKidMode: isKidMode)
     }
 
     private var client: SeerrClient {
@@ -210,18 +217,22 @@ final class DiscoverViewModel: ViewModel {
 
         guard query.isNotEmpty else {
             searchResults = []
+            isFamilyFiltered = false
             hasSearched = false
             return
         }
 
+        let filtersForKids = isKidMode
+
         do {
-            let page = try await client.search(query: query, page: 1)
+            let load = try await loadSearchPages(query: query, from: 1, familyOnly: filtersForKids)
 
             guard !Task.isCancelled, query == activeQuery else { return }
 
-            searchResults = Self.uniqued(page.results)
-            searchPage = page.page
-            searchTotalPages = page.totalPages
+            searchResults = Self.uniqued(load.results)
+            searchPage = load.page
+            searchTotalPages = load.totalPages
+            isFamilyFiltered = filtersForKids
             hasSearched = true
         } catch {
             guard !Self.isCancellation(error), query == activeQuery else { return }
@@ -231,6 +242,7 @@ final class DiscoverViewModel: ViewModel {
                 metadata: ["error": .string(error.localizedDescription)]
             )
             searchResults = []
+            isFamilyFiltered = filtersForKids
             searchError = error
             hasSearched = true
         }
@@ -250,17 +262,25 @@ final class DiscoverViewModel: ViewModel {
         isLoadingNextSearchPage = true
         defer { isLoadingNextSearchPage = false }
 
+        // Never loosen the filter mid-search; tighten it when a child just joined the couch
+        let filtersForKids = isFamilyFiltered || isKidMode
+
         do {
-            let page = try await client.search(query: query, page: searchPage + 1)
+            let load = try await loadSearchPages(query: query, from: searchPage + 1, familyOnly: filtersForKids)
 
             guard !Task.isCancelled, query == activeQuery else { return }
 
+            if filtersForKids, !isFamilyFiltered {
+                searchResults = SeerrFamilySearchFilter.familyPicks(searchResults)
+                isFamilyFiltered = true
+            }
+
             let existingIDs = Set(searchResults.map(\.id))
             searchResults.append(
-                contentsOf: Self.uniqued(page.results).filter { !existingIDs.contains($0.id) }
+                contentsOf: Self.uniqued(load.results).filter { !existingIDs.contains($0.id) }
             )
-            searchPage = page.page
-            searchTotalPages = page.totalPages
+            searchPage = load.page
+            searchTotalPages = load.totalPages
         } catch {
             guard !Self.isCancellation(error) else { return }
 
@@ -269,6 +289,49 @@ final class DiscoverViewModel: ViewModel {
                 metadata: ["error": .string(error.localizedDescription)]
             )
         }
+    }
+
+    /// Search pages loaded in one go.
+    private struct SearchLoad {
+        let results: [SeerrMedia]
+        let page: Int
+        let totalPages: Int
+    }
+
+    /// In kid mode, at most this many search pages are loaded in one go to find a family pick.
+    private static let maxFamilyFilteredPagesPerLoad = 3
+
+    /// Loads search results from page `startPage`.
+    ///
+    /// With `familyOnly`, only family picks (`SeerrFamilySearchFilter`) are kept, and
+    /// pages that keep nothing are skipped (up to `maxFamilyFilteredPagesPerLoad`), so a
+    /// page of grown-up titles doesn't end the search at "No results" or stall paging.
+    private func loadSearchPages(query: String, from startPage: Int, familyOnly: Bool) async throws -> SearchLoad {
+        let seerrClient = try client
+        let maxPages = familyOnly ? Self.maxFamilyFilteredPagesPerLoad : 1
+
+        var page = startPage
+        var results: [SeerrMedia] = []
+        var loadedPage = startPage
+        var totalPages = startPage
+
+        for _ in 0 ..< maxPages {
+            let response = try await seerrClient.search(query: query, page: page)
+
+            try Task.checkCancellation()
+
+            loadedPage = response.page
+            totalPages = response.totalPages
+            results.append(
+                contentsOf: familyOnly ? SeerrFamilySearchFilter.familyPicks(response.results) : response.results
+            )
+
+            guard results.isEmpty, response.page < response.totalPages else { break }
+
+            page = response.page + 1
+        }
+
+        return SearchLoad(results: results, page: loadedPage, totalPages: totalPages)
     }
 
     // MARK: - Helpers

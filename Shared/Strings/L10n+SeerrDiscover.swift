@@ -31,6 +31,8 @@ extension L10n {
         static let popularShows = "Popular shows"
         static let upcomingMovies = "Upcoming movies"
         static let upcomingShows = "Upcoming shows"
+        static let animatedMovies = "Animated movies"
+        static let familyShows = "Family shows"
 
         // MARK: - Watchlists card
 
@@ -53,5 +55,21 @@ extension L10n {
         // MARK: - Search
 
         static let searchFailed = "Search failed"
+
+        /// The kid-mode search footer (#49), e.g. "Showing family picks because Tuur is on the couch".
+        static func familyPicksFooter(childNames: [String]) -> String {
+            guard childNames.isNotEmpty else {
+                return "Showing family picks because a child is on the couch"
+            }
+
+            let names = ListFormatter.localizedString(byJoining: childNames)
+            let verb = childNames.count == 1 ? "is" : "are"
+            return "Showing family picks because \(names) \(verb) on the couch"
+        }
+
+        /// The tvOS library Search hand-off (#49), e.g. "Find “Paddington” on Seerr".
+        static func findOnSeerr(_ query: String) -> String {
+            "Find “\(query)” on Seerr"
+        }
     }
 }
