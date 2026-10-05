@@ -23,5 +23,25 @@ extension NavigationRoute {
             SeerrSettingsView()
         }
     }
+
+    // MARK: - Media (placeholder from #13; #14 replaces the destination with `SeerrMediaDetailView`)
+
+    static func seerrMedia(mediaType: SeerrMediaType, tmdbID: Int) -> NavigationRoute {
+        NavigationRoute(
+            id: "seerr-media-\(mediaType.rawValue)-\(tmdbID)"
+        ) {
+            SeerrMediaPlaceholderView(mediaType: mediaType, tmdbID: tmdbID)
+        }
+    }
+
+    // MARK: - Watchlists (placeholder from #13; #15 replaces the destination with `WatchlistsView`)
+
+    static var seerrWatchlists: NavigationRoute {
+        NavigationRoute(
+            id: "seerr-watchlists"
+        ) {
+            SeerrWatchlistsPlaceholderView()
+        }
+    }
 }
 #endif
