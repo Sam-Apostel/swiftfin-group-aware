@@ -1,5 +1,9 @@
 name: "Build 🔨"
 
+# Runs on a self-hosted runner on Sam's Mac (labels: self-hosted, macOS, swiftfin-mac)
+# so no GitHub-hosted macOS minutes are used. Jobs simply queue while the Mac is offline.
+# Setup: see the "[Mac] Set up the self-hosted GitHub Actions runner" issue.
+
 on:
   push:
     branches: [ main ]
@@ -7,96 +11,66 @@ on:
       - '**'
       - '!Translations/*.lproj/**'
       - 'Translations/en.lproj/**'
-  pull_request:
-    types:
-      - opened
-      - reopened
-      - synchronize
-      - ready_for_review
-    branches: [ main ]
+  workflow_dispatch:
 
+# Only the newest commit on main is worth building: cancel superseded runs.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
     name: "Build 🔨"
-    if: github.event.pull_request.draft == false
     strategy:
+      fail-fast: false
       matrix:
-        scheme:
-          - "Swiftfin"
-          - "Swiftfin tvOS"
+        include:
+          - scheme: "Swiftfin"
+            destination: "generic/platform=iOS"
+          - scheme: "Swiftfin tvOS"
+            destination: "generic/platform=tvOS"
 
-    runs-on: macos-26
-
-    env:
-      XCODE_VERSION: "26.6"
+    runs-on: [ self-hosted, macOS, swiftfin-mac ]
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
-
-      - name: Setup Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: '3.3'
-          bundler-cache: true
-
-      - name: Install Homebrew dependencies
-        run: brew bundle --file Brewfile
-
-      - name: Restore Swift packages
-        id: swift-packages
-        uses: actions/cache/restore@v6
-        with:
-          path: |
-            build/SourcePackages/checkouts
-            build/SourcePackages/repositories
-            build/SourcePackages/artifacts
-            build/SourcePackages/workspace-state.json
-          key: spm-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.XCODE_VERSION }}-${{ matrix.scheme }}-${{ hashFiles('Swiftfin.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
-          restore-keys: |
-            spm-v1-${{ runner.os }}-${{ runner.arch }}-${{ env.XCODE_VERSION }}-${{ matrix.scheme }}-
+        uses: actions/checkout@v4
 
       - name: Build
-        uses: nick-fields/retry@v4
-        with:
-          max_attempts: 3
-          retry_on: error
-          timeout_minutes: 60
-          command: bundle exec fastlane buildLane \
-            scheme:"\"${{ matrix.scheme }}\"" \
-            xcodeVersion:${{ env.XCODE_VERSION }}
-
-      - name: Package unsigned IPA
         env:
           SCHEME: ${{ matrix.scheme }}
+          DESTINATION: ${{ matrix.destination }}
         run: |
-          set -euo pipefail
-          mkdir -p fastlane/build/Payload
-          cp -R fastlane/build/*.xcarchive/Products/Applications/*.app fastlane/build/Payload/
-          cd fastlane/build
-          zip -r -y "$SCHEME-unsigned.ipa" Payload
+          set -uo pipefail
+          export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
-      - name: Upload unsigned IPA
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ matrix.scheme }}-unsigned
-          path: fastlane/build/*-unsigned.ipa
-          if-no-files-found: error
-          compression-level: 0
+          # Persistent caches outside the workspace so incremental builds stay fast between runs.
+          cache="$HOME/Library/Caches/swiftfin-ci"
+          mkdir -p "$cache"
+          log="$RUNNER_TEMP/build-$(echo "$SCHEME" | tr ' ' '-').log"
 
-      # Populate the shared cache from main,
-      # PR caches are isolated to their merge ref
-      - name: Save Swift packages
-        if: ${{ github.event_name == 'push' && steps.swift-packages.outputs.cache-hit != 'true' }}
-        uses: actions/cache/save@v6
-        with:
-          path: |
-            build/SourcePackages/checkouts
-            build/SourcePackages/repositories
-            build/SourcePackages/artifacts
-            build/SourcePackages/workspace-state.json
-          key: ${{ steps.swift-packages.outputs.cache-primary-key }}
+          xcodebuild -version
+
+          xcodebuild build \
+            -project Swiftfin.xcodeproj \
+            -scheme "$SCHEME" \
+            -destination "$DESTINATION" \
+            -configuration Debug \
+            -derivedDataPath "$cache/DerivedData" \
+            -clonedSourcePackagesDirPath "$cache/SourcePackages" \
+            -skipMacroValidation \
+            -skipPackagePluginValidation \
+            CODE_SIGNING_ALLOWED=NO \
+            > "$log" 2>&1
+          status=$?
+
+          # Print a compact, de-duplicated error summary at the END of the log so it is easy to read
+          # (agents fetch the tail of this log to fix compile errors).
+          echo "::group::Last 60 lines of xcodebuild output"
+          tail -n 60 "$log"
+          echo "::endgroup::"
+          echo "===== COMPILER ERRORS ($SCHEME) ====="
+          grep -E "^/.*: (error|fatal error): " "$log" | sed "s|$GITHUB_WORKSPACE/||" | sort -u | head -n 300 || true
+          echo "===== END COMPILER ERRORS ====="
+          exit $status

@@ -1,9 +1,23 @@
 name: "TestFlight ✈️"
 
+# Runs entirely on the self-hosted runner on Sam's Mac (labels: self-hosted, macOS, swiftfin-mac):
+# no GitHub-hosted macOS minutes are used.
+#
+# Triggers:
+#   - manually (Actions ▸ TestFlight ✈️ ▸ Run workflow)
+#   - on every push to main, ONLY when the repository variable TESTFLIGHT_ON_PUSH is "true".
+#     Bursts of pushes collapse into a single build of the newest commit.
+#
+# Repository variables (Settings ▸ Secrets and variables ▸ Actions ▸ Variables):
+#   APP_BUNDLE_ID       e.g. be.apostel.swiftfin (defaults to the Fastfile fallback when unset)
+#   TESTFLIGHT_ON_PUSH  "true" to upload a TestFlight build for every push to main
+#   XCODE_VERSION       optional; when unset the Mac's currently selected Xcode is used
+#
+# Secrets: see the "[Mac] Set up automated TestFlight builds" issue.
+
 on:
-  schedule:
-    # 1st of every month at 12pm EST / 1pm EDT (17:00 UTC)
-    - cron: '0 17 1 * *'
+  push:
+    branches: [ main ]
   repository_dispatch:
     types: [testflight]
   workflow_dispatch:
@@ -25,14 +39,19 @@ on:
         required: false
         type: number
       xcodeVersion:
-        description: "Xcode"
+        description: "Xcode (empty = the Mac's selected Xcode)"
         required: false
         type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'push' }}
 
 jobs:
   resolve_platform:
     name: Resolve platform
-    runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'push' || vars.TESTFLIGHT_ON_PUSH == 'true' }}
+    runs-on: [ self-hosted, macOS, swiftfin-mac ]
     env:
       IOS_SCHEME: "Swiftfin"
       TVOS_SCHEME: "Swiftfin tvOS"
@@ -51,7 +70,7 @@ jobs:
             printf '%s' "${1:-}" | tr -d '\r\n'
           }
 
-          if [ "$EVENT_NAME" = "schedule" ]; then
+          if [ "$EVENT_NAME" = "push" ]; then
             platform="all"
           else
             platform="$(clean "$PLATFORM_INPUT" | tr '[:upper:]' '[:lower:]')"
@@ -79,13 +98,17 @@ jobs:
   test_build:
     name: Build and upload to TestFlight
     needs: resolve_platform
-    runs-on: macos-26
+    runs-on: [ self-hosted, macOS, swiftfin-mac ]
+    timeout-minutes: 90
     strategy:
+      # One runner builds one platform at a time; keep going if one platform fails.
+      fail-fast: false
+      max-parallel: 1
       matrix: ${{ fromJSON(needs.resolve_platform.outputs.matrix) }}
     env:
-      XCODE_VERSION: "26.6"
       PLATFORM: ${{ matrix.platform }}
       SCHEME: ${{ matrix.scheme }}
+      APP_BUNDLE_ID: ${{ vars.APP_BUNDLE_ID }}
       BUILD_CERTIFICATE_BASE64: ${{ github.event.client_payload.BUILD_CERTIFICATE_BASE64 || secrets.BUILD_CERTIFICATE_BASE64 }}
       BUILD_PROVISION_PROFILE_BASE64: ${{ matrix.platform == 'ios' && (github.event.client_payload.BUILD_PROVISION_PROFILE_IOS_BASE64 || secrets.BUILD_PROVISION_PROFILE_IOS_BASE64) || (github.event.client_payload.BUILD_PROVISION_PROFILE_TVOS_BASE64 || secrets.BUILD_PROVISION_PROFILE_TVOS_BASE64) }}
       FL_PROFILE_NAME_BASE64: ${{ matrix.platform == 'ios' && (github.event.client_payload.PROFILE_NAME_IOS_BASE64 || secrets.PROFILE_NAME_IOS_BASE64) || (github.event.client_payload.PROFILE_NAME_TVOS_BASE64 || secrets.PROFILE_NAME_TVOS_BASE64) }}
@@ -95,47 +118,34 @@ jobs:
       FL_ISSUER_ID: ${{ github.event.client_payload.APP_STORE_ISSUER_ID || secrets.APP_STORE_ISSUER_ID }}
       FL_KEY_CONTENTS: ${{ github.event.client_payload.APP_STORE_KEY_CONTENTS || secrets.APP_STORE_KEY_CONTENTS }}
       FL_CODE_SIGN_BASE64: ${{ github.event.client_payload.CODE_SIGN_BASE64 || secrets.CODE_SIGN_BASE64 }}
-      PAYLOAD_XCODE_VERSION: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.XCODE_VERSION || inputs.xcodeVersion || github.event.inputs.xcodeVersion }}
+      PAYLOAD_XCODE_VERSION: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.XCODE_VERSION || inputs.xcodeVersion || github.event.inputs.xcodeVersion || vars.XCODE_VERSION }}
       PAYLOAD_BUILD: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.BUILD || inputs.build || github.event.inputs.build }}
       PAYLOAD_VERSION: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.VERSION || inputs.version || github.event.inputs.version }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.client_payload.ref || 'main' }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.event.client_payload.ref || github.sha }}
           fetch-depth: 0
 
-      - name: Setup Ruby
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: "3.3"
-          bundler-cache: true
+      - name: Ruby + fastlane (Homebrew Ruby, no setup-ruby on self-hosted)
+        run: |
+          set -euo pipefail
+          export PATH="/opt/homebrew/opt/ruby/bin:/usr/local/opt/ruby/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"
+          if ! command -v bundle >/dev/null; then
+            echo "Bundler missing. On the Mac run: brew install ruby && gem install bundler"
+            exit 1
+          fi
+          ruby --version
+          bundle config set --local path "$HOME/Library/Caches/swiftfin-ci/bundle"
+          bundle install --jobs 4
+          echo "PATH=$PATH" >> "$GITHUB_ENV"
 
       - name: Install Homebrew dependencies
         run: brew bundle --file Brewfile
 
-      - name: Resolve Xcode version
-        id: xcode
-        run: |
-          set -euo pipefail
-          xcode_version="$(printf '%s' "$PAYLOAD_XCODE_VERSION" | tr -d '\r\n')"
-          echo "version=${xcode_version:-$XCODE_VERSION}" >> "$GITHUB_OUTPUT"
-
-      - name: Cache Swift packages
-        uses: actions/cache@v6
-        with:
-          path: |
-            build/SourcePackages/checkouts
-            build/SourcePackages/repositories
-            build/SourcePackages/artifacts
-            build/SourcePackages/workspace-state.json
-          key: spm-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.xcode.outputs.version }}-${{ matrix.scheme }}-${{ hashFiles('Swiftfin.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved') }}
-          restore-keys: |
-            spm-v1-${{ runner.os }}-${{ runner.arch }}-${{ steps.xcode.outputs.version }}-${{ matrix.scheme }}-
-
-      - name: Install certificate and provisioning profile
+      - name: Install certificate and provisioning profile (temporary keychain)
         run: |
           set -euo pipefail
 
@@ -171,36 +181,26 @@ jobs:
 
           security import "$cert_path" -P "$p12_password" -A -t cert -f pkcs12 -k "$keychain_path"
           security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$keychain_path"
-          security list-keychain -d user -s "$keychain_path"
 
-          mkdir -p "$HOME/Library/MobileDevice/Provisioning Profiles"
-          sudo mkdir -p "/Library/MobileDevice/Provisioning Profiles"
-          cp "$profile_path" "$HOME/Library/MobileDevice/Provisioning Profiles"
-          sudo cp "$profile_path" "/Library/MobileDevice/Provisioning Profiles"
+          # This is a personal Mac: ADD the temporary keychain to the search list instead of replacing
+          # the user's keychains (the hosted-runner version replaced the list).
+          existing_keychains=$(security list-keychains -d user | sed -e 's/^[[:space:]]*"//' -e 's/"$//')
+          security list-keychains -d user -s "$keychain_path" $existing_keychains
+
+          # No sudo on a personal Mac: user-level profile locations only.
+          for dir in "$HOME/Library/MobileDevice/Provisioning Profiles" "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"; do
+            mkdir -p "$dir"
+            cp "$profile_path" "$dir/"
+          done
 
       - name: Generate changelog
         id: changelog
-        env:
-          GH_TOKEN: ${{ github.event.client_payload.githubToken || secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-
-          release_date="$(gh release view --json publishedAt -q '.publishedAt' 2>/dev/null || true)"
-          log=""
-
-          if [ -n "$release_date" ]; then
-            log="$(gh pr list \
-              --state merged \
-              --label 'release highlight' \
-              --search "merged:>=$release_date" \
-              --json title \
-              --jq '.[].title' | sed 's/^/- /')"
-          fi
-
+          log="$(git log -15 --no-merges --pretty='- %s' 2>/dev/null || true)"
           if [ -z "$log" ]; then
             log="General performance changes, fixes, and localization changes."
           fi
-
           {
             echo "changelog<<CHANGELOG_EOF"
             echo "$log"
@@ -210,7 +210,6 @@ jobs:
       - name: Build and upload to TestFlight
         env:
           AUTO_CHANGELOG: ${{ steps.changelog.outputs.changelog }}
-          RESOLVED_XCODE_VERSION: ${{ steps.xcode.outputs.version }}
         run: |
           set -euo pipefail
 
@@ -234,15 +233,13 @@ jobs:
           profile_name_base64="$(clean "$FL_PROFILE_NAME_BASE64")"
           payload_build="$(clean "$PAYLOAD_BUILD")"
           payload_version="$(clean "$PAYLOAD_VERSION")"
-
-          resolved_xcode_version="$(clean "$RESOLVED_XCODE_VERSION")"
+          xcode_version="$(clean "$PAYLOAD_XCODE_VERSION")"
 
           require_non_empty "$key_id" "FL_KEY_ID"
           require_non_empty "$issuer_id" "FL_ISSUER_ID"
           require_non_empty "$key_contents" "FL_KEY_CONTENTS"
           require_non_empty "$code_sign_base64" "FL_CODE_SIGN_BASE64"
           require_non_empty "$profile_name_base64" "FL_PROFILE_NAME_BASE64"
-          require_non_empty "$resolved_xcode_version" "XCODE_VERSION"
           require_non_empty "$SCHEME" "SCHEME"
 
           changelog_file="$(mktemp)"
@@ -254,10 +251,14 @@ jobs:
             "keyContents:$key_contents"
             "codeSign64:$code_sign_base64"
             "profileName64:$profile_name_base64"
-            "xcodeVersion:$resolved_xcode_version"
             "changelogFile:$changelog_file"
             "scheme:\"$SCHEME\""
           )
+
+          # Only switch Xcode when explicitly requested; otherwise use the Mac's selected Xcode.
+          if [ -n "$xcode_version" ]; then
+            args+=("xcodeVersion:$xcode_version")
+          fi
 
           if [ -n "$payload_build" ]; then
             args+=("build:$payload_build")
@@ -270,12 +271,11 @@ jobs:
           echo "Building and uploading scheme '$SCHEME' for platform '$PLATFORM'"
           bundle exec fastlane testFlightLane "${args[@]}"
 
-      # Preserve the IPA even if uploading it to TestFlight fails.
-      - name: Upload TestFlight IPA
-        if: ${{ !cancelled() && hashFiles('fastlane/build/**/*.ipa') != '' }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ matrix.scheme }}-testflight
-          path: fastlane/build/**/*.ipa
-          if-no-files-found: error
-          compression-level: 0
+      - name: Remove temporary keychain and profile
+        if: ${{ always() }}
+        run: |
+          keychain_path="$RUNNER_TEMP/app-signing.keychain-db"
+          if [ -f "$keychain_path" ]; then
+            security delete-keychain "$keychain_path" || true
+          fi
+          rm -f "$RUNNER_TEMP/build_certificate.p12" "$RUNNER_TEMP/build_${PLATFORM}.mobileprovision"
