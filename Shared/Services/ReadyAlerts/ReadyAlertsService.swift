@@ -294,11 +294,28 @@ extension ReadyAlertsService {
 
         let published = ReadyAlertRules.publishable(allArrivals, now: now)
 
-        if isFirstRun {
-            updatedLedger.seed(with: published, now: now)
+        // Seeding is measured from the ledger's creation, not only on its first refresh: arrivals this
+        // device first sees later (no Seerr on a cold background launch, a failed lookup) that landed more
+        // than 24 h before it started tracking are old news too, so they never flood a later refresh.
+        let seedCutoff = updatedLedger.createdAt.addingTimeInterval(-ReadyAlertRules.seedSilenceInterval)
+        let unseededArrivals = published.filter { arrival in
+            arrival.arrivedAt < seedCutoff
+                && arrival.audience.contains { updatedLedger.isAnnounced(arrival.id, to: $0) == false }
+        }
+        updatedLedger.seed(with: unseededArrivals, now: now)
+
+        // Without Seerr (no current session, network error) the request candidates are missing:
+        // keep their records, or an ongoing request would be announced again once Seerr is back.
+        var keptIDs = Set(candidates.map(\.id)).union(unavailableRequestIDs)
+        if requests.isEmpty {
+            let recordIDs = Set(updatedLedger.announced.keys)
+                .union(updatedLedger.seenUnavailable.keys)
+                .union(updatedLedger.firstSeenAvailable.keys)
+
+            keptIDs.formUnion(recordIDs.filter { $0.hasPrefix("r:") })
         }
 
-        updatedLedger.prune(now: now, keeping: Set(candidates.map(\.id)).union(unavailableRequestIDs))
+        updatedLedger.prune(now: now, keeping: keptIDs)
 
         self.ledger = updatedLedger
         Self.saveLedger(updatedLedger, serverID: serverID)
@@ -316,7 +333,7 @@ extension ReadyAlertsService {
 
         if arrivals != published {
             arrivals = published
-        } else if isFirstRun {
+        } else if isFirstRun || unseededArrivals.isNotEmpty {
             // The ledger changed what's unannounced
             objectWillChange.send()
         }
