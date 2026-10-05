@@ -11,10 +11,12 @@ import FactoryKit
 import JellyfinAPI
 import Logging
 import SwiftUI
+import UIKit
 
 /// The phone's "Vote for tonight" ballot, presented by `couchVotePrompt()`.
 ///
-/// Tapping a row votes right away; tapping another row changes the vote.
+/// "Voting as" shows the grown-ups on the couch this phone can vote for (never a kid); tapping an avatar
+/// switches who the next tap votes for. Tapping a row votes right away; tapping another row changes the vote.
 /// It shows the result when the TV closes the vote, then dismisses itself.
 struct CouchVoteBallotView: View {
 
@@ -56,10 +58,16 @@ struct CouchVoteBallotView: View {
     private var displayedPoll: CouchVotePoll?
     @State
     private var items: [String: BaseItemDto] = [:]
+    /// A vote being sent (or that failed), for one voter on this phone.
+    private struct PendingVote: Equatable {
+        let userID: String
+        let choice: Choice
+    }
+
     @State
-    private var pendingChoice: Choice?
+    private var pendingVote: PendingVote?
     @State
-    private var failedChoice: Choice?
+    private var failedVote: PendingVote?
     @State
     private var error: Error?
     @State
@@ -102,48 +110,79 @@ struct CouchVoteBallotView: View {
         }
     }
 
+    /// The vote being sent for the person this phone votes as now.
+    private var currentPendingVote: PendingVote? {
+        guard let pendingVote, pendingVote.userID == participant.votingAsUserID else { return nil }
+
+        return pendingVote
+    }
+
     private var selectedChoice: Choice? {
-        if let pendingChoice {
-            return pendingChoice
+        if let currentPendingVote {
+            return currentPendingVote.choice
         }
 
         return participant.myChoice.map { Choice(optionID: $0.optionID) }
     }
 
+    private func isPending(_ choice: Choice) -> Bool {
+        currentPendingVote?.choice == choice && participant.isSending
+    }
+
+    private var votingAsName: String? {
+        participant.voters.first { $0.id == participant.votingAsUserID }?.user.username
+    }
+
     // MARK: - Actions
 
     private func vote(_ choice: Choice) {
-        guard stage == .voting, !participant.isSending || pendingChoice != choice else { return }
+        guard let userID = participant.votingAsUserID else { return }
 
-        pendingChoice = choice
-        failedChoice = nil
+        send(PendingVote(userID: userID, choice: choice))
+    }
+
+    private func send(_ vote: PendingVote) {
+        guard stage == .voting, !participant.isSending || pendingVote != vote else { return }
+
+        pendingVote = vote
+        failedVote = nil
         error = nil
         selectionTrigger += 1
 
         Task {
             do {
-                try await participant.vote(optionID: choice.optionID)
+                try await participant.vote(optionID: vote.choice.optionID, as: vote.userID)
             } catch {
                 logger.error("Couch vote failed: \(error.localizedDescription)")
-                failedChoice = choice
+                failedVote = vote
                 self.error = error
             }
 
-            if pendingChoice == choice {
-                pendingChoice = nil
+            if pendingVote == vote {
+                pendingVote = nil
             }
         }
     }
 
     private func retry() {
-        guard let failedChoice else { return }
+        guard let failedVote else { return }
 
-        vote(failedChoice)
+        send(failedVote)
+    }
+
+    private func selectVoter(_ voter: CouchVoteVoter) {
+        guard participant.votingAsUserID != voter.id else { return }
+
+        selectionTrigger += 1
+        participant.selectVoter(userID: voter.id)
     }
 
     private func loadPosters(for poll: CouchVotePoll) async {
-        // The phone's own account: the TV's session isn't available here
-        guard let session = Container.shared.currentUserSession() else { return }
+        // A voter's own account on this phone (works signed out); the TV's session isn't available here
+        let voterSession = (participant.votingAsUserID ?? participant.voters.first?.id)
+            .flatMap { participant.session(forVoterID: $0) }
+
+        guard let session = voterSession ?? Container.shared.currentUserSession() else { return }
 
         let ids = poll.options.map(\.id).filter { items[$0] == nil }
         guard ids.isNotEmpty else { return }
@@ -185,6 +224,8 @@ struct CouchVoteBallotView: View {
                         )
                         .monospacedDigit()
                     }
+                    // "closes in 0:52" is read as one element
+                    .accessibilityElement(children: .combine)
                 }
             }
             .font(.subheadline)
@@ -196,8 +237,105 @@ struct CouchVoteBallotView: View {
                 .foregroundStyle(.secondary)
                 .contentTransition(.numericText())
                 .animation(.default, value: poll.votedUserIDs.count)
+
+            votingAsRow
+                .padding(.top, 8)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: - Voting as
+
+    @ViewBuilder
+    private func voterAvatar(_ voter: CouchVoteVoter, hasVoted: Bool) -> some View {
+        UserProfileImage(
+            userID: voter.id,
+            source: voter.user.profileImageSource(
+                client: voter.server.client
+            ),
+            pipeline: .Swiftfin.local
+        )
+        .frame(width: 32, height: 32)
+        .overlay(alignment: .bottomTrailing) {
+            if hasVoted {
+                // Who on this phone has already voted
+                Image(systemName: "checkmark.circle.fill")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .symbolRenderingMode(.palette)
+                    .foregroundStyle(accentColor.overlayColor, accentColor)
+                    .frame(width: 14, height: 14)
+                    .offset(x: 3, y: 2)
+                    .transition(.scale.combined(with: .opacity))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func voterChip(_ voter: CouchVoteVoter) -> some View {
+        let isSelected = participant.votingAsUserID == voter.id
+        let hasVoted = participant.votedVoterIDs.contains(voter.id)
+
+        Button {
+            selectVoter(voter)
+        } label: {
+            HStack(spacing: 8) {
+                voterAvatar(voter, hasVoted: hasVoted)
+
+                Text(voter.user.username)
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .lineLimit(1)
+            }
+            .padding(.leading, 4)
+            .padding(.trailing, 12)
+            .padding(.vertical, 4)
+            .background {
+                Capsule()
+                    .fill(isSelected ? AnyShapeStyle(accentColor.opacity(0.18)) : AnyShapeStyle(Color.secondarySystemFill))
+            }
+            .overlay {
+                if isSelected {
+                    Capsule()
+                        .stroke(accentColor, lineWidth: 2)
+                }
+            }
+            .contentShape(.capsule)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(.primary)
+        .disabled(stage != .voting)
+        .accessibilityLabel(voter.user.username)
+        .accessibilityValue(hasVoted ? L10n.CouchVote.voted : "")
+        .accessibilityHint(L10n.CouchVote.votingAsHint(voter.user.username))
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    /// The grown-ups on this phone that take part in the vote. Shown even for one, so it's clear who votes.
+    @ViewBuilder
+    private var votingAsRow: some View {
+        if participant.voters.isNotEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(L10n.CouchVote.votingAs)
+                    .font(.footnote)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+                    .accessibilityAddTraits(.isHeader)
+
+                ScrollView(.horizontal) {
+                    HStack(spacing: 8) {
+                        ForEach(participant.voters) { voter in
+                            voterChip(voter)
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+                .scrollIndicators(.hidden)
+                .scrollClipDisabled()
+            }
+            .animation(.easeInOut(duration: 0.2), value: participant.votingAsUserID)
+            .animation(.easeInOut(duration: 0.2), value: participant.votedVoterIDs)
+        }
     }
 
     // MARK: - Rows
@@ -223,7 +361,7 @@ struct CouchVoteBallotView: View {
 
     @ViewBuilder
     private func selectionIndicator(_ choice: Choice) -> some View {
-        if pendingChoice == choice, participant.isSending {
+        if isPending(choice) {
             ProgressView()
                 .frame(width: 26, height: 26)
         } else if selectedChoice == choice {
@@ -257,13 +395,16 @@ struct CouchVoteBallotView: View {
             HStack(spacing: 12) {
                 leading()
                     .frame(width: 48)
+                    .accessibilityHidden(true)
 
                 VStack(alignment: .leading, spacing: 2) {
                     label()
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
+                // The state is read as the selected trait and the value
                 selectionIndicator(choice)
+                    .accessibilityHidden(true)
             }
             .padding(10)
             .background {
@@ -281,6 +422,10 @@ struct CouchVoteBallotView: View {
         .buttonStyle(.plain)
         .foregroundStyle(.primary, .secondary)
         .disabled(stage != .voting)
+        // VoiceOver: "Toy Story, selected"
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityValue(isPending(choice) ? L10n.CouchVote.sending : "")
+        .accessibilityHint(votingAsName.map { L10n.CouchVote.votesAs($0) } ?? "")
     }
 
     @ViewBuilder
@@ -411,6 +556,10 @@ struct CouchVoteBallotView: View {
         .sensoryFeedback(.success, trigger: celebrationTrigger)
         .task {
             celebrationTrigger += 1
+
+            if let winner {
+                UIAccessibility.post(notification: .announcement, argument: L10n.CouchVote.tonight(winner.title))
+            }
 
             try? await Task.sleep(for: .seconds(8))
 

@@ -13,7 +13,8 @@ extension View {
 
     /// Shows the "Vote for tonight" ballot when a TV on the couch starts a vote.
     ///
-    /// Attach it once, to a view that stays on screen (the main tab view).
+    /// Attach it to a view that stays on screen: the main tab view while signed in,
+    /// and the couch picker while signed out (the participant listens with the stored accounts).
     /// It listens while the app is in the foreground, and never prompts
     /// while the video player is up: the sheet waits until playback stops.
     func couchVotePrompt() -> some View {
@@ -39,6 +40,9 @@ private struct CouchVotePromptModifier: ViewModifier {
     private var lastPresentedPollID: String?
     @State
     private var handledPollIDs: Set<String> = []
+    /// This prompt's listener id: the signed-out and signed-in prompts can overlap while the root view swaps them.
+    @State
+    private var listenerID = UUID().uuidString
 
     private func presentIfNeeded() {
         guard presentedPoll == nil,
@@ -70,20 +74,20 @@ private struct CouchVotePromptModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .onAppear {
-                participant.startListening()
+                participant.startListening(owner: listenerID)
             }
             .onDisappear {
-                participant.stopListening()
+                participant.stopListening(owner: listenerID)
             }
             .onScenePhase(.active) {
-                participant.startListening()
+                participant.startListening(owner: listenerID)
 
                 Task {
                     await participant.refreshNow()
                 }
             }
             .onScenePhase(.background) {
-                participant.stopListening()
+                participant.stopListening(owner: listenerID)
             }
             .onChange(of: participant.poll) {
                 presentIfNeeded()

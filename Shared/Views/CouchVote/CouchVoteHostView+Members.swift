@@ -18,14 +18,33 @@ extension CouchVoteHostView {
 
         /// Their vote is in (from their phone or cast on the TV).
         case voted
-        /// The poll reached their account; they vote on their phone.
+        /// Their phone confirmed that it has the vote; they vote on their phone.
         case phone
-        /// No phone account (no stored token, or the write failed): they vote on the TV.
+        /// The poll reached their account, but no phone has picked it up yet.
+        case waiting
+        /// A kid, no phone account (no stored token, or the write failed), or no phone picked the vote up in time:
+        /// they vote on the TV.
         case votesHere
         /// Their phone account stopped answering; they can vote on the TV.
         case unreachable
         /// They are voting in another TV's vote.
         case elsewhere
+
+        /// The order of the "Vote as…" dialog: who votes here first, who already voted last.
+        var voteAsRank: Int {
+            switch self {
+            case .votesHere:
+                0
+            case .waiting:
+                1
+            case .phone:
+                2
+            case .unreachable, .elsewhere:
+                3
+            case .voted:
+                4
+            }
+        }
 
         var displayTitle: String {
             switch self {
@@ -33,6 +52,8 @@ extension CouchVoteHostView {
                 L10n.CouchVote.voted
             case .phone:
                 L10n.CouchVote.votingOnPhone
+            case .waiting:
+                L10n.CouchVote.canVoteOnPhone
             case .votesHere:
                 L10n.CouchVote.votesHere
             case .unreachable:
@@ -47,6 +68,8 @@ extension CouchVoteHostView {
             case .voted:
                 "checkmark.circle.fill"
             case .phone:
+                "iphone.radiowaves.left.and.right"
+            case .waiting:
                 "iphone"
             case .votesHere:
                 "tv"
@@ -87,7 +110,9 @@ extension CouchVoteHostView {
                 accentColor
             case .unreachable:
                 .orange
-            case .phone, .votesHere, .elsewhere:
+            case .phone:
+                .primary
+            case .waiting, .votesHere, .elsewhere:
                 .secondary
             }
         }

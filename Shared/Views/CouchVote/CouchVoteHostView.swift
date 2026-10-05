@@ -185,7 +185,7 @@ extension CouchVoteHostView {
         }
 
         private var showsUnreachableBanner: Bool {
-            host.phase == .open && host.phoneMemberIDs.isEmpty
+            host.phase == .open && host.phoneMemberIDs.isEmpty && hasPhoneCapableMember
         }
 
         /// The art behind everything: the winner, else the current favourite, else the first option.
@@ -217,11 +217,48 @@ extension CouchVoteHostView {
             if host.hostOnlyMemberIDs.contains(member.id) {
                 return .votesHere
             }
-            if host.phoneMemberIDs.contains(member.id) {
+            if host.presentMemberIDs.contains(member.id) {
                 return .phone
             }
+            if host.waitingMemberIDs.contains(member.id) {
+                return .waiting
+            }
 
+            // Phone members whose phone didn't pick the vote up in time vote here (a late pickup flips them back)
             return host.phase == .starting ? nil : .votesHere
+        }
+
+        /// The couch for "Vote as…": who votes here first, then who may still vote on a phone,
+        /// then who can't be reached, then who already voted. Couch order within each group.
+        private var voteAsMembers: [UserState] {
+            couch.members
+                .enumerated()
+                .sorted { lhs, rhs in
+                    let lhsRank = memberStatus(lhs.element)?.voteAsRank ?? 0
+                    let rhsRank = memberStatus(rhs.element)?.voteAsRank ?? 0
+
+                    return lhsRank == rhsRank ? lhs.offset < rhs.offset : lhsRank < rhsRank
+                }
+                .map(\.element)
+        }
+
+        /// "Sam", or for someone who already voted "Sam ✓ (on phone)" / "Lisa ✓ (Toy Story)".
+        private func voteAsTitle(_ member: UserState) -> String {
+            guard host.tally.votedUserIDs.contains(member.id) else { return member.username }
+            guard let hostChoice = host.hostCastChoice(of: member.id) else {
+                return L10n.CouchVote.votedOnPhone(member.username)
+            }
+
+            let choiceTitle = hostChoice.optionID
+                .flatMap { optionID in options.first { $0.id == optionID }?.title }
+                ?? L10n.CouchVote.anythingsFine
+
+            return L10n.CouchVote.votedHere(member.username, choiceTitle)
+        }
+
+        /// Whether anyone on the couch could vote on a phone (kids never do).
+        private var hasPhoneCapableMember: Bool {
+            couch.members.contains { !$0.isChildAudience }
         }
 
         // MARK: - Actions
@@ -453,7 +490,7 @@ extension CouchVoteHostView {
                 HStack(spacing: 12) {
                     ProgressView()
 
-                    Text(L10n.CouchVote.sendingToPhones)
+                    Text(L10n.CouchVote.startingVote)
                         .font(UIDevice.isTV ? .headline : .subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -558,8 +595,8 @@ extension CouchVoteHostView {
                 titleVisibility: .visible,
                 presenting: voteAsOption
             ) { option in
-                ForEach(couch.members) { member in
-                    Button(member.username) {
+                ForEach(voteAsMembers) { member in
+                    Button(voteAsTitle(member)) {
                         castVote(userID: member.id, optionID: option.id)
                     }
                 }
@@ -661,7 +698,7 @@ extension CouchVoteHostView {
                     Button {
                         send()
                     } label: {
-                        Label(L10n.CouchVote.sendToPhones, systemImage: "paperplane.fill")
+                        Label(L10n.CouchVote.startVote, systemImage: "paperplane.fill")
                             .frame(maxWidth: .infinity)
                     }
                     .fontWeight(.semibold)
@@ -683,7 +720,8 @@ extension CouchVoteHostView {
         @ViewBuilder
         private var openFooter: some View {
             VStack(spacing: UIDevice.isTV ? 30 : 16) {
-                Text(L10n.CouchVote.hostVoteHint)
+                // How to join from a phone, unless no phone can join this vote
+                Text(host.phoneMemberIDs.isEmpty ? L10n.CouchVote.hostVoteHint : L10n.CouchVote.joinHint)
                     .font(UIDevice.isTV ? .callout : .footnote)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

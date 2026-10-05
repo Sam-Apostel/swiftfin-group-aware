@@ -21,10 +21,10 @@ extension L10n {
         static let voteForTonight = "Vote for tonight"
 
         /// Primary button that starts the vote.
-        static let sendToPhones = "Send to phones"
+        static let startVote = "Start the vote"
 
         /// Shown while the poll is being written to everyone's account.
-        static let sendingToPhones = "Sending to phones…"
+        static let startingVote = "Starting the vote…"
 
         /// Banner when no phone account could be reached.
         static let phonesUnreachable = "Phones can't be reached; vote here on the TV"
@@ -78,8 +78,11 @@ extension L10n {
         /// Shown on the phone when the vote disappeared without a result.
         static let voteEnded = "The vote has ended"
 
-        /// Member state: the poll reached their phone.
+        /// Member state: their phone confirmed that it has the vote.
         static let votingOnPhone = "Voting on their phone"
+
+        /// Member state: the vote was sent to their account, their phone hasn't picked it up yet.
+        static let canVoteOnPhone = "Can vote on their phone"
 
         /// Member state: no phone account, votes on the TV.
         static let votesHere = "Votes here"
@@ -112,8 +115,37 @@ extension L10n {
             n == 1 ? "1 vote" : "\(n) votes"
         }
 
-        /// Explains how to vote on the TV.
+        /// Explains how to vote on the TV (nobody can vote on a phone).
         static let hostVoteHint = "Select a title to vote for someone on the couch"
+
+        /// Explains how to join from a phone, and how to vote on the TV.
+        static let joinHint = "Open Couchfin on your iPhone to vote · or select a title to vote for someone here"
+
+        /// "Vote as…" entry of someone whose vote came from their phone, e.g. "Sam ✓ (on phone)".
+        static func votedOnPhone(_ name: String) -> String {
+            "\(name) ✓ (on phone)"
+        }
+
+        /// "Vote as…" entry of someone whose vote was cast on the TV, e.g. "Lisa ✓ (Toy Story)".
+        static func votedHere(_ name: String, _ choice: String) -> String {
+            "\(name) ✓ (\(choice))"
+        }
+
+        /// Label above the phone's voter avatars.
+        static let votingAs = "Voting as"
+
+        /// VoiceOver hint of a voter avatar on the phone, e.g. "Your next vote counts for Lisa".
+        static func votingAsHint(_ name: String) -> String {
+            "Your next vote counts for \(name)"
+        }
+
+        /// VoiceOver hint of a ballot row, e.g. "Votes as Sam".
+        static func votesAs(_ name: String) -> String {
+            "Votes as \(name)"
+        }
+
+        /// VoiceOver value of a ballot row while its vote is being sent.
+        static let sending = "Sending"
 
         /// Explains the phone ballot.
         static let ballotHint = "Tap a title to vote. You can change your mind until the vote closes."

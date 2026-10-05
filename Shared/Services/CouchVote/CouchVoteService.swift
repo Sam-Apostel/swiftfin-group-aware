@@ -79,4 +79,28 @@ enum CouchVoteService {
             client: client
         )
     }
+
+    /// The presence in `userID`'s presence row (`nil` when there is none, or it's unreadable).
+    static func fetchPresence(userID: String, client: JellyfinClient) async throws -> CouchVotePresence? {
+        let customPrefs = try await CouchDisplayPreferences.fetchCustomPrefs(
+            displayPreferencesID: CouchVoteSync.presencePrefsID,
+            userID: userID,
+            client: client
+        )
+        return CouchVoteSync.presence(in: customPrefs)
+    }
+
+    /// Replaces `userID`'s presence row. Only that person's own phones write it.
+    static func writePresence(_ presence: CouchVotePresence, userID: String, client: JellyfinClient) async throws {
+        guard let value = CouchVoteSync.encode(presence) else {
+            throw CouchVoteError.encodingFailed
+        }
+
+        try await CouchDisplayPreferences.postCustomPrefs(
+            [CouchVoteSync.presenceKey: value],
+            displayPreferencesID: CouchVoteSync.presencePrefsID,
+            userID: userID,
+            client: client
+        )
+    }
 }

@@ -141,6 +141,24 @@ struct CouchVoteBallot: Codable, Hashable, Sendable {
     }
 }
 
+/// "This phone has seen the vote": proof that someone can really vote on a phone.
+///
+/// Written **only by that person's own phones**, into their `swiftfin-couch-vote-presence` row,
+/// once per poll, when a phone first finds the poll promptable for them. The host reads it to tell
+/// "Voting on their phone" from "Can vote on their phone". Older builds never read or write this row.
+struct CouchVotePresence: Codable, Hashable, Sendable {
+
+    /// The poll the phone has seen.
+    var pollID: String
+    /// From the phone's clock.
+    var seenAt: Date
+
+    init(pollID: String, seenAt: Date = .now) {
+        self.pollID = pollID
+        self.seenAt = seenAt
+    }
+}
+
 /// The live count of a poll, computed by `CouchVoteSync.tally(_:ballots:)`.
 struct CouchVoteTally: Equatable, Sendable {
 

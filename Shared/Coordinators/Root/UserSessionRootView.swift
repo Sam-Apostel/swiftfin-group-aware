@@ -34,6 +34,11 @@ struct UserSessionRootView: View {
                 NavigationInjectionView(coordinator: .init()) {
                     SelectUserView()
                 }
+                #if os(iOS)
+                // "Vote for tonight" also reaches a phone that sits on the couch picker
+                // (MainTabView has its own prompt while signed in)
+                .couchVotePrompt()
+                #endif
 
             case .signedIn:
                 PosterPreferencesEnvironment {

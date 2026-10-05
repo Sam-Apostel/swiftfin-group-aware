@@ -12,17 +12,24 @@ import Foundation
 ///
 /// Storage: Jellyfin DisplayPreferences (client `swiftfin-couch`), one JSON document per row, single writer per row:
 /// - `swiftfin-couch-vote-poll` / `sgw.vote.poll` in each participant's account: written only by the host (TV);
-/// - `swiftfin-couch-vote-ballot` / `sgw.vote.ballot` in each participant's account: written only by that person's phones.
+/// - `swiftfin-couch-vote-ballot` / `sgw.vote.ballot` in each participant's account: written only by that person's phones;
+/// - `swiftfin-couch-vote-presence` / `sgw.vote.presence` in each participant's account: written only by that person's
+///   phones, once per poll, when a phone first sees it (`CouchVotePresence`). Older builds ignore this row.
 ///
 /// Every write is a whole-row replace of one key, so there is no read-modify-write and no lost update.
+/// (`postCustomPrefs` replaces the whole map of a DisplayPreferences id, so every kind of row has its own id.)
+///
+/// Kids (`UserState.isChildAudience`) never get a poll row and are never listened for: they vote on the host.
 ///
 /// Foundation only: this file is type-checked and unit-tested on Linux.
 enum CouchVoteSync {
 
     static let pollPrefsID = "swiftfin-couch-vote-poll"
     static let ballotPrefsID = "swiftfin-couch-vote-ballot"
+    static let presencePrefsID = "swiftfin-couch-vote-presence"
     static let pollKey = "sgw.vote.poll"
     static let ballotKey = "sgw.vote.ballot"
+    static let presenceKey = "sgw.vote.presence"
     static let schema = 1
 
     /// How long a vote stays open by default.
@@ -38,6 +45,9 @@ enum CouchVoteSync {
     /// Consecutive failed ballot reads after which a member shows as unreachable.
     static let unreachableAfterFailures = 3
     static let maxOptions = 5
+    /// A member whose phone hasn't confirmed the poll (`CouchVotePresence`) this long after it was sent
+    /// shows as "Votes here". Phones read every 10 s while idle, so this allows one missed read plus latency.
+    static let presenceFallback: TimeInterval = 20
 
     static let hostPollInterval: Duration = .seconds(2)
     static let participantIdleInterval: Duration = .seconds(10)
@@ -78,6 +88,26 @@ enum CouchVoteSync {
         return ballot
     }
 
+    /// The presence stored in a presence row. `nil` when missing or undecodable.
+    static func presence(in customPrefs: [String: String?]) -> CouchVotePresence? {
+        guard let value = customPrefs[presenceKey] ?? nil else { return nil }
+
+        return decode(CouchVotePresence.self, from: value)
+    }
+
+    // MARK: - Presence (host)
+
+    /// Whether `presence` proves that a phone has seen `poll`.
+    static func isPresent(_ presence: CouchVotePresence?, for poll: CouchVotePoll) -> Bool {
+        presence?.pollID == poll.id
+    }
+
+    /// Whether a phone member without presence still shows as "Can vote on their phone"
+    /// (else "Votes here"). `sentAt` is when the poll reached their account.
+    static func isWaitingForPresence(sentAt: Date, now: Date) -> Bool {
+        now < sentAt.addingTimeInterval(presenceFallback)
+    }
+
     // MARK: - Participant rules
 
     /// Whether a phone signed in as `userID` should prompt for this poll.
@@ -93,6 +123,72 @@ enum CouchVoteSync {
             && poll.participantIDs.contains(userID)
             && poll.hostDeviceID != deviceID
             && !dismissedPollIDs.contains(poll.id)
+    }
+
+    /// The poll a phone should prompt for, from the poll rows of every account it listens for (keyed by user id):
+    /// the newest poll that is promptable for at least one of them. Ties go to the smaller id, so it's deterministic.
+    static func promptablePoll(
+        in pollsByUserID: [String: CouchVotePoll],
+        deviceID: String,
+        dismissedPollIDs: Set<String>,
+        now: Date
+    ) -> CouchVotePoll? {
+        var best: CouchVotePoll?
+
+        for (userID, poll) in pollsByUserID {
+            guard isPromptable(poll, userID: userID, deviceID: deviceID, dismissedPollIDs: dismissedPollIDs, now: now) else {
+                continue
+            }
+
+            if let current = best {
+                if poll.createdAt > current.createdAt || (poll.createdAt == current.createdAt && poll.id < current.id) {
+                    best = poll
+                }
+            } else {
+                best = poll
+            }
+        }
+
+        return best
+    }
+
+    /// The freshest copy of poll `pollID` among the rows (the host may have reached some accounts and not others):
+    /// the latest `updatedAt`; on a tie a finished copy beats an open one.
+    static func freshestPoll(id pollID: String, in pollsByUserID: [String: CouchVotePoll]) -> CouchVotePoll? {
+        var best: CouchVotePoll?
+
+        for poll in pollsByUserID.values where poll.id == pollID {
+            if let current = best {
+                if poll.updatedAt > current.updatedAt || (poll.updatedAt == current.updatedAt && current.state == .open) {
+                    best = poll
+                }
+            } else {
+                best = poll
+            }
+        }
+
+        return best
+    }
+
+    /// The listened accounts that can vote in `poll` with this phone, in the poll's participant order:
+    /// participants whose own poll row holds this poll (the host reads exactly their ballots).
+    static func voterIDs(for poll: CouchVotePoll, in pollsByUserID: [String: CouchVotePoll]) -> [String] {
+        poll.participantIDs.filter { pollsByUserID[$0]?.id == poll.id }
+    }
+
+    /// Who a phone votes as until someone taps another avatar: in `preferredOrder` (the phone's last couch,
+    /// in pick order), then the poll's order, the first voter who isn't restricted, else the first voter.
+    static func defaultVoterID(
+        voterIDs: [String],
+        restrictedIDs: Set<String>,
+        preferredOrder: [String]
+    ) -> String? {
+        var ordered: [String] = []
+        for userID in preferredOrder + voterIDs where voterIDs.contains(userID) && !ordered.contains(userID) {
+            ordered.append(userID)
+        }
+
+        return ordered.first { !restrictedIDs.contains($0) } ?? ordered.first
     }
 
     /// Whether a phone should still show the outcome of this poll (winner, or "Vote cancelled").

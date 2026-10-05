@@ -14,9 +14,13 @@ import UIKit
 
 /// Runs a "Vote for tonight" on the host device (the TV).
 ///
-/// - `start` writes the poll into the poll row of every couch member this device has a session for.
-///   Members without a session (or whose write failed) vote on the host with `castOnHost`.
-/// - Every 2 s the host reads the ballot rows of the phone members and updates `tally`.
+/// - `start` writes the poll into the poll row of every grown-up couch member this device has a session for.
+///   Kids (`UserState.isChildAudience`), members without a session and members whose write failed vote on the host
+///   with `castOnHost`.
+/// - Every 2 s the host reads the ballot rows of the phone members and updates `tally`. In the same round it reads
+///   the presence rows of phone members whose phone hasn't confirmed the poll yet: a member is really on a phone
+///   (`presentMemberIDs`) only once their phone wrote a `CouchVotePresence` for this poll. Until then they are
+///   `waitingMemberIDs` for `CouchVoteSync.presenceFallback`, after that they count as voting here.
 /// - The vote closes at the deadline, on `closeNow`, or `CouchVoteSync.allVotedSettle` after everyone voted.
 ///   The winner is written back to every phone member's poll row.
 ///
@@ -42,9 +46,16 @@ final class CouchVoteHost: ObservableObject {
     /// Members whose account received the poll: they can vote on their phone.
     @Published
     private(set) var phoneMemberIDs: Set<String> = []
-    /// Members without a session on this device, or whose poll write failed: they vote on the host.
+    /// Kids, members without a session on this device, and members whose poll write failed: they vote on the host.
     @Published
     private(set) var hostOnlyMemberIDs: Set<String> = []
+    /// Phone members whose phone confirmed that it has seen this poll: "Voting on their phone".
+    @Published
+    private(set) var presentMemberIDs: Set<String> = []
+    /// Phone members without a confirmation yet, during the first `CouchVoteSync.presenceFallback` seconds:
+    /// "Can vote on their phone". Phone members in neither set vote here (a later confirmation still counts).
+    @Published
+    private(set) var waitingMemberIDs: Set<String> = []
     /// Phone members whose ballot couldn't be read `CouchVoteSync.unreachableAfterFailures` times in a row.
     @Published
     private(set) var unreachableMemberIDs: Set<String> = []
@@ -77,6 +88,8 @@ final class CouchVoteHost: ObservableObject {
     private var lastWriteDate: Date?
     /// When everyone had voted (reset by every change), for the settle time before closing.
     private var allVotedSince: Date?
+    /// When the poll reached the phone members, for the presence fallback.
+    private var sentAt: Date?
 
     private let logger = Logger.swiftfin()
 
@@ -142,6 +155,8 @@ final class CouchVoteHost: ObservableObject {
         accounts = Dictionary(delivered.map { ($0.userID, $0) }) { first, _ in first }
         phoneMemberIDs = Set(accounts.keys)
         hostOnlyMemberIDs = Set(newPoll.participantIDs).subtracting(phoneMemberIDs)
+        sentAt = .now
+        updatePresence()
 
         if delivered.isEmpty {
             logger.warning("Couch vote: no phone account could be reached, voting on this device only")
@@ -175,6 +190,17 @@ final class CouchVoteHost: ObservableObject {
 
         recomputeTally()
         publishVoteCountsIfNeeded()
+    }
+
+    /// `userID`'s counted vote when it was cast on this host (`nil` when they have no vote, or it came from their phone).
+    func hostCastChoice(of userID: String) -> CouchVoteChoice? {
+        guard let poll,
+              let hostVote = poll.hostVotes[userID],
+              let choice = CouchVoteSync.choice(of: userID, in: poll, ballot: ballots[userID]),
+              choice == hostVote
+        else { return nil }
+
+        return choice
     }
 
     /// Closes the vote now (after one last read of the ballots) and publishes the winner.
@@ -243,6 +269,7 @@ extension CouchVoteHost {
 
         guard isCurrent(generation) else { return nil }
 
+        updatePresence()
         recomputeTally()
         publishVoteCountsIfNeeded()
 
@@ -306,6 +333,9 @@ extension CouchVoteHost {
         tally = .empty
         phoneMemberIDs = []
         hostOnlyMemberIDs = []
+        presentMemberIDs = []
+        waitingMemberIDs = []
+        sentAt = nil
         unreachableMemberIDs = []
         elsewhereMemberIDs = []
         accounts = [:]
@@ -360,6 +390,19 @@ extension CouchVoteHost {
         enqueueWrite(poll, to: writableAccounts)
     }
 
+    /// Phone members without a confirmation wait for one during `CouchVoteSync.presenceFallback`, then vote here.
+    private func updatePresence() {
+        var waiting: Set<String> = []
+
+        if let sentAt, CouchVoteSync.isWaitingForPresence(sentAt: sentAt, now: .now) {
+            waiting = phoneMemberIDs.subtracting(presentMemberIDs)
+        }
+
+        if waiting != waitingMemberIDs {
+            waitingMemberIDs = waiting
+        }
+    }
+
     private func updateElsewhere() {
         let elsewhere = elsewhereByBallot.union(elsewhereByPoll)
         if elsewhere != elsewhereMemberIDs {
@@ -384,6 +427,17 @@ extension CouchVoteHost {
         let error: String?
     }
 
+    private struct PresenceRead: Sendable {
+        let userID: String
+        /// `nil` when there is none, or the read failed (failures are tracked by the ballot reads).
+        let presence: CouchVotePresence?
+    }
+
+    private enum RowRead: Sendable {
+        case ballot(BallotRead)
+        case presence(PresenceRead)
+    }
+
     private struct PollRead: Sendable {
         let userID: String
         let poll: CouchVotePoll?
@@ -395,11 +449,13 @@ extension CouchVoteHost {
         let error: String
     }
 
-    /// An account for every couch member this device has a session for (the primary user included).
+    /// An account for every grown-up couch member this device has a session for (the primary user included).
+    ///
+    /// Kids (`isChildAudience`) get no poll row: no phone listens for them, so they always vote on the host.
     private func makeAccounts() -> [Account] {
         var result: [Account] = []
 
-        for member in couch.members {
+        for member in couch.members where !member.isChildAudience {
             guard let session = primary.session(forMemberID: member.id) else { continue }
 
             result.append(Account(userID: member.id, client: session.client))
@@ -443,7 +499,8 @@ extension CouchVoteHost {
         return task
     }
 
-    /// Reads the ballot rows of the phone members (and every few ticks their poll rows).
+    /// Reads the ballot rows of the phone members, the presence rows of those not confirmed yet,
+    /// and every few ticks their poll rows.
     private func refreshBallots(checkPollRows: Bool) async {
         guard let poll else { return }
 
@@ -452,14 +509,29 @@ extension CouchVoteHost {
         guard !accounts.isEmpty else { return }
 
         let generation = self.generation
-        let ballotReads = await Self.fetchBallots(accounts)
+        let presenceUserIDs = Set(accounts.map(\.userID)).subtracting(presentMemberIDs)
+        let rowReads = await Self.fetchBallotsAndPresence(accounts, presenceUserIDs: presenceUserIDs)
         let pollReads = checkPollRows ? await Self.fetchPolls(accounts) : []
 
         guard generation == self.generation else { return }
 
-        applyBallotReads(ballotReads, poll: poll)
+        applyBallotReads(rowReads.ballots, poll: poll)
+        applyPresenceReads(rowReads.presences, poll: poll)
         applyPollReads(pollReads, poll: poll)
         updateElsewhere()
+    }
+
+    private func applyPresenceReads(_ reads: [PresenceRead], poll: CouchVotePoll) {
+        var present = presentMemberIDs
+
+        for read in reads where CouchVoteSync.isPresent(read.presence, for: poll) {
+            present.insert(read.userID)
+        }
+
+        if present != presentMemberIDs {
+            presentMemberIDs = present
+            updatePresence()
+        }
     }
 
     private func applyBallotReads(_ reads: [BallotRead], poll: CouchVotePoll) {
@@ -554,24 +626,42 @@ extension CouchVoteHost {
         }
     }
 
-    private nonisolated static func fetchBallots(_ accounts: [Account]) async -> [BallotRead] {
-        await withTaskGroup(of: BallotRead.self) { group in
+    /// Every account's ballot, and the presence of `presenceUserIDs`, all in one parallel round.
+    private nonisolated static func fetchBallotsAndPresence(
+        _ accounts: [Account],
+        presenceUserIDs: Set<String>
+    ) async -> (ballots: [BallotRead], presences: [PresenceRead]) {
+        await withTaskGroup(of: RowRead.self) { group in
             for account in accounts {
                 group.addTask {
                     do {
                         let ballot = try await CouchVoteService.fetchBallot(userID: account.userID, client: account.client)
-                        return BallotRead(userID: account.userID, ballot: ballot, error: nil)
+                        return .ballot(BallotRead(userID: account.userID, ballot: ballot, error: nil))
                     } catch {
-                        return BallotRead(userID: account.userID, ballot: nil, error: error.localizedDescription)
+                        return .ballot(BallotRead(userID: account.userID, ballot: nil, error: error.localizedDescription))
                     }
+                }
+
+                guard presenceUserIDs.contains(account.userID) else { continue }
+
+                group.addTask {
+                    // `try?` flattens: `nil` for a missing row and for a failed read alike
+                    let presence = try? await CouchVoteService.fetchPresence(userID: account.userID, client: account.client)
+                    return .presence(PresenceRead(userID: account.userID, presence: presence))
                 }
             }
 
-            var reads: [BallotRead] = []
+            var ballots: [BallotRead] = []
+            var presences: [PresenceRead] = []
             for await read in group {
-                reads.append(read)
+                switch read {
+                case let .ballot(ballotRead):
+                    ballots.append(ballotRead)
+                case let .presence(presenceRead):
+                    presences.append(presenceRead)
+                }
             }
-            return reads
+            return (ballots, presences)
         }
     }
 
