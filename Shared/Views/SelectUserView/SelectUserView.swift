@@ -214,6 +214,38 @@ struct SelectUserView: View {
         isPresentingConfirmDeleteUsers = true
     }
 
+    /// Deletes the selected users. Deleting a child (`isChildAudience`) loosens kid protection:
+    /// the next couch no longer counts as dropping them. So a grown-up confirms first.
+    private func deleteSelectedUsers() {
+        let users = selectedUsers
+        selectedUsers.removeAll()
+        isEditing = false
+
+        guard let child = users.first(where: \.isChildAudience) else {
+            commitDelete(users)
+            return
+        }
+
+        // The delete alert is still closing
+        memberAuthenticator.didDismissPresentation()
+
+        Task { @MainActor in
+            let isConfirmed = await memberAuthenticator.confirmGrownUp(
+                grownUps: grownUps(serverID: child.serverID, first: couchSelection),
+                authenticationAction: authenticationAction
+            )
+
+            guard isConfirmed else { return }
+
+            commitDelete(users)
+        }
+    }
+
+    private func commitDelete(_ users: Set<UserState>) {
+        viewModel.deleteUsers(users)
+        UIDevice.feedback(.success)
+    }
+
     // MARK: - Couch
 
     private func toggleCouch(user: UserState) {
@@ -1039,10 +1071,7 @@ struct SelectUserView: View {
             isPresented: $isPresentingConfirmDeleteUsers
         ) {
             Button(L10n.delete, role: .destructive) {
-                viewModel.deleteUsers(selectedUsers)
-                selectedUsers.removeAll()
-                isEditing = false
-                UIDevice.feedback(.success)
+                deleteSelectedUsers()
             }
         } message: {
             if selectedUsers.count == 1, let first = selectedUsers.first {

@@ -99,6 +99,11 @@ final class CouchMemberAuthenticator: ObservableObject {
         let members = Self.unique(members)
         var skippedIDs: Set<String> = []
 
+        // Nobody has a stored sign-in: there is nobody to start without them
+        if let firstMember = members.first, !members.contains(where: { $0.storedAccessToken != nil }) {
+            throw ErrorMessage(L10n.CouchStart.needsSignIn(firstMember.username))
+        }
+
         // Ask about missing sign-ins first, so nobody types a PIN for a start that is then cancelled
         for member in members where member.storedAccessToken == nil {
             try await offerToSkip(
