@@ -192,9 +192,12 @@ enum CouchVoteSync {
     }
 
     /// A vote time that's strictly later than `previous`, even when this device's clock is behind.
+    ///
+    /// At least 1 ms later: dates are stored as whole milliseconds, so a smaller step could round to a tie.
     static func voteTime(after previous: Date?, now: Date) -> Date {
-        guard let previous, previous >= now else { return now }
+        guard let previous else { return now }
 
-        return previous.addingTimeInterval(0.001)
+        let earliest = previous.addingTimeInterval(0.001)
+        return now >= earliest ? now : earliest
     }
 }

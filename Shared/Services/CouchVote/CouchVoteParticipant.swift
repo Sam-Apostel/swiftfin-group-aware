@@ -133,6 +133,7 @@ final class CouchVoteParticipant: ObservableObject {
         let userID = session.user.id
         let client = session.client
         let previousBallot = myBallot
+        let previousFetchedPollID = ballotFetchedPollID
 
         let choice = CouchVoteChoice(
             optionID: optionID,
@@ -175,6 +176,8 @@ final class CouchVoteParticipant: ObservableObject {
             // Revert, unless a newer vote replaced this one meanwhile
             if myBallot == ballot {
                 myBallot = previousBallot
+                // Read the stored ballot again if it hadn't been read yet
+                ballotFetchedPollID = previousFetchedPollID
                 evaluate(userID: userID)
             }
 

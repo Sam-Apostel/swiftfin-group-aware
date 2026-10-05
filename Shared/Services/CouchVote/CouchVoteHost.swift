@@ -62,6 +62,8 @@ final class CouchVoteHost: ObservableObject {
     private var failureCounts: [String: Int] = [:]
     private var elsewhereByBallot: Set<String> = []
     private var elsewhereByPoll: Set<String> = []
+    /// Ids of every poll this host started, so a late ballot for our own earlier vote isn't "elsewhere".
+    private var ownPollIDs: Set<String> = []
 
     private var loopTask: Task<Void, Never>?
     private var writeChain: Task<Void, Never>?
@@ -90,7 +92,8 @@ final class CouchVoteHost: ObservableObject {
 
     /// Starts a vote between `options` (deduplicated, at most 5). Returns once the poll was sent to the phones.
     func start(options: [CouchVoteOption], duration: TimeInterval = CouchVoteSync.defaultDuration) async {
-        guard phase != .starting, phase != .open else { return }
+        // A vote left behind by `stop()` (no loop any more) may be replaced
+        guard isStopped || (phase != .starting && phase != .open) else { return }
 
         var uniqueOptions: [CouchVoteOption] = []
         for option in options where !uniqueOptions.contains(where: { $0.id == option.id }) {
@@ -121,6 +124,8 @@ final class CouchVoteHost: ObservableObject {
             deadline: now.addingTimeInterval(max(duration, 5)),
             updatedAt: now
         )
+
+        ownPollIDs.insert(newPoll.id)
 
         let candidates = makeAccounts()
         accounts = Dictionary(candidates.map { ($0.userID, $0) }) { first, _ in first }
@@ -479,7 +484,11 @@ extension CouchVoteHost {
             ballots[read.userID] = read.ballot
 
             // A ballot for another poll, cast after ours started: they're voting on another host
-            if let ballot = read.ballot, ballot.pollID != poll.id, ballot.choice.votedAt > poll.createdAt {
+            if let ballot = read.ballot,
+               ballot.pollID != poll.id,
+               !ownPollIDs.contains(ballot.pollID),
+               ballot.choice.votedAt > poll.createdAt
+            {
                 elsewhereByBallot.insert(read.userID)
             } else {
                 elsewhereByBallot.remove(read.userID)
@@ -491,14 +500,19 @@ extension CouchVoteHost {
         }
     }
 
-    /// A newer poll of another host in a member's row wins (the phone shows the newest one): stop writing there.
-    /// An older or missing one was overwritten by a slow write of someone else: write ours again.
+    /// A newer, still running poll of another host in a member's row wins (the phone shows the newest one):
+    /// stop writing there. An older, finished or missing one: write ours again.
     private func applyPollReads(_ reads: [PollRead], poll: CouchVotePoll) {
         var rewrite: [Account] = []
+        let now = Date.now
 
         for read in reads where !read.didFail {
             guard let stored = read.poll, stored.id == poll.id else {
-                if let stored = read.poll, stored.createdAt > poll.createdAt {
+                if let stored = read.poll,
+                   stored.createdAt > poll.createdAt,
+                   stored.state == .open,
+                   now < stored.deadline.addingTimeInterval(CouchVoteSync.deadlineGrace)
+                {
                     elsewhereByPoll.insert(read.userID)
                 } else if let account = accounts[read.userID] {
                     elsewhereByPoll.remove(read.userID)
