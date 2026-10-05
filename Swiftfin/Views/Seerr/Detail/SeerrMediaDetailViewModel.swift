@@ -228,14 +228,10 @@ final class SeerrMediaDetailViewModel: ViewModel {
         householdUsers = [session.user] + otherUsers
         watchlistEntry = watchlistStore.entry(id: entryID)
 
-        // Pick up audiences tagged on other devices; `watchlistEntry` follows the store.
-        if !watchlistStore.isRefreshing {
-            let store = watchlistStore
-            let sessions = session.householdSessions()
-
-            Task {
-                await store.refresh(sessions: sessions)
-            }
+        // Pick up audiences tagged on other devices (throttled to once a minute);
+        // `watchlistEntry` follows the store.
+        Task {
+            await AudienceWatchlistActions.refreshIfNeeded()
         }
 
         guard let client = seerrService.client else {
@@ -251,6 +247,8 @@ final class SeerrMediaDetailViewModel: ViewModel {
         self.details = details
 
         if let libraryItem {
+            libraryLookupTask?.cancel()
+            isLookingUpLibraryItem = false
             self.libraryItem = libraryItem
         } else {
             lookUpLibraryItem(details: details, session: session)
