@@ -40,6 +40,8 @@ extension SelectUserView {
         private let isStartingCouch: Bool
         private let onStart: () -> Void
         private let onDelete: () -> Void
+        private let isCouchSaved: Bool
+        private let onSaveCouch: (() -> Void)?
 
         private func toggleUsers() {
             if selectedUsers.count == allUsers.count {
@@ -72,6 +74,8 @@ extension SelectUserView {
         ///   - couchMembers: The users on the couch, in pick order.
         ///   - couchServer: The server of the users on the couch.
         ///   - onStart: Starts watching as the couch.
+        ///   - isCouchSaved: Whether the people on the couch are a saved couch preset.
+        ///   - onSaveCouch: "Save this couch…". Without it, no save button is shown.
         init(
             servers: OrderedSet<ServerState>,
             allUsers: [UserItem],
@@ -81,7 +85,9 @@ extension SelectUserView {
             couchServer: ServerState?,
             isStartingCouch: Bool,
             onStart: @escaping () -> Void,
-            onDelete: @escaping () -> Void
+            onDelete: @escaping () -> Void,
+            isCouchSaved: Bool = false,
+            onSaveCouch: (() -> Void)? = nil
         ) {
             self.servers = servers
             self.allUsers = allUsers
@@ -92,6 +98,8 @@ extension SelectUserView {
             self.isStartingCouch = isStartingCouch
             self.onStart = onStart
             self.onDelete = onDelete
+            self.isCouchSaved = isCouchSaved
+            self.onSaveCouch = onSaveCouch
         }
 
         var body: some View {
@@ -116,9 +124,13 @@ extension SelectUserView {
                     }
 
                     if allUsers.isNotEmpty {
-                        startButton
-                            .frame(height: startButtonHeight)
-                            .frame(maxWidth: 400 + 16 + buttonHeight)
+                        HStack(spacing: 16) {
+                            startButton
+                                .frame(height: startButtonHeight)
+
+                            saveCouchButton(size: startButtonHeight)
+                        }
+                        .frame(maxWidth: 400 + 16 + buttonHeight)
                     }
                 }
                 .animation(.linear(duration: 0.1), value: couchMembers.map(\.id))
@@ -193,6 +205,28 @@ extension SelectUserView {
             .focused($focusedButton, equals: .start)
         }
 
+        /// "Save this couch…", or edit the saved couch with the same people.
+        @ViewBuilder
+        private func saveCouchButton(size: CGFloat) -> some View {
+            if let onSaveCouch, couchMembers.isNotEmpty {
+                Button(action: onSaveCouch) {
+                    Label(
+                        isCouchSaved ? L10n.CouchPresets.editCouch : L10n.CouchPresets.saveThisCouch,
+                        systemImage: isCouchSaved ? "bookmark.fill" : "bookmark"
+                    )
+                    .labelStyle(.iconOnly)
+                    .fontWeight(.semibold)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                .foregroundStyle(.primary, .secondary)
+                .buttonBorderShape(.circle)
+                .backport
+                .glassEffect(in: .circle)
+                .frame(width: size, height: size)
+                .transition(.opacity.combined(with: .scale))
+            }
+        }
+
         @ViewBuilder
         private var editView: some View {
             Button(action: toggleUsers) {
@@ -247,6 +281,8 @@ extension SelectUserView {
                 startButton
                     .frame(maxWidth: UIDevice.isTV ? 700 : 400)
                     .frame(height: buttonHeight)
+
+                saveCouchButton(size: buttonHeight)
             }
 
             AddUserMenu(servers: servers)

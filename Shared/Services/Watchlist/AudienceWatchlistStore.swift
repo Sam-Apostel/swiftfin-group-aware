@@ -637,18 +637,12 @@ extension AudienceWatchlistStore {
         }
     }
 
-    /// GET with our own lenient DTO: the SDK's `DisplayPreferencesDto` fails on a fresh row's `"tvhome": null`.
     private nonisolated static func fetchCustomPrefs(account: Account) async throws -> [String: String?] {
-        let request = Request<CouchPrefsDTO>(
-            path: "/DisplayPreferences/\(AudienceWatchlistSync.displayPreferencesID)",
-            query: [
-                ("userId", account.userID),
-                ("client", AudienceWatchlistSync.client),
-            ]
+        try await CouchDisplayPreferences.fetchCustomPrefs(
+            displayPreferencesID: AudienceWatchlistSync.displayPreferencesID,
+            userID: account.userID,
+            client: account.client
         )
-
-        let response = try await account.client.send(request)
-        return response.value.customPrefs
     }
 
     /// - Returns: the errors of the failed writes
@@ -675,32 +669,13 @@ extension AudienceWatchlistStore {
         }
     }
 
-    /// POST replaces the whole map, so `customPrefs` must be the complete set of our keys.
-    /// The other fields are the server defaults, sent explicitly because the body is a full DTO.
     private nonisolated static func postCustomPrefs(_ customPrefs: [String: String], account: Account) async throws {
-        let body = DisplayPreferencesDto(
-            client: AudienceWatchlistSync.client,
-            customPrefs: customPrefs,
-            id: AudienceWatchlistSync.displayPreferencesID,
-            isRememberIndexing: false,
-            isRememberSorting: false,
-            isShowBackdrop: true,
-            isShowSidebar: false,
-            primaryImageHeight: 250,
-            primaryImageWidth: 250,
-            scrollDirection: .horizontal,
-            sortBy: "SortName",
-            sortOrder: .ascending
-        )
-
-        let request = Paths.updateDisplayPreferences(
+        try await CouchDisplayPreferences.postCustomPrefs(
+            customPrefs,
             displayPreferencesID: AudienceWatchlistSync.displayPreferencesID,
             userID: account.userID,
-            client: AudienceWatchlistSync.client,
-            body
+            client: account.client
         )
-
-        try await account.client.send(request)
     }
 }
 

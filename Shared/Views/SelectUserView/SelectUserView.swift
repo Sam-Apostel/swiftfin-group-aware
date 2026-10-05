@@ -37,6 +37,9 @@ struct SelectUserView: View {
     @Injected(\.userSessionManager)
     private var userSessionManager: UserSessionManager
 
+    @InjectedObject(\.couchPresetStore)
+    private var couchPresetStore
+
     @Router
     private var router
 
@@ -56,6 +59,9 @@ struct SelectUserView: View {
     private var isEditing = false
     @State
     private var isPresentingConfirmDeleteUsers = false
+    /// The couch preset being saved or edited in the name + emoji prompt.
+    @State
+    private var presetDraft: CouchPresetDraft?
 
     @StateObject
     private var viewModel = SelectUserViewModel()
@@ -250,12 +256,196 @@ struct SelectUserView: View {
                 }
 
                 try await userSessionManager.signIn(userIDs: members.map(\.id))
+                couchPresetStore.recordRecent(memberIDs: members.map(\.id))
                 UIDevice.feedback(.success)
             } catch is CancellationError {
                 return
             } catch {
                 await viewModel.error(error)
             }
+        }
+    }
+
+    // MARK: - Couch presets
+
+    /// Saved couches and the last couches of the shown users.
+    private var couchChips: [CouchChip] {
+        let items = userItems
+        let shownServerIDs = Set(items.map(\.server.id))
+        let presets = viewModel.servers
+            .keys
+            .filter { shownServerIDs.contains($0.id) }
+            .flatMap { couchPresetStore.presets(serverID: $0.id) }
+
+        return CouchPresetSync.chips(
+            presets: presets,
+            recents: couchPresetStore.recentCouches,
+            usernames: Dictionary(items.map { ($0.user.id, $0.user.username) }) { first, _ in first },
+            serverIDs: Dictionary(items.map { ($0.user.id, $0.server.id) }) { first, _ in first }
+        )
+    }
+
+    /// The saved couch with exactly the people on the couch, if any.
+    private var couchSelectionPreset: CouchPreset? {
+        guard let couchServer, couchSelection.isNotEmpty else { return nil }
+
+        return couchPresetStore.preset(
+            serverID: couchServer.id,
+            memberIDs: Set(couchSelection.map(\.id))
+        )
+    }
+
+    private func chipServer(_ chip: CouchChip) -> ServerState? {
+        guard let firstID = chip.memberIDs.first,
+              let serverID = storedUsers.first(where: { $0.id == firstID })?.serverID
+        else { return nil }
+
+        return viewModel.servers.keys.first { $0.id == serverID }
+    }
+
+    private func refreshCouchPresets() {
+        couchPresetStore.seedRecentsIfNeeded()
+
+        for (server, users) in viewModel.servers where users.isNotEmpty {
+            couchPresetStore.refresh(server: server, users: users)
+        }
+    }
+
+    /// Puts the chip's people on the couch, or starts watching when they already are.
+    private func selectChip(_ chip: CouchChip) {
+        let members = chip.memberIDs.compactMap { id in
+            storedUsers.first { $0.id == id }
+        }
+
+        guard members.isNotEmpty else { return }
+
+        if Set(couchSelection.map(\.id)) == chip.memberSet {
+            startCouch()
+            return
+        }
+
+        UIDevice.impact(.light)
+
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            couchSelection = members
+        }
+    }
+
+    /// "Save this couch…" from the start bar, or edits the saved couch with the same people.
+    private func saveCurrentCouch() {
+        guard let couchServer, couchSelection.isNotEmpty else { return }
+
+        if let preset = couchSelectionPreset {
+            editPreset(preset, server: couchServer)
+            return
+        }
+
+        presetDraft = CouchPresetDraft(
+            presetID: nil,
+            serverID: couchServer.id,
+            memberIDs: couchSelection.map(\.id),
+            memberNames: couchSelection.map(\.username),
+            name: "",
+            emoji: couchSelection.contains(where: \.isKid) ? "🧸" : "🛋️"
+        )
+    }
+
+    private func saveChip(_ chip: CouchChip) {
+        guard let server = chipServer(chip) else { return }
+
+        presetDraft = CouchPresetDraft(
+            presetID: nil,
+            serverID: server.id,
+            memberIDs: chip.memberIDs,
+            memberNames: chip.memberNames,
+            name: "",
+            emoji: kidUserIDs.isDisjoint(with: chip.memberSet) ? "🛋️" : "🧸"
+        )
+    }
+
+    private func editChip(_ chip: CouchChip) {
+        guard let preset = chip.preset, let server = chipServer(chip) else { return }
+
+        editPreset(preset, server: server)
+    }
+
+    private func editPreset(_ preset: CouchPreset, server: ServerState) {
+        let names = preset.memberIDs.compactMap { id in
+            storedUsers.first { $0.id == id }?.username
+        }
+
+        presetDraft = CouchPresetDraft(
+            presetID: preset.id,
+            serverID: server.id,
+            memberIDs: preset.memberIDs,
+            memberNames: names,
+            name: preset.name,
+            emoji: preset.emoji ?? ""
+        )
+    }
+
+    private func deleteChip(_ chip: CouchChip) {
+        guard let preset = chip.preset, let server = chipServer(chip) else { return }
+
+        withAnimation(.linear(duration: 0.1)) {
+            couchPresetStore.delete(
+                presetID: preset.id,
+                server: server,
+                users: viewModel.servers[server] ?? []
+            )
+        }
+        UIDevice.impact(.light)
+    }
+
+    private func forgetChip(_ chip: CouchChip) {
+        withAnimation(.linear(duration: 0.1)) {
+            couchPresetStore.forgetRecent(memberIDs: chip.memberIDs)
+        }
+        UIDevice.impact(.light)
+    }
+
+    private func commitPresetDraft(_ draft: CouchPresetDraft) {
+        let name = CouchPreset.sanitizedName(draft.name)
+
+        guard name.isNotEmpty,
+              let server = viewModel.servers.keys.first(where: { $0.id == draft.serverID })
+        else { return }
+
+        let existing = draft.presetID.flatMap { id in
+            couchPresetStore.presets(serverID: server.id).first { $0.id == id }
+        }
+
+        var preset = existing ?? CouchPreset(name: name, memberIDs: draft.memberIDs)
+        preset.name = name
+        preset.emoji = CouchPreset.sanitizedEmoji(draft.emoji)
+
+        withAnimation(.linear(duration: 0.1)) {
+            couchPresetStore.save(
+                preset,
+                server: server,
+                users: viewModel.servers[server] ?? []
+            )
+        }
+        UIDevice.feedback(.success)
+    }
+
+    @ViewBuilder
+    private var couchChipsView: some View {
+        let chips = couchChips
+
+        if !isEditing, CouchPresetSync.shouldShowChips(chips) {
+            CouchPresetChips(
+                chips: chips,
+                selectedMemberIDs: Set(couchSelection.map(\.id)),
+                userItems: userItems,
+                onSelect: { selectChip($0) },
+                onEdit: { editChip($0) },
+                onDelete: { deleteChip($0) },
+                onSave: { saveChip($0) },
+                onForget: { forgetChip($0) }
+            )
+            .padding(.bottom, UIDevice.isTV ? 10 : 8)
+            .transition(.opacity)
         }
     }
 
@@ -306,6 +496,8 @@ struct SelectUserView: View {
     private var contentView: some View {
         VStack(spacing: 0) {
             headerView
+
+            couchChipsView
 
             ZStack {
                 if userItems.isEmpty {
@@ -403,7 +595,9 @@ struct SelectUserView: View {
                 onStart: startCouch,
                 onDelete: {
                     isPresentingConfirmDeleteUsers = true
-                }
+                },
+                isCouchSaved: couchSelectionPreset != nil,
+                onSaveCouch: saveCurrentCouch
             )
             .focusSection()
         }
@@ -525,6 +719,7 @@ struct SelectUserView: View {
         }
         .onChange(of: storedUsers, initial: true) {
             syncCouchSelection()
+            refreshCouchPresets()
         }
         .onChange(of: serverSelection) {
             // Keep the couch visible: clear it when switching to another server
@@ -593,5 +788,8 @@ struct SelectUserView: View {
             }
         }
         .errorMessage($viewModel.error)
+        .couchPresetEditor(draft: $presetDraft) { draft in
+            commitPresetDraft(draft)
+        }
     }
 }
