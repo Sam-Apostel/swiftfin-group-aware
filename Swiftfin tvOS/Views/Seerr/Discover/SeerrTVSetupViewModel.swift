@@ -166,7 +166,7 @@ final class SeerrTVSetupViewModel: ObservableObject {
     }
 
     /// Signs in, in the background, couch members without a Seerr session (someone who joined the couch later).
-    /// Best effort: at most once per couch, and failures are only logged.
+    /// Best effort: once per couch while it succeeds; after a failure (logged only) the next appearance retries.
     func signInRemainingCouchSilently() {
         guard phase == .ready,
               !seerrService.hasAPIKey,
@@ -180,14 +180,25 @@ final class SeerrTVSetupViewModel: ObservableObject {
         let service = seerrService
 
         // `signInCouch(_:)` logs each failure; the phase follows the service by itself
-        Task {
-            _ = await service.signInCouch(couch)
+        Task { @MainActor [weak self] in
+            let failures = await service.signInCouch(couch)
+
+            // Try again on the next appearance instead of never (e.g. a network hiccup)
+            if failures.isNotEmpty {
+                self?.silentlySignedInCouchIDs.remove(couch.id)
+            }
         }
     }
 
     // MARK: - Phase
 
     private func serviceDidChange(hasServer: Bool, hasClient: Bool) {
+        // A server was saved (e.g. entered in settings): an earlier adoption failure is no longer current
+        if hasServer {
+            adoptionError = nil
+            attemptedHost = nil
+        }
+
         // `start()` and `signInCouch()` recompute when they finish
         guard phase != .checking else { return }
 
