@@ -16,6 +16,9 @@ struct SwiftfinApp: App {
     init() {
         Self.configure()
 
+        // "It's ready" notifications: must register before launch finishes
+        ReadyAlertsBackgroundRefresh.register()
+
         UIScrollView.appearance().keyboardDismissMode = .onDrag
 
         // Sometimes the tab bar won't appear properly on push, always have material background.
