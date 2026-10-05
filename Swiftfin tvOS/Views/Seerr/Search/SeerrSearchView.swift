@@ -49,14 +49,16 @@ struct SeerrSearchView: View {
         L10n.SeerrDiscover.familyPicksFooter(childNames: viewModel.childMemberNames)
     }
 
-    private var familyFilterFooter: some View {
+    /// Shown above the grid: on tvOS the scroll view only follows focus, so a
+    /// non-focusable line below a long grid would never scroll into view.
+    private var familyFilterHeader: some View {
         Label(familyFilterMessage, systemImage: "figure.and.child.holdinghands")
             .font(.callout)
             .foregroundStyle(.secondary)
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity)
             .edgePadding(.horizontal)
-            .padding(.bottom, EdgeInsets.edgePadding)
+            .padding(.top, EdgeInsets.edgePadding)
     }
 
     private var familyFilterNoResultsView: some View {
@@ -71,6 +73,10 @@ struct SeerrSearchView: View {
 
     private var resultsGrid: some View {
         ScrollView {
+            if viewModel.isFamilyFiltered {
+                familyFilterHeader
+            }
+
             LazyVGrid(columns: columns, spacing: 60) {
                 ForEach(viewModel.searchResults) { media in
                     PosterButton(
@@ -88,10 +94,6 @@ struct SeerrSearchView: View {
             }
             .edgePadding()
             .focusSection()
-
-            if viewModel.isFamilyFiltered {
-                familyFilterFooter
-            }
         }
         .scrollClipDisabled()
         .scrollIndicators(.hidden)
