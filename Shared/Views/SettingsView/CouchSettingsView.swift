@@ -177,7 +177,11 @@ struct CouchSettingsView: View {
     private var browsingSection: some View {
         Section {
             Toggle(L10n.Couch.kidSafeBrowsing, isOn: kidSafeBrowsingBinding)
-                .disabled(isCheckingGrownUp)
+                #if os(iOS)
+                // Not on tvOS: disabling the focused toggle moves focus to the next row,
+                // where the next click would change another setting. `requestLoosening` ignores repeats.
+                    .disabled(isCheckingGrownUp)
+                #endif
         } footer: {
             Text(L10n.CouchSettings.kidSafeBrowsingFooter)
         }
@@ -202,7 +206,9 @@ struct CouchSettingsView: View {
                     Toggle(isOn: kidBinding(for: user)) {
                         kidRowLabel(user: user)
                     }
+                    #if os(iOS)
                     .disabled(isCheckingGrownUp)
+                    #endif
 
                     if kidIDs.contains(user.id), user.isKidWithoutServerLimit {
                         noAgeLimitRows(kid: user)
@@ -505,7 +511,12 @@ struct CouchSettingsView: View {
     private func closeSettings() {
         #if os(iOS)
         // `router.dismiss()` would only go back to Settings: close the Settings sheet itself
-        if let presenter = tabCoordinator.tabs.first(where: { $0.coordinator.presentedSheet != nil })?.coordinator {
+        // The id of `NavigationRoute.settings` (not built here: that would create a SettingsView)
+        let settingsID = "settings"
+        let presenter = tabCoordinator.tabs.first { $0.coordinator.presentedSheet?.id == settingsID }?.coordinator
+            ?? tabCoordinator.tabs.first { $0.coordinator.presentedSheet != nil }?.coordinator
+
+        if let presenter {
             presenter.presentedSheet = nil
             return
         }
