@@ -84,12 +84,19 @@ final class SelectUserViewModel: ViewModel {
 
     @Function(\Action.Cases.signIn)
     private func _signIn(_ user: UserState, _ pin: String) throws {
+        try validatePin(pin, for: user)
+
+        events.send(.signedIn(user))
+    }
+
+    /// Checks the PIN entered for a user that requires one.
+    ///
+    /// Used for each member when starting a couch, before signing in.
+    func validatePin(_ pin: String, for user: UserState) throws {
         if user.accessPolicy == .requirePin, let storedPin = keychain.get("\(user.id)-pin") {
             guard pin == storedPin else {
                 throw ErrorMessage(L10n.incorrectPinForUser(user.username))
             }
         }
-
-        events.send(.signedIn(user))
     }
 }

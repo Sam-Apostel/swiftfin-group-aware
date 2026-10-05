@@ -6,12 +6,21 @@
 // Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
+import Defaults
 import OrderedCollections
 import SwiftUI
 
 extension SelectUserView {
 
     struct Toolbar: View {
+
+        private enum FocusedButton: Hashable {
+            case center
+            case start
+        }
+
+        @Default(.accentColor)
+        private var accentColor
 
         @Environment(\.horizontalSizeClass)
         private var horizontalSizeClass
@@ -22,10 +31,14 @@ extension SelectUserView {
         private var selectedUsers: Set<UserState>
 
         @FocusState
-        private var isCenterButtonFocused: Bool
+        private var focusedButton: FocusedButton?
 
         private let servers: OrderedSet<ServerState>
         private let allUsers: [UserItem]
+        private let couchMembers: [UserState]
+        private let couchServer: ServerState?
+        private let isStartingCouch: Bool
+        private let onStart: () -> Void
         private let onDelete: () -> Void
 
         private func toggleUsers() {
@@ -37,18 +50,47 @@ extension SelectUserView {
         }
 
         private let buttonHeight: CGFloat = UIDevice.isTV ? 75 : 44
+        private let startButtonHeight: CGFloat = UIDevice.isTV ? 75 : 50
 
+        private var startButtonTitle: String {
+            if couchMembers.count > 1 {
+                L10n.CouchPicker.startWatchingTogether(couchMembers.count)
+            } else {
+                L10n.CouchPicker.startWatching
+            }
+        }
+
+        private var defaultFocusedButton: FocusedButton {
+            if !isEditing, couchMembers.isNotEmpty {
+                .start
+            } else {
+                .center
+            }
+        }
+
+        /// - Parameters:
+        ///   - couchMembers: The users on the couch, in pick order.
+        ///   - couchServer: The server of the users on the couch.
+        ///   - onStart: Starts watching as the couch.
         init(
             servers: OrderedSet<ServerState>,
             allUsers: [UserItem],
             isEditing: Binding<Bool>,
             selectedUsers: Binding<Set<UserState>>,
+            couchMembers: [UserState],
+            couchServer: ServerState?,
+            isStartingCouch: Bool,
+            onStart: @escaping () -> Void,
             onDelete: @escaping () -> Void
         ) {
             self.servers = servers
             self.allUsers = allUsers
             self._isEditing = isEditing
             self._selectedUsers = selectedUsers
+            self.couchMembers = couchMembers
+            self.couchServer = couchServer
+            self.isStartingCouch = isStartingCouch
+            self.onStart = onStart
             self.onDelete = onDelete
         }
 
@@ -63,14 +105,23 @@ extension SelectUserView {
         @ViewBuilder
         private var compactView: some View {
             if !isEditing {
-                HStack(spacing: 16) {
-                    ServerMenu(servers: servers)
-                        .frame(height: buttonHeight)
-                        .frame(maxWidth: 400)
+                VStack(spacing: 16) {
+                    HStack(spacing: 16) {
+                        ServerMenu(servers: servers)
+                            .frame(height: buttonHeight)
+                            .frame(maxWidth: 400)
 
-                    AddUserMenu(servers: servers)
-                        .frame(width: buttonHeight, height: buttonHeight)
+                        AddUserMenu(servers: servers)
+                            .frame(width: buttonHeight, height: buttonHeight)
+                    }
+
+                    if allUsers.isNotEmpty {
+                        startButton
+                            .frame(height: startButtonHeight)
+                            .frame(maxWidth: 400 + 16 + buttonHeight)
+                    }
                 }
+                .animation(.linear(duration: 0.1), value: couchMembers.map(\.id))
                 .edgePadding([.bottom, .horizontal])
             }
         }
@@ -85,15 +136,49 @@ extension SelectUserView {
                 }
             }
             .animation(.linear(duration: 0.1), value: selectedUsers.isNotEmpty)
+            .animation(.linear(duration: 0.1), value: couchMembers.map(\.id))
             .frame(height: buttonHeight)
             .frame(maxWidth: .infinity)
             .focusSection()
             .edgePadding([.bottom, .horizontal])
             .defaultFocus(
-                $isCenterButtonFocused,
-                true,
+                $focusedButton,
+                defaultFocusedButton,
                 priority: .userInitiated
             )
+        }
+
+        @ViewBuilder
+        private var startButton: some View {
+            Button(action: onStart) {
+                HStack(spacing: UIDevice.isTV ? 24 : 12) {
+                    if let couchServer, couchMembers.isNotEmpty {
+                        CouchAvatarStack(
+                            users: couchMembers,
+                            server: couchServer,
+                            size: UIDevice.isTV ? 50 : 30
+                        )
+                    }
+
+                    Text(startButtonTitle)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+
+                    if isStartingCouch {
+                        ProgressView()
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+            .fontWeight(.semibold)
+            .backport
+            .buttonStyle(.glassProminent.shadow(false))
+            .tint(accentColor)
+            #if os(iOS)
+            .controlSize(.large)
+            #endif
+            .disabled(couchMembers.isEmpty || isStartingCouch)
+            .focused($focusedButton, equals: .start)
         }
 
         @ViewBuilder
@@ -111,7 +196,7 @@ extension SelectUserView {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .frame(minWidth: 100, maxWidth: 300)
-            .focused($isCenterButtonFocused)
+            .focused($focusedButton, equals: .center)
 
             Button(role: .destructive, action: onDelete) {
                 Text(L10n.delete)
@@ -144,7 +229,13 @@ extension SelectUserView {
             ServerMenu(servers: servers)
                 .frame(maxWidth: UIDevice.isTV ? 600 : 400)
                 .frame(height: buttonHeight)
-                .focused($isCenterButtonFocused)
+                .focused($focusedButton, equals: .center)
+
+            if allUsers.isNotEmpty {
+                startButton
+                    .frame(maxWidth: UIDevice.isTV ? 700 : 400)
+                    .frame(height: buttonHeight)
+            }
 
             AddUserMenu(servers: servers)
                 .frame(width: buttonHeight, height: buttonHeight)

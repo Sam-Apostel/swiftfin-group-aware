@@ -40,6 +40,16 @@ struct SelectUserView: View {
     @Router
     private var router
 
+    /// The users on the couch, in pick order. The first pick is the preferred primary user.
+    @State
+    private var couchSelection: [UserState] = []
+    @State
+    private var hasRestoredLastCouch = false
+    @State
+    private var isStartingCouch = false
+    @State
+    private var kidUserIDs: Set<String> = []
+    /// The users selected for deletion in edit mode, separate from the couch selection.
     @State
     private var selectedUsers: Set<UserState> = []
     @State
@@ -118,6 +128,17 @@ struct SelectUserView: View {
         }()
     }
 
+    private var storedUsers: [UserState] {
+        viewModel.servers.values.flattened()
+    }
+
+    /// The server of the users on the couch. Couch members always share a server.
+    private var couchServer: ServerState? {
+        guard let serverID = couchSelection.first?.serverID else { return nil }
+
+        return viewModel.servers.keys.first { $0.id == serverID }
+    }
+
     private func addUser(server: ServerState) {
         UIDevice.impact(.light)
         router.route(to: .userSignIn(server: server))
@@ -128,19 +149,108 @@ struct SelectUserView: View {
         isPresentingConfirmDeleteUsers = true
     }
 
-    private func select(user: UserState) {
+    // MARK: - Couch
+
+    private func toggleCouch(user: UserState) {
+        UIDevice.impact(.light)
+
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            if couchSelection.contains(where: { $0.id == user.id }) {
+                couchSelection.removeAll { $0.id == user.id }
+            } else if let first = couchSelection.first, first.serverID != user.serverID {
+                // Couch members must share a server: start a new couch with this user
+                couchSelection = [user]
+            } else {
+                couchSelection.append(user)
+            }
+        }
+    }
+
+    private func toggleKid(user: UserState) {
+        let isKid = !user.isKid
+        user.isKid = isKid
+
+        if isKid {
+            kidUserIDs.insert(user.id)
+        } else {
+            kidUserIDs.remove(user.id)
+        }
+
+        UIDevice.impact(.light)
+    }
+
+    /// Keeps the couch selection in sync with the stored users and
+    /// pre-selects the last couch once the users are first loaded.
+    private func syncCouchSelection() {
+        let users = storedUsers
+        kidUserIDs = Set(users.filter(\.isKid).map(\.id))
+
+        if !hasRestoredLastCouch, users.isNotEmpty {
+            hasRestoredLastCouch = true
+            couchSelection = lastCouch(from: users)
+        } else {
+            // Drop deleted users and pick up renamed users
+            couchSelection = couchSelection.compactMap { member in
+                users.first { $0.id == member.id }
+            }
+        }
+    }
+
+    private func lastCouch(from users: [UserState]) -> [UserState] {
+        let members = Defaults[.Couch.lastMemberIDs].compactMap { id in
+            users.first { $0.id == id }
+        }
+
+        guard let serverID = members.first?.serverID else { return [] }
+
+        // Only pre-select users that are shown with the current server selection
+        if case let .server(id) = serverSelection, id != serverID {
+            return []
+        }
+
+        return members.filter { $0.serverID == serverID }
+    }
+
+    /// Runs each member's local access policy one after another, since only
+    /// one PIN prompt can be presented at a time, then signs in as the couch.
+    private func startCouch() {
+        let members = couchSelection
+
+        guard members.isNotEmpty, !isStartingCouch else { return }
+
+        isStartingCouch = true
+
         Task { @MainActor in
+            defer {
+                isStartingCouch = false
+            }
 
             do {
                 guard let authenticationAction else { return }
 
-                let evaluatedPolicy = try await authenticationAction(
-                    policy: user.accessPolicy,
-                    reason: user.accessPolicy.authenticateReason(user: user)
-                )
-                let pin = (evaluatedPolicy as? PinEvaluatedUserAccessPolicy)?.pin ?? ""
+                var isAfterPrompt = false
 
-                await viewModel.signIn(user, pin: pin)
+                for member in members {
+                    let policy = member.accessPolicy
+
+                    if policy != .none, isAfterPrompt {
+                        // Let the previous prompt dismiss before presenting the next one
+                        try await Task.sleep(for: .milliseconds(600))
+                    }
+
+                    let evaluatedPolicy = try await authenticationAction(
+                        policy: policy,
+                        reason: policy.authenticateReason(user: member)
+                    )
+                    let pin = (evaluatedPolicy as? PinEvaluatedUserAccessPolicy)?.pin ?? ""
+
+                    try viewModel.validatePin(pin, for: member)
+
+                    isAfterPrompt = policy != .none
+                }
+
+                try await userSessionManager.signIn(userIDs: members.map(\.id))
+                UIDevice.feedback(.success)
             } catch is CancellationError {
                 return
             } catch {
@@ -168,8 +278,35 @@ struct SelectUserView: View {
     }
 
     @ViewBuilder
+    private var headerView: some View {
+        if !isEditing, userItems.isNotEmpty {
+            VStack(spacing: UIDevice.isTV ? 8 : 4) {
+                Text(L10n.CouchPicker.title)
+                    .font(UIDevice.isTV ? .title3 : .title2)
+                    .fontWeight(.bold)
+
+                Text(L10n.CouchPicker.subtitle)
+                    .font(UIDevice.isTV ? .callout : .subheadline)
+                    .foregroundStyle(.secondary)
+            }
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .multilineTextAlignment(.center)
+            .frame(maxWidth: .infinity)
+            .edgePadding(.horizontal)
+            .padding(.top, UIDevice.isTV ? 0 : 8)
+            .padding(.bottom, UIDevice.isTV ? 20 : 8)
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isHeader)
+            .transition(.opacity)
+        }
+    }
+
+    @ViewBuilder
     private var contentView: some View {
         VStack(spacing: 0) {
+            headerView
+
             ZStack {
                 if userItems.isEmpty {
                     EmptyUserView {
@@ -198,8 +335,11 @@ struct SelectUserView: View {
                             userItems: userItems,
                             isEditing: $isEditing,
                             selectedUsers: $selectedUsers,
+                            couchSelectionIDs: couchSelection.map(\.id),
+                            kidUserIDs: kidUserIDs,
                             serverSelection: serverSelection,
-                            action: { select(user: $0) },
+                            action: { toggleCouch(user: $0) },
+                            onToggleKid: { toggleKid(user: $0) },
                             onDelete: { delete(user: $0) }
                         )
 
@@ -208,8 +348,11 @@ struct SelectUserView: View {
                             userItems: userItems,
                             isEditing: $isEditing,
                             selectedUsers: $selectedUsers,
+                            couchSelectionIDs: couchSelection.map(\.id),
+                            kidUserIDs: kidUserIDs,
                             serverSelection: serverSelection,
-                            action: { select(user: $0) },
+                            action: { toggleCouch(user: $0) },
+                            onToggleKid: { toggleKid(user: $0) },
                             onDelete: { delete(user: $0) }
                         )
                     }
@@ -254,12 +397,17 @@ struct SelectUserView: View {
                 allUsers: userItems,
                 isEditing: $isEditing,
                 selectedUsers: $selectedUsers,
+                couchMembers: couchSelection,
+                couchServer: couchServer,
+                isStartingCouch: isStartingCouch,
+                onStart: startCouch,
                 onDelete: {
                     isPresentingConfirmDeleteUsers = true
                 }
             )
             .focusSection()
         }
+        .animation(.linear(duration: 0.1), value: isEditing)
     }
 
     var body: some View {
@@ -368,6 +516,21 @@ struct SelectUserView: View {
             guard !isEditing, !isPresentingConfirmDeleteUsers else { return }
 
             selectedUsers.removeAll()
+        }
+        .onChange(of: isPresentingConfirmDeleteUsers) {
+            // A delete from a context menu outside of edit mode was cancelled
+            guard !isPresentingConfirmDeleteUsers, !isEditing else { return }
+
+            selectedUsers.removeAll()
+        }
+        .onChange(of: storedUsers, initial: true) {
+            syncCouchSelection()
+        }
+        .onChange(of: serverSelection) {
+            // Keep the couch visible: clear it when switching to another server
+            if case let .server(id) = serverSelection, let first = couchSelection.first, first.serverID != id {
+                couchSelection.removeAll()
+            }
         }
         .onChange(of: viewModel.servers.keys) {
             let newValue = viewModel.servers.keys

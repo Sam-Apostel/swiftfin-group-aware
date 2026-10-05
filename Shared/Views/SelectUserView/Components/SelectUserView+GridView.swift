@@ -20,43 +20,71 @@ extension SelectUserView {
         @Binding
         private var selectedUsers: Set<UserState>
 
+        private let couchSelectionIDs: [String]
+        private let kidUserIDs: Set<String>
         private let onDelete: (UserState) -> Void
+        private let onToggleKid: (UserState) -> Void
         private let action: (UserState) -> Void
         private let serverSelection: SelectUserServerSelection
         private let userItems: [UserItem]
 
+        /// - Parameters:
+        ///   - couchSelectionIDs: The IDs of the users on the couch, in pick order.
+        ///   - action: Toggles a user on or off the couch. Not called in edit mode.
         init(
             userItems: [UserItem],
             isEditing: Binding<Bool>,
             selectedUsers: Binding<Set<UserState>>,
+            couchSelectionIDs: [String],
+            kidUserIDs: Set<String>,
             serverSelection: SelectUserServerSelection,
             action: @escaping (UserState) -> Void,
+            onToggleKid: @escaping (UserState) -> Void,
             onDelete: @escaping (UserState) -> Void
         ) {
             self.userItems = userItems
             self._isEditing = isEditing
             self._selectedUsers = selectedUsers
+            self.couchSelectionIDs = couchSelectionIDs
+            self.kidUserIDs = kidUserIDs
             self.serverSelection = serverSelection
             self.action = action
+            self.onToggleKid = onToggleKid
             self.onDelete = onDelete
         }
 
         @ViewBuilder
         private func userGridButton(for item: UserItem) -> some View {
-            UserButton(
-                user: item.user,
-                server: item.server,
-                showServer: serverSelection == .all
-            ) {
-                if isEditing {
+            if isEditing {
+                UserButton(
+                    user: item.user,
+                    server: item.server,
+                    showServer: serverSelection == .all
+                ) {
                     selectedUsers.toggle(value: item.user)
-                } else {
-                    action(item.user)
+                } onDelete: {
+                    onDelete(item.user)
                 }
-            } onDelete: {
-                onDelete(item.user)
+                .isSelected(selectedUsers.contains(item.user))
+            } else {
+                CouchMemberButton(
+                    user: item.user,
+                    server: item.server,
+                    showServer: serverSelection == .all,
+                    isSelected: couchSelectionIDs.contains(item.user.id),
+                    isDimmed: couchSelectionIDs.isNotEmpty && !couchSelectionIDs.contains(item.user.id),
+                    isKid: kidUserIDs.contains(item.user.id),
+                    action: {
+                        action(item.user)
+                    },
+                    onToggleKid: {
+                        onToggleKid(item.user)
+                    },
+                    onDelete: {
+                        onDelete(item.user)
+                    }
+                )
             }
-            .isSelected(selectedUsers.contains(item.user))
         }
 
         var iOSView: some View {
