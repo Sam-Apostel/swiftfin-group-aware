@@ -115,6 +115,12 @@ final class SeerrTVSetupViewModel: ObservableObject {
     func start() async {
         guard !isStarting else { return }
 
+        // Returning to the app or the tab mid sign-in: never hide it behind `checking`,
+        // which would show Sign in again and allow a second, racing Quick Connect run
+        if case .signingIn = phase {
+            return
+        }
+
         isStarting = true
         defer { isStarting = false }
 
@@ -228,8 +234,10 @@ final class SeerrTVSetupViewModel: ObservableObject {
     /// Signs in, in the background, couch members without a Seerr session (someone who joined the couch later).
     /// Best effort: once per couch while it succeeds; after a failure (logged only) the next appearance retries.
     func signInRemainingCouchSilently() {
+        // Someone signed out in the Seerr settings: don't sign them back in behind their back
         guard phase == .ready,
               !seerrService.hasAPIKey,
+              !SeerrTVSetupFlags.isSignedOutExplicitly,
               let couch,
               !silentlySignedInCouchIDs.contains(couch.id),
               seerrService.couchMembersNeedingSignIn(couch).isNotEmpty

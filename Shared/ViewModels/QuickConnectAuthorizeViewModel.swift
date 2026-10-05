@@ -81,6 +81,17 @@ final class QuickConnectAuthorizeViewModel: ViewModel {
         chosenSession?.user.id ?? user.id
     }
 
+    /// The chosen person when it isn't who is signed in on this phone and their profile is locked here
+    /// (PIN or Face ID): they confirm before the other device signs in as them.
+    var chosenPersonNeedingConfirmation: UserState? {
+        guard let chosenSession,
+              chosenSession.user.id != Container.shared.currentUserSession()?.user.id,
+              chosenSession.user.accessPolicy != .none
+        else { return nil }
+
+        return chosenSession.user
+    }
+
     /// Who the other device signs in as: the chosen person, with their own session.
     func select(session: UserSession) {
         chosenSession = session

@@ -16,6 +16,9 @@ struct QuickConnectAuthorizeView: View {
     @Default(.accentColor)
     private var accentColor
 
+    @Environment(\.localUserAuthenticationAction)
+    private var authenticationAction
+
     @Router
     private var router
 
@@ -29,9 +32,62 @@ struct QuickConnectAuthorizeView: View {
     private var code: String = ""
     @State
     private var isPresentingSuccess: Bool = false
+    /// Waiting for the chosen person's PIN or Face ID.
+    @State
+    private var isConfirmingPerson: Bool = false
 
     init(user: UserDto) {
         self._viewModel = StateObject(wrappedValue: QuickConnectAuthorizeViewModel(user: user))
+    }
+
+    /// Signing another device in as someone else hands out their account: someone whose profile
+    /// is locked on this phone confirms with their PIN or Face ID first, like on the couch picker.
+    private func authorize() {
+        guard let person = viewModel.chosenPersonNeedingConfirmation else {
+            viewModel.authorize(code: code)
+            return
+        }
+
+        let code = code
+        let authenticationAction = authenticationAction
+
+        isConfirmingPerson = true
+
+        Task { @MainActor in
+            defer { isConfirmingPerson = false }
+
+            do {
+                try await Self.confirm(person, authenticationAction: authenticationAction)
+                viewModel.authorize(code: code)
+            } catch is CancellationError {
+                isCodeFocused = true
+            } catch {
+                viewModel.error = error
+            }
+        }
+    }
+
+    /// Throws when the person's PIN or Face ID didn't check out. Fails closed without an authentication action.
+    @MainActor
+    private static func confirm(
+        _ person: UserState,
+        authenticationAction: LocalUserAuthenticationAction?
+    ) async throws {
+        guard let authenticationAction else {
+            throw ErrorMessage(L10n.deviceAuthFailed)
+        }
+
+        let policy = person.accessPolicy
+        let evaluated = try await authenticationAction(
+            policy: policy,
+            reason: policy.authenticateReason(user: person)
+        )
+
+        if let pinPolicy = evaluated as? PinEvaluatedUserAccessPolicy,
+           !CouchMemberAuthenticator.isValidPin(pinPolicy.pin, for: person)
+        {
+            throw ErrorMessage(L10n.invalidPin)
+        }
     }
 
     @ViewBuilder
@@ -75,7 +131,7 @@ struct QuickConnectAuthorizeView: View {
             .padding(.vertical, 8)
         }
         .scrollIndicators(.hidden)
-        .disabled(viewModel.state == .authorizing)
+        .disabled(viewModel.state == .authorizing || isConfirmingPerson)
     }
 
     @ViewBuilder
@@ -130,9 +186,7 @@ struct QuickConnectAuthorizeView: View {
                 .controlSize(.large)
                 #endif
             } else {
-                Button {
-                    viewModel.authorize(code: code)
-                } label: {
+                Button(action: authorize) {
                     Text(L10n.authorize)
                         .frame(maxWidth: .infinity)
                 }
@@ -146,7 +200,7 @@ struct QuickConnectAuthorizeView: View {
                 #if os(iOS)
                 .controlSize(.large)
                 #endif
-                .disabled(code.count != 6 || viewModel.state == .authorizing)
+                .disabled(code.count != 6 || viewModel.state == .authorizing || isConfirmingPerson)
             }
         }
         .interactiveDismissDisabled(viewModel.state == .authorizing)

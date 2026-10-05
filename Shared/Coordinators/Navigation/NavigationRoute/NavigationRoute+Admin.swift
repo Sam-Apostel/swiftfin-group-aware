@@ -121,7 +121,10 @@ extension NavigationRoute {
 
     static func quickConnectAuthorize(user: UserDto) -> NavigationRoute {
         NavigationRoute(id: "quickConnectAuthorize") {
-            QuickConnectAuthorizeView(user: user)
+            // "Sign in as" someone else asks for their PIN or Face ID first
+            WithLocalUserAuthentication {
+                QuickConnectAuthorizeView(user: user)
+            }
         }
     }
 
