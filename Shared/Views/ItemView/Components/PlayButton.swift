@@ -71,10 +71,6 @@ struct PlayButton: View {
     private func play(positionTicks: Int? = nil) {
         let mediaPlayerItemProvider = if let positionTicks {
             provider.mediaPlayerItemProvider?.modifyingItem {
-                if $0.userData == nil {
-                    $0.userData = UserItemDataDto()
-                }
-
                 $0.userData?.playbackPositionTicks = positionTicks
             }
         } else {
