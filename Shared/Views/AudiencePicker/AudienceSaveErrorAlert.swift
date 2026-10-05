@@ -36,7 +36,13 @@ private struct AudienceWatchlistSaveErrorAlertModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .onNotification(.audienceWatchlistSaveDidFail) { message in
-                error = ErrorMessage(message)
+                // The picker dismisses itself right after starting the save, and a fast failure
+                // (offline, no account) arrives while its sheet is still animating out.
+                // An alert presented during that dismissal is dropped, so wait for it to finish.
+                Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(800))
+                    error = ErrorMessage(message)
+                }
             }
             .errorMessage($error)
     }
