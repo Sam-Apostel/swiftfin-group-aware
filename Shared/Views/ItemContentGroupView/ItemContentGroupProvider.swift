@@ -22,13 +22,29 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
     @Published
     private(set) var randomBackdropItem: BaseItemDto?
 
+    /// Where everyone on a group couch is in the item Play would start,
+    /// fetched after the page loads. `nil` on a solo couch.
+    @Published
+    private(set) var couchResumePlan: CouchResumePlan?
+
     @Published
     var isPresentingDeleteConfirmation = false
 
+    /// On a group couch: asks whether "Mark unwatched" is for everyone or just the primary user.
+    @Published
+    var isPresentingUnplayedChoice = false
+
     let id: String
+
+    private var couchResumeTask: Task<Void, Never>?
 
     var displayTitle: String {
         item.displayTitle
+    }
+
+    /// Whether more than one person is on the couch.
+    var isCouchGroup: Bool {
+        userSession?.couch.isGroup == true
     }
 
     init(item: BaseItemDto) {
@@ -57,6 +73,8 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
         localTrailers = newLocalTrailers ?? []
         mediaPlayerItemProvider = newMediaPlayerItemProvider
         randomBackdropItem = newRandomBackdropItem
+
+        refreshCouchResumePlan(for: newMediaPlayerItemProvider?.item, userSession: userSession)
 
         return try await _makeGroups(
             item: fullItem,
@@ -277,6 +295,43 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
         }
     }
 
+    /// Marks the item played or unplayed on a group couch, then toasts who was updated.
+    ///
+    /// - Parameter forEveryone: Also mirror the change to every other member on the couch.
+    ///   When `false`, only the primary user is changed ("Just Tuur").
+    func setIsPlayedOnCouch(_ isPlayed: Bool, forEveryone: Bool) async {
+        guard let userSession, let itemID = item.id else { return }
+
+        let beforeIsPlayed = item.userData?.isPlayed ?? false
+
+        item.userData?.isPlayed = isPlayed
+        do {
+            try await sendIsPlayed(isPlayed, itemID: itemID)
+        } catch {
+            item.userData?.isPlayed = beforeIsPlayed
+            logger.error(
+                "Couch: failed to mark item \(isPlayed ? "played" : "unplayed")",
+                metadata: [
+                    "itemID": .stringConvertible(itemID),
+                    "error": .stringConvertible(error.localizedDescription),
+                ]
+            )
+            CouchPlayedFeedback.presentPrimaryFailure(in: userSession)
+            return
+        }
+
+        // The server just reset resume points: never offer a stale one. The next refresh rebuilds it.
+        couchResumeTask?.cancel()
+        couchResumeTask = nil
+        couchResumePlan = nil
+
+        if forEveryone {
+            await CouchPlayedFeedback.mirror(itemID: itemID, isPlayed: isPlayed, in: userSession)
+        } else {
+            CouchPlayedFeedback.presentPrimaryOnly(isPlayed: isPlayed, in: userSession)
+        }
+    }
+
     enum PlaybackSelection {
         case mediaSource(MediaSourceInfo?)
         case audioStreamIndex(Int?)
@@ -432,6 +487,12 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
     private func setIsPlayed(_ isPlayed: Bool) async throws {
         guard let itemID = item.id else { return }
 
+        try await sendIsPlayed(isPlayed, itemID: itemID)
+        userSession?.couchPlaybackService.mirrorPlayed(itemID: itemID, isPlayed: isPlayed)
+    }
+
+    /// Marks the item played or unplayed for the primary user only.
+    private func sendIsPlayed(_ isPlayed: Bool, itemID: String) async throws {
         let request: Request<UserItemDataDto> = if isPlayed {
             try Paths.markPlayedItem(
                 itemID: itemID,
@@ -447,7 +508,105 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
         let response = try await send(request)
         Notifications[.itemUserDataDidChange].post(response.value)
         Notifications[.itemShouldRefreshMetadata].post(itemID)
-        userSession?.couchPlaybackService.mirrorPlayed(itemID: itemID, isPlayed: isPlayed)
+    }
+
+    // MARK: - Couch resume points
+
+    /// Fetches every other member's user data for the item Play would start, in the
+    /// background, and builds `couchResumePlan`. Clears it on a solo couch.
+    private func refreshCouchResumePlan(for playbackItem: BaseItemDto?, userSession: UserSession) {
+        couchResumeTask?.cancel()
+        couchResumeTask = nil
+
+        guard userSession.couch.isGroup,
+              let playbackItem,
+              let itemID = playbackItem.id
+        else {
+            couchResumePlan = nil
+            return
+        }
+
+        let members = userSession.memberSessions
+
+        guard members.isNotEmpty else {
+            couchResumePlan = nil
+            return
+        }
+
+        // The primary user's own position, as the Play button shows it.
+        let primary = CouchResumePlan.Member(
+            name: userSession.user.username,
+            positionTicks: playbackItem.userData?.playbackPositionTicks,
+            isPlayed: playbackItem.userData?.isPlayed,
+            isPrimary: true
+        )
+
+        // Keep a plan for the same item while refreshing, so the hint doesn't flicker.
+        if couchResumePlan?.itemID != itemID {
+            couchResumePlan = nil
+        }
+
+        couchResumeTask = Task { [weak self] in
+            guard let self else { return }
+
+            let others = await self.memberResumePoints(itemID: itemID, members: members)
+
+            guard !Task.isCancelled else { return }
+
+            self.couchResumePlan = CouchResumePlan(itemID: itemID, members: [primary] + others)
+        }
+    }
+
+    /// Every member's own position in the item, fetched concurrently, in couch order.
+    ///
+    /// Members whose fetch failed, including members who can't see the item (404), are left out.
+    private func memberResumePoints(itemID: String, members: [UserSession]) async -> [CouchResumePlan.Member] {
+        let fetched: [(Int, CouchResumePlan.Member?)] = await withTaskGroup(
+            of: (Int, CouchResumePlan.Member?).self
+        ) { group in
+            for (index, member) in members.enumerated() {
+                group.addTask { @MainActor in
+                    do {
+                        let userData = try await member.client
+                            .send(Paths.getItemUserData(itemID: itemID, userID: member.user.id))
+                            .value
+
+                        return (
+                            index,
+                            CouchResumePlan.Member(
+                                name: member.user.username,
+                                positionTicks: userData.playbackPositionTicks,
+                                isPlayed: userData.isPlayed,
+                                isPrimary: false
+                            )
+                        )
+                    } catch {
+                        self.logger.warning(
+                            "Couch: couldn't fetch a member's resume point",
+                            metadata: [
+                                "itemID": .stringConvertible(itemID),
+                                "memberID": .stringConvertible(member.user.id),
+                                "error": .stringConvertible(error.localizedDescription),
+                            ]
+                        )
+
+                        return (index, nil)
+                    }
+                }
+            }
+
+            var results: [(Int, CouchResumePlan.Member?)] = []
+
+            for await result in group {
+                results.append(result)
+            }
+
+            return results
+        }
+
+        return fetched
+            .sorted { $0.0 < $1.0 }
+            .compactMap(\.1)
     }
 
     private func setIsFavorite(_ isFavorite: Bool) async throws {

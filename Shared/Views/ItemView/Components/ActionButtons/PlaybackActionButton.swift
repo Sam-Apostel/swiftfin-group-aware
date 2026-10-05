@@ -7,7 +7,6 @@
 //
 
 import Defaults
-import FactoryKit
 import JellyfinAPI
 import SwiftUI
 
@@ -24,65 +23,12 @@ extension ItemActionButtons {
         @ViewContextContains(.isInMenu)
         private var isInMenu
 
-        @InjectedObject(\.couchLanguageStore)
-        private var couchLanguageStore: CouchLanguageStore
-
         private var mediaSources: [MediaSourceInfo] {
             provider.mediaPlayerItemProvider?.item.mediaSources ?? []
         }
 
-        // TODO: Fix External Audio Tracks & Re-Enable
-        private var audioStreams: [MediaStream] {
-            provider.mediaPlayerItemProvider?.mediaSource?.audioStreams?.filter { $0.isExternal != true } ?? []
-        }
-
-        private var subtitleStreams: [MediaStream] {
-            provider.mediaPlayerItemProvider?.mediaSource?.subtitleStreams ?? []
-        }
-
         private var supportedBitrates: [PlaybackBitrate] {
             provider.mediaPlayerItemProvider?.mediaSource?.supportedBitrates ?? []
-        }
-
-        /// The couch's pick for the axes the user hasn't picked, so the pickers show what will play.
-        /// `nil` for a solo couch, which keeps today's behaviour.
-        private var couchDecision: CouchLanguageDecision? {
-            _ = couchLanguageStore.revision
-
-            guard let itemProvider = provider.mediaPlayerItemProvider,
-                  let mediaSource = itemProvider.mediaSource
-            else { return nil }
-
-            return CouchLanguages.decision(
-                for: mediaSource,
-                item: itemProvider.item,
-                audioStreamIndex: itemProvider.audioStreamIndex,
-                subtitleStreamIndex: itemProvider.subtitleStreamIndex
-            )
-        }
-
-        private var audioStreamSelection: Binding<Int?> {
-            Binding(
-                get: {
-                    provider.mediaPlayerItemProvider?.audioStreamIndex
-                        ?? couchDecision?.audioStreamIndex
-                        ?? provider.mediaPlayerItemProvider?.mediaSource?.defaultAudioStreamIndex
-                        ?? audioStreams.first?.index
-                },
-                set: { provider.select(.audioStreamIndex($0)) }
-            )
-        }
-
-        private var subtitleStreamSelection: Binding<Int?> {
-            Binding(
-                get: {
-                    provider.mediaPlayerItemProvider?.subtitleStreamIndex
-                        ?? couchDecision?.subtitleStreamIndex
-                        ?? provider.mediaPlayerItemProvider?.mediaSource?.defaultSubtitleStreamIndex
-                        ?? -1
-                },
-                set: { provider.select(.subtitleStreamIndex($0)) }
-            )
         }
 
         @ViewBuilder
@@ -124,27 +70,6 @@ extension ItemActionButtons {
             .pickerStyle(.menu)
         }
 
-        @ViewBuilder
-        private func trackPicker(
-            _ title: String,
-            streams: [MediaStream],
-            selection: Binding<Int?>
-        ) -> some View {
-            Picker(selection: selection) {
-                ForEach(streams, id: \.index) { stream in
-                    Text(stream.displayTitle ?? L10n.unknown)
-                        .tag(stream.index as Int?)
-                }
-            } label: {
-                Text(title)
-
-                if let selectedStream = streams.first(where: { $0.index == selection.wrappedValue }) {
-                    Text(selectedStream.displayTitle ?? L10n.unknown)
-                }
-            }
-            .pickerStyle(.menu)
-        }
-
         var body: some View {
             Menu(
                 ItemActionButton.playback.displayTitle,
@@ -157,23 +82,9 @@ extension ItemActionButtons {
                     qualityPicker
                 }
 
-                if audioStreams.isNotEmpty || subtitleStreams.isNotEmpty {
+                if CouchTrackPickers.hasTracks(for: provider) {
                     Section(L10n.tracks) {
-                        if audioStreams.isNotEmpty {
-                            trackPicker(
-                                L10n.audio,
-                                streams: audioStreams,
-                                selection: audioStreamSelection
-                            )
-                        }
-
-                        if subtitleStreams.isNotEmpty {
-                            trackPicker(
-                                L10n.subtitles,
-                                streams: subtitleStreams.prepending(.none),
-                                selection: subtitleStreamSelection
-                            )
-                        }
+                        CouchTrackPickers(provider: provider)
                     }
                 }
             }

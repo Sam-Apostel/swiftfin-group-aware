@@ -236,6 +236,16 @@ private struct BaseItemDtoPosterContextMenu: View {
         item.userData?.isPlayed == true
     }
 
+    /// "Mark watched for everyone" on a group couch. A context menu can't present a
+    /// dialog, so unlike the item view, unwatched doesn't ask "everyone or just me".
+    private var playedTitle: String {
+        if Container.shared.currentUserSession()?.couch.isGroup == true {
+            isPlayed ? L10n.CouchItem.markUnwatchedForEveryone : L10n.CouchItem.markWatchedForEveryone
+        } else {
+            isPlayed ? L10n.markAsUnplayed : L10n.markAsPlayed
+        }
+    }
+
     /// The watchlist entry this item is tagged with, ignoring an entry without anyone in it.
     private var audienceEntry: AudienceWatchlistEntry? {
         guard let entry = AudienceWatchlistActions.entry(for: item, in: audienceStore),
@@ -283,7 +293,7 @@ private struct BaseItemDtoPosterContextMenu: View {
         }
 
         if item.canBePlayed {
-            Button(isPlayed ? L10n.markAsUnplayed : L10n.markAsPlayed, systemImage: isPlayed ? "circle" : "checkmark.circle") {
+            Button(playedTitle, systemImage: isPlayed ? "circle" : "checkmark.circle") {
                 Task {
                     await toggleIsPlayed()
                 }
@@ -349,7 +359,13 @@ private struct BaseItemDtoPosterContextMenu: View {
         item.userData = response.value
         Notifications[.itemUserDataDidChange].post(response.value)
         Notifications[.itemShouldRefreshMetadata].post(itemID)
-        userSession.couchPlaybackService.mirrorPlayed(itemID: itemID, isPlayed: isPlayed)
+
+        if userSession.couch.isGroup {
+            // Waits for every member, then toasts who was updated.
+            await CouchPlayedFeedback.mirror(itemID: itemID, isPlayed: isPlayed, in: userSession)
+        } else {
+            userSession.couchPlaybackService.mirrorPlayed(itemID: itemID, isPlayed: isPlayed)
+        }
     }
 
     private func setIsFavorite(_ isFavorite: Bool) async throws {
