@@ -129,7 +129,9 @@ struct MainTabView: View {
 
     var body: some View {
         tabContent()
-            .onChange(of: userSessionManager.pendingDeepLink) {
+            .onChange(of: userSessionManager.pendingDeepLink, initial: true) {
+                // `initial`: a deep link that signed in or switched users is set before this
+                // new MainTabView exists, so it's only seen on appear
                 routePendingDeepLink(userSessionManager.consumePendingDeepLink())
             }
             .onReceive(userSessionManager.routePublisher) { route in
