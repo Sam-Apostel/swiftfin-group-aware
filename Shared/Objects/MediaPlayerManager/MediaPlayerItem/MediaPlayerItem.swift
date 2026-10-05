@@ -64,6 +64,11 @@ class MediaPlayerItem: ViewModel, MediaPlayerObserver {
 
     let requestedBitrate: PlaybackBitrate
 
+    /// The couch's audio and subtitle pick this item was built with, if any.
+    ///
+    /// `nil` for a solo couch, when the feature is off, and for rebuilds after a track or bitrate change.
+    var couchLanguageDecision: CouchLanguageDecision?
+
     // MARK: init
 
     init(

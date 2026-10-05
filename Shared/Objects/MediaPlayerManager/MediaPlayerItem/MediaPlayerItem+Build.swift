@@ -70,14 +70,30 @@ extension MediaPlayerItem {
             maxBitrate: maxBitrate
         )
 
+        // Group couch: pick the tracks that work for everyone, only for the axes without an explicit index.
+        // nil for a solo couch, so the request is unchanged.
+        let couchLanguageDecision = CouchLanguages.decision(
+            for: initialMediaSource,
+            item: item,
+            audioStreamIndex: audioStreamIndex,
+            subtitleStreamIndex: subtitleStreamIndex,
+            deviceProfile: deviceProfile
+        )
+        let resolvedAudioStreamIndex = audioStreamIndex ?? couchLanguageDecision?.audioStreamIndex
+        let resolvedSubtitleStreamIndex = subtitleStreamIndex ?? couchLanguageDecision?.subtitleStreamIndex
+
+        if let couchLanguageDecision {
+            logger.info("Couch languages for item \(itemID): \(couchLanguageDecision.summary)")
+        }
+
         var playbackInfo = PlaybackInfoDto()
         playbackInfo.isAutoOpenLiveStream = true
         playbackInfo.deviceProfile = deviceProfile
         playbackInfo.liveStreamID = initialMediaSource.liveStreamID
         playbackInfo.maxStreamingBitrate = maxBitrate
         playbackInfo.userID = userSession.user.id
-        playbackInfo.audioStreamIndex = audioStreamIndex
-        playbackInfo.subtitleStreamIndex = subtitleStreamIndex
+        playbackInfo.audioStreamIndex = resolvedAudioStreamIndex
+        playbackInfo.subtitleStreamIndex = resolvedSubtitleStreamIndex
 
         if !item.isLiveStream, initialMediaSource.type != .placeholder {
             playbackInfo.mediaSourceID = initialMediaSource.id
@@ -167,18 +183,21 @@ extension MediaPlayerItem {
             return nil
         }()
 
-        return .init(
+        let playerItem = MediaPlayerItem(
             baseItem: item,
             mediaSource: mediaSource,
             playSessionID: playSessionID,
             url: playbackURL,
             requestedBitrate: requestedBitrate,
             deviceProfile: deviceProfile,
-            initialAudioStreamIndex: audioStreamIndex,
-            initialSubtitleStreamIndex: subtitleStreamIndex,
+            initialAudioStreamIndex: resolvedAudioStreamIndex,
+            initialSubtitleStreamIndex: resolvedSubtitleStreamIndex,
             previewImageProvider: previewImageProvider,
             thumbnailProvider: item.getNowPlayingImage
         )
+        playerItem.couchLanguageDecision = couchLanguageDecision
+
+        return playerItem
     }
 
     // TODO: audio type stream

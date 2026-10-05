@@ -112,6 +112,9 @@ extension Defaults.Keys {
 
         /// Hide items from couch home rows that any member has already watched.
         static let hideWatchedByAnyMember: Key<Bool> = AppKey("couchHideWatchedByAnyMember", default: true)
+
+        /// When several people watch, pick the audio and subtitle tracks that work for everyone on the couch.
+        static let autoLanguages: Key<Bool> = AppKey("couchAutoLanguages", default: true)
     }
 }
 
