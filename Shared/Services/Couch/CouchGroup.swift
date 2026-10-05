@@ -59,6 +59,27 @@ struct CouchGroup: Hashable, Identifiable {
         members.count > 1
     }
 
+    /// Whether a child is on the couch (`UserState.isChildAudience`:
+    /// marked as a kid, or a server age limit below 12).
+    var hasChild: Bool {
+        members.contains(where: \.isChildAudience)
+    }
+
+    /// Whether everyone on the couch is a child (`UserState.isChildAudience`).
+    var isChildrenOnly: Bool {
+        members.allSatisfy(\.isChildAudience)
+    }
+
+    /// Whether anyone on the couch is restricted (a kid, or any server age limit).
+    var hasRestrictedMember: Bool {
+        members.contains(where: \.isRestricted)
+    }
+
+    /// The members that are not restricted, in couch order (primary first).
+    var grownUps: [UserState] {
+        members.filter { !$0.isRestricted }
+    }
+
     /// A localized list of the member names, e.g. "Sam, Lisa and Tuur".
     var displayNames: String {
         let names = members.map(\.username)

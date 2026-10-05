@@ -121,8 +121,16 @@ final class UserSessionManager: ObservableObject {
     /// picked user, or have no stored access token are dropped. The primary
     /// user is the first picked user, unless kid-safe browsing is enabled
     /// and a member is restricted: then the most restricted member is the primary.
+    ///
+    /// The household kid flags are synced first (at most about 1.5 s, otherwise the
+    /// cached flags are used), so a kid marked on another device is a kid here.
+    ///
+    /// - Important: to sign in an existing couch again, pass `pickOrderedMemberIDs(of:)`,
+    ///   so the pick order is kept and a kid never becomes the first pick.
     @MainActor
     func signIn(userIDs: [String]) async throws {
+        await refreshKidsBeforeSignIn(userIDs: userIDs)
+
         let members = couchMembers(
             for: userIDs,
             in: StoredValues[.User.users]
@@ -234,13 +242,22 @@ final class UserSessionManager: ObservableObject {
         }
 
         guard currentSession != nil else { return }
-        guard Defaults[.signOutOnBackground] else { return }
-        guard !hasActivePlayback else { return }
 
-        let backgroundedInterval = Date.now.timeIntervalSince(Defaults[.backgroundTimeStamp])
-        if backgroundedInterval > Defaults[.backgroundSignOutInterval] {
-            await signOut(reason: .backgroundTimeout)
+        if Defaults[.signOutOnBackground], !hasActivePlayback {
+            let backgroundedInterval = Date.now.timeIntervalSince(Defaults[.backgroundTimeStamp])
+            if backgroundedInterval > Defaults[.backgroundSignOutInterval] {
+                await signOut(reason: .backgroundTimeout)
+            }
         }
+
+        // Only while still signed in
+        guard let currentSession else { return }
+
+        if Container.shared.couchKidsStore().lastRefreshDate?.isStale(with: .minutes(10)) ?? true {
+            await refreshKidsAndMembers(of: currentSession)
+        }
+
+        await applyStricterPrimaryIfNeeded()
     }
 
     private enum ServerInformationRefreshReason {
@@ -302,17 +319,12 @@ final class UserSessionManager: ObservableObject {
             )
         }
 
-        // Keep the other couch members' policies fresh
-        for member in currentSession.couch.otherMembers where member.storedAccessToken != nil {
-            do {
-                try await member.updateUserData(server: currentSession.server)
-            } catch {
-                logger.error(
-                    "Unable to refresh couch member information",
-                    metadata: ["error": .string(error.localizedDescription)]
-                )
-            }
-        }
+        // Keep the other couch members' policies fresh (fetched concurrently, applied in order), then the kid flags
+        await UserState.refreshUserData(currentSession.couch.otherMembers, server: currentSession.server)
+        await Container.shared.couchKidsStore().refresh(
+            server: currentSession.server,
+            users: storedUsers(on: currentSession.server)
+        )
     }
 
     private func setupObservations() {
@@ -407,7 +419,11 @@ extension UserSessionManager {
     ///
     /// Drops IDs that are not stored users, are on another server than the
     /// first stored user, have no stored access token, or are duplicates.
-    private func couchMembers(for userIDs: [String], in storedUsers: [UserState]) -> [UserState] {
+    ///
+    /// - Parameters:
+    ///   - userIDs: the user ids in pick order.
+    ///   - storedUsers: usually `StoredValues[.User.users]`.
+    func couchMembers(for userIDs: [String], in storedUsers: [UserState]) -> [UserState] {
         var couchServerID: String?
         var seenIDs: Set<String> = []
         var members: [UserState] = []
@@ -432,13 +448,83 @@ extension UserSessionManager {
     /// The member the app should browse as.
     ///
     /// The first member, unless kid-safe browsing is enabled and a member
-    /// is restricted: then the most restricted member.
-    private func couchPrimary(of members: [UserState]) -> UserState? {
+    /// is restricted: then the most restricted member (lowest `restrictionScore`).
+    ///
+    /// - Parameter members: the couch members in pick order (see `pickOrderedMemberIDs(of:)`).
+    /// - Returns: `nil` for no members.
+    func couchPrimary(of members: [UserState]) -> UserState? {
         guard let firstMember = members.first else { return nil }
         guard members.count > 1, Defaults[.Couch.kidSafeBrowsing] else { return firstMember }
         guard members.contains(where: \.isRestricted) else { return firstMember }
 
         return members.min { $0.restrictionScore < $1.restrictionScore } ?? firstMember
+    }
+
+    /// The member ids of `couch` in the order they were picked:
+    /// `Defaults[.Couch.lastMemberIDs]` filtered to the couch, then any missing members in couch order.
+    ///
+    /// Every re-sign-in of an existing couch must pass this order to `signIn(userIDs:)`.
+    /// `CouchGroup.members` puts the primary first, so passing those would make the
+    /// primary (e.g. the kid) the first pick.
+    func pickOrderedMemberIDs(of couch: CouchGroup) -> [String] {
+        let couchMemberIDs = couch.memberIDs
+        var seenIDs: Set<String> = []
+        var orderedIDs: [String] = []
+
+        for userID in Defaults[.Couch.lastMemberIDs] where couchMemberIDs.contains(userID) {
+            guard seenIDs.insert(userID).inserted else { continue }
+
+            orderedIDs.append(userID)
+        }
+
+        for member in couch.members where seenIDs.insert(member.id).inserted {
+            orderedIDs.append(member.id)
+        }
+
+        return orderedIDs
+    }
+
+    /// Makes the current couch browse as a stricter member when one appeared,
+    /// e.g. a kid flag synced from another device or an age limit added on the server.
+    ///
+    /// Only acts on a group couch without active playback. Recomputes `couchPrimary(of:)`
+    /// over the stored members in pick order, and signs in again (keeping the pick order)
+    /// only when that member has a lower `restrictionScore` than the current primary.
+    /// It never makes browsing less strict.
+    ///
+    /// - Returns: whether the couch was signed in again.
+    @MainActor
+    @discardableResult
+    func applyStricterPrimaryIfNeeded() async -> Bool {
+        guard let currentSession, currentSession.couch.isGroup else { return false }
+        guard !hasActivePlayback else { return false }
+
+        let orderedIDs = pickOrderedMemberIDs(of: currentSession.couch)
+        let members = couchMembers(for: orderedIDs, in: StoredValues[.User.users])
+
+        guard let stricterPrimary = couchPrimary(of: members),
+              stricterPrimary.id != currentSession.user.id,
+              stricterPrimary.restrictionScore < currentSession.user.restrictionScore
+        else { return false }
+
+        logger.info(
+            "Couch: browsing as a stricter member",
+            metadata: [
+                "from": .string(currentSession.user.id),
+                "to": .string(stricterPrimary.id),
+            ]
+        )
+
+        do {
+            try await signIn(userIDs: orderedIDs)
+            return true
+        } catch {
+            logger.error(
+                "Unable to switch the couch to a stricter member",
+                metadata: ["error": .string(error.localizedDescription)]
+            )
+            return false
+        }
     }
 
     /// Rebuilds the current couch from `Defaults[.Couch.memberIDs]`,
@@ -460,5 +546,95 @@ extension UserSessionManager {
             primary: primary,
             members: members
         )
+    }
+}
+
+// MARK: - Kids
+
+extension UserSessionManager {
+
+    /// How long a sign-in waits for the household kid flags before using the cached ones.
+    private static let kidsRefreshTimeout: Duration = .milliseconds(1500)
+
+    /// The stored users of a server.
+    private func storedUsers(on server: ServerState) -> [UserState] {
+        StoredValues[.User.users].filter { $0.serverID == server.id }
+    }
+
+    /// Syncs the kid flags of the first picked user's server, bounded to `kidsRefreshTimeout`.
+    ///
+    /// On timeout the sign-in continues with the cached flags; the refresh finishes in the
+    /// background and then makes the couch stricter if a kid flag arrived.
+    @MainActor
+    private func refreshKidsBeforeSignIn(userIDs: [String]) async {
+        let storedUsers = StoredValues[.User.users]
+
+        guard let firstUser = userIDs.lazy.compactMap({ userID in storedUsers.first { $0.id == userID } }).first,
+              let server = StoredValues[.Server.servers].first(where: { $0.id == firstUser.serverID })
+        else { return }
+
+        let serverUsers = storedUsers.filter { $0.serverID == server.id }
+        let kidsStore = Container.shared.couchKidsStore()
+
+        let refreshTask = Task { @MainActor in
+            await kidsStore.refresh(server: server, users: serverUsers)
+        }
+
+        let didFinish = await Self.waitForTask(refreshTask, timeout: Self.kidsRefreshTimeout)
+
+        guard !didFinish else { return }
+
+        logger.warning("Kid flags: refresh is slow, signing in with the cached flags")
+
+        Task { @MainActor [weak self] in
+            await refreshTask.value
+            await self?.applyStricterPrimaryIfNeeded()
+        }
+    }
+
+    /// Refreshes the user data of the couch members and the household kid flags.
+    @MainActor
+    private func refreshKidsAndMembers(of session: UserSession) async {
+        await UserState.refreshUserData(session.couch.members, server: session.server)
+        await Container.shared.couchKidsStore().refresh(
+            server: session.server,
+            users: storedUsers(on: session.server)
+        )
+    }
+
+    /// Waits for `task` at most `timeout`. The task itself is never cancelled.
+    ///
+    /// - Returns: whether the task finished in time.
+    @MainActor
+    private static func waitForTask(_ task: Task<Void, Never>, timeout: Duration) async -> Bool {
+        let race = CouchTaskRace()
+
+        return await withCheckedContinuation { (continuation: CheckedContinuation<Bool, Never>) in
+            race.continuation = continuation
+
+            Task { @MainActor in
+                await task.value
+                race.finish(true)
+            }
+
+            Task { @MainActor in
+                try? await Task.sleep(for: timeout)
+                race.finish(false)
+            }
+        }
+    }
+}
+
+/// Resumes a continuation once, with the result of whichever side finishes first. Main actor only.
+@MainActor
+private final class CouchTaskRace {
+
+    var continuation: CheckedContinuation<Bool, Never>?
+
+    func finish(_ result: Bool) {
+        guard let continuation else { return }
+
+        self.continuation = nil
+        continuation.resume(returning: result)
     }
 }
