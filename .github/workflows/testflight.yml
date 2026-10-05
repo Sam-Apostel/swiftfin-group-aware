@@ -3,16 +3,16 @@ name: "TestFlight ✈️"
 # Runs entirely on the self-hosted runner on Sam's Mac (labels: self-hosted, macOS, swiftfin-mac):
 # no GitHub-hosted macOS minutes are used.
 #
-# Signing is Xcode's automatic signing, authenticated with an App Store Connect API key
-# (-allowProvisioningUpdates). Xcode creates/fetches the cloud-managed distribution certificate and
-# App Store profiles itself, so no .p12 or .mobileprovision secrets are needed.
+# Signing and upload go through the Apple account signed in to Xcode on that Mac (Xcode ▸ Settings ▸
+# Accounts) with automatic signing (-allowProvisioningUpdates), so no secrets are needed (same as
+# slide-station). If the optional APP_STORE_* secrets exist, the App Store Connect API key is used instead.
 #
 # Triggers:
 #   - manually (Actions ▸ TestFlight ✈️ ▸ Run workflow)
 #   - on every push to main, ONLY when the repository variable TESTFLIGHT_ON_PUSH is "true".
 #     Bursts of pushes collapse into a single build of the newest commit.
 #
-# Secrets (Settings ▸ Secrets and variables ▸ Actions ▸ Secrets):
+# Optional secrets (Settings ▸ Secrets and variables ▸ Actions ▸ Secrets):
 #   APP_STORE_KEY_ID        API key id
 #   APP_STORE_ISSUER_ID     issuer id
 #   APP_STORE_KEY_CONTENTS  the AuthKey_XXXX.p8 file, as-is or base64 (key role: Admin, needed for cloud signing)
@@ -38,7 +38,7 @@ on:
         required: false
         type: string
       build:
-        description: "Build (empty = this run's number)"
+        description: "Build (empty = UTC time, yyyymmddHHMM)"
         required: false
         type: number
 
@@ -60,19 +60,23 @@ jobs:
           - platform: iOS
             scheme: "Swiftfin"
             destination: "generic/platform=iOS"
+            archive_signing: ""
           - platform: tvOS
             scheme: "Swiftfin tvOS"
             destination: "generic/platform=tvOS"
+            # a development profile needs a registered Apple TV: archive unsigned, the export signs for the App Store
+            archive_signing: "CODE_SIGNING_ALLOWED=NO"
 
     env:
       SELECTED_PLATFORM: ${{ inputs.platform || 'All' }}
       SCHEME: ${{ matrix.scheme }}
       DESTINATION: ${{ matrix.destination }}
+      ARCHIVE_SIGNING: ${{ matrix.archive_signing }}
       KEY_ID: ${{ secrets.APP_STORE_KEY_ID }}
       ISSUER_ID: ${{ secrets.APP_STORE_ISSUER_ID }}
       KEY_CONTENTS: ${{ secrets.APP_STORE_KEY_CONTENTS }}
       INPUT_VERSION: ${{ inputs.version }}
-      BUILD_NUMBER: ${{ inputs.build || github.run_number }}
+      INPUT_BUILD: ${{ inputs.build }}
 
     steps:
       - name: Skip unselected platform
@@ -95,27 +99,26 @@ jobs:
           set -euo pipefail
           export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
-          for v in KEY_ID ISSUER_ID KEY_CONTENTS; do
-            if [ -z "$(printf '%s' "${!v}" | tr -d '[:space:]')" ]; then
-              echo "Missing secret for $v (see the header of this workflow)"
-              exit 1
-            fi
-          done
-
+          auth=( -allowProvisioningUpdates )
           key_path="$RUNNER_TEMP/AuthKey.p8"
-          # Accept the .p8 as-is or base64-encoded.
-          if printf '%s' "$KEY_CONTENTS" | grep -q "BEGIN PRIVATE KEY"; then
-            printf '%s\n' "$KEY_CONTENTS" > "$key_path"
+          if [ -n "$(printf '%s' "$KEY_CONTENTS$KEY_ID$ISSUER_ID" | tr -d '[:space:]')" ]; then
+            echo "Signing with the App Store Connect API key"
+            # Accept the .p8 as-is or base64-encoded.
+            if printf '%s' "$KEY_CONTENTS" | grep -q "BEGIN PRIVATE KEY"; then
+              printf '%s\n' "$KEY_CONTENTS" > "$key_path"
+            else
+              printf '%s' "$KEY_CONTENTS" | tr -d '[:space:]' | base64 --decode -o "$key_path"
+            fi
+            auth+=(
+              -authenticationKeyPath "$key_path"
+              -authenticationKeyID "$(printf '%s' "$KEY_ID" | tr -d '[:space:]')"
+              -authenticationKeyIssuerID "$(printf '%s' "$ISSUER_ID" | tr -d '[:space:]')"
+            )
           else
-            printf '%s' "$KEY_CONTENTS" | tr -d '[:space:]' | base64 --decode -o "$key_path"
+            echo "Signing with the Apple account signed in to Xcode on this Mac"
           fi
-          auth=(
-            -allowProvisioningUpdates
-            -authenticationKeyPath "$key_path"
-            -authenticationKeyID "$(printf '%s' "$KEY_ID" | tr -d '[:space:]')"
-            -authenticationKeyIssuerID "$(printf '%s' "$ISSUER_ID" | tr -d '[:space:]')"
-          )
 
+          BUILD_NUMBER="${INPUT_BUILD:-$(date -u +%Y%m%d%H%M)}"
           version_args=( "CURRENT_PROJECT_VERSION=$BUILD_NUMBER" )
           if [ -n "${INPUT_VERSION:-}" ]; then
             version_args+=( "MARKETING_VERSION=$INPUT_VERSION" )
@@ -133,9 +136,11 @@ jobs:
           <dict>
             <key>method</key><string>app-store-connect</string>
             <key>destination</key><string>upload</string>
+            <key>teamID</key><string>Y3734CNKQ8</string>
             <key>signingStyle</key><string>automatic</string>
             <key>manageAppVersionAndBuildNumber</key><false/>
             <key>uploadSymbols</key><true/>
+            <key>testFlightInternalTestingOnly</key><false/>
           </dict>
           </plist>
           PLIST
@@ -156,6 +161,7 @@ jobs:
             -skipPackagePluginValidation \
             "${auth[@]}" \
             "${version_args[@]}" \
+            ${ARCHIVE_SIGNING:+"$ARCHIVE_SIGNING"} \
             > "$log" 2>&1 || status=$?
 
           if [ $status -ne 0 ]; then
