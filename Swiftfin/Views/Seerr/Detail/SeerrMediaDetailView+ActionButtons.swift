@@ -56,6 +56,11 @@ extension SeerrMediaDetailView {
             viewModel.background.is(.requesting)
         }
 
+        /// Busy while requesting, or while checking whether the title is already in the library.
+        private var isRequestBusy: Bool {
+            isRequesting || viewModel.isLookingUpLibraryItem
+        }
+
         private var isUpdatingAudience: Bool {
             viewModel.background.is(.updatingAudience)
         }
@@ -93,10 +98,10 @@ extension SeerrMediaDetailView {
                     title: L10n.SeerrDetail.request,
                     systemImage: "plus",
                     isProminent: true,
-                    isLoading: isRequesting,
+                    isLoading: isRequestBusy,
                     action: onRequest
                 )
-                .disabled(isRequesting)
+                .disabled(isRequestBusy)
 
             case let .requested(requesterName):
                 capsuleButton(

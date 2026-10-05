@@ -77,6 +77,9 @@ final class SeerrMediaDetailViewModel: ViewModel {
     /// The Jellyfin item as seen by the current (primary) user, if it is in the library.
     @Published
     private(set) var libraryItem: BaseItemDto?
+    /// `true` while the TMDB → library fallback lookup runs.
+    @Published
+    private(set) var isLookingUpLibraryItem: Bool = false
     /// A request made from this screen, kept so the status flips before Seerr reports it.
     @Published
     private(set) var submittedRequest: SeerrRequest?
@@ -86,6 +89,7 @@ final class SeerrMediaDetailViewModel: ViewModel {
     private(set) var watchlistEntry: AudienceWatchlistEntry?
 
     private var isSubmittingRequest = false
+    private var libraryLookupTask: Task<Void, Never>?
 
     private var seerrService: SeerrService {
         Container.shared.seerrService()
@@ -120,6 +124,18 @@ final class SeerrMediaDetailViewModel: ViewModel {
             .$entries
             .sink { [weak self] entries in
                 self?.watchlistEntry = entries.first { $0.id == entryID }
+            }
+            .store(in: &cancellables)
+
+        // Load as soon as Seerr gets connected from the "not connected" state
+        Container.shared
+            .seerrService()
+            .$client
+            .dropFirst()
+            .sink { [weak self] client in
+                guard let self, client != nil, !self.isSeerrConfigured else { return }
+
+                self.refresh()
             }
             .store(in: &cancellables)
     }
@@ -230,39 +246,59 @@ final class SeerrMediaDetailViewModel: ViewModel {
         isSeerrConfigured = true
 
         let details = try await client.details(mediaType: mediaType, tmdbID: tmdbID)
-        let libraryItem = await resolveLibraryItem(details: details, session: session)
+        let libraryItem = await seerrLibraryItem(details: details, session: session)
 
         self.details = details
-        self.libraryItem = libraryItem
+
+        if let libraryItem {
+            self.libraryItem = libraryItem
+        } else {
+            lookUpLibraryItem(details: details, session: session)
+        }
     }
 
-    /// Resolves the title to a Jellyfin item visible to the current user: Seerr's `jellyfinMediaId`
-    /// first, then the watchlist store's TMDB → item map (covers titles Seerr hasn't synced yet).
-    private func resolveLibraryItem(details: SeerrMediaDetails, session: UserSession) async -> BaseItemDto? {
-        if let itemID = details.mediaInfo?.jellyfinMediaId, itemID.isNotEmpty {
-            do {
-                let request = Paths.getItem(itemID: itemID, userID: session.user.id)
-                return try await session.client.send(request).value
-            } catch {
-                logger.warning(
-                    "Seerr's Jellyfin item is not reachable for the current user",
-                    metadata: [
-                        "itemID": .string(itemID),
-                        "error": .string(error.localizedDescription),
-                    ]
-                )
-            }
-        }
+    /// The Jellyfin item Seerr links to (`jellyfinMediaId`), if the current user can see it.
+    private func seerrLibraryItem(details: SeerrMediaDetails, session: UserSession) async -> BaseItemDto? {
+        guard let itemID = details.mediaInfo?.jellyfinMediaId, itemID.isNotEmpty else { return nil }
 
+        do {
+            let request = Paths.getItem(itemID: itemID, userID: session.user.id)
+            return try await session.client.send(request).value
+        } catch {
+            logger.warning(
+                "Seerr's Jellyfin item is not reachable for the current user",
+                metadata: [
+                    "itemID": .string(itemID),
+                    "error": .string(error.localizedDescription),
+                ]
+            )
+            return nil
+        }
+    }
+
+    /// Falls back to the watchlist store's TMDB → item map (covers titles Seerr hasn't synced yet).
+    ///
+    /// Runs after the screen is shown: building the map can take a moment the first time.
+    private func lookUpLibraryItem(details: SeerrMediaDetails, session: UserSession) {
         let probe = makeEntry(
             details: details,
             audience: [],
             addedBy: session.user.id,
             jellyfinItemID: nil
         )
-        let items = await watchlistStore.libraryItems(for: [probe], session: session)
+        let store = watchlistStore
 
-        return items[probe.id]
+        libraryLookupTask?.cancel()
+        isLookingUpLibraryItem = true
+
+        libraryLookupTask = Task { [weak self] in
+            let items = await store.libraryItems(for: [probe], session: session)
+
+            guard let self, !Task.isCancelled else { return }
+
+            self.libraryItem = items[probe.id]
+            self.isLookingUpLibraryItem = false
+        }
     }
 
     private func reloadDetails(client: SeerrClient) async {
@@ -365,7 +401,7 @@ final class SeerrMediaDetailViewModel: ViewModel {
             try await watchlistStore.upsert(entry, sessions: session.householdSessions())
 
             watchlistEntry = watchlistStore.entry(id: entry.id) ?? entry
-            events.send(.audienceSaved(offerRequest: status == .notRequested))
+            events.send(.audienceSaved(offerRequest: status == .notRequested && !isLookingUpLibraryItem))
 
             await syncSeerrWatchlists(
                 adding: audience,
@@ -421,19 +457,8 @@ final class SeerrMediaDetailViewModel: ViewModel {
         guard let client = seerrService.client else { return }
 
         for jellyfinUserID in adding.union(removing).sorted() {
-            let seerrUserID: Int?
-
-            do {
-                seerrUserID = try await client.seerrUserID(forJellyfinUserID: jellyfinUserID)
-            } catch {
-                logger.warning(
-                    "Failed to map a Jellyfin user to Seerr",
-                    metadata: ["error": .string(error.localizedDescription)]
-                )
-                continue
-            }
-
-            guard let seerrUserID else { continue }
+            // Logs and returns nil when the person can't be mapped (or imported) into Seerr
+            guard let seerrUserID = await seerrService.seerrUserID(forJellyfinUserID: jellyfinUserID) else { continue }
 
             do {
                 if adding.contains(jellyfinUserID) {

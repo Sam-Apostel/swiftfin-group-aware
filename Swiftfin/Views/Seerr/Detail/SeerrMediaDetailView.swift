@@ -6,12 +6,16 @@
 // Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
+import Defaults
 import JellyfinAPI
 import SwiftUI
 
 /// Detail screen for a Seerr (TMDB) movie or show: play it when it's in the library,
 /// request it otherwise, and tag who it's for.
 struct SeerrMediaDetailView: View {
+
+    @Default(.accentColor)
+    private var accentColor
 
     @Router
     private var router
@@ -110,6 +114,19 @@ struct SeerrMediaDetailView: View {
                 Label(L10n.SeerrDetail.notConfiguredTitle, systemImage: "popcorn")
             } description: {
                 Text(L10n.SeerrDetail.notConfiguredDescription)
+            } actions: {
+                Button {
+                    router.route(to: .seerrSettings)
+                } label: {
+                    Text(L10n.connect)
+                        .frame(maxWidth: .infinity)
+                }
+                .fontWeight(.semibold)
+                .backport
+                .buttonStyle(.glassProminent.shadow(false))
+                .tint(accentColor)
+                .controlSize(.large)
+                .frame(maxWidth: 300)
             }
         }
     }
