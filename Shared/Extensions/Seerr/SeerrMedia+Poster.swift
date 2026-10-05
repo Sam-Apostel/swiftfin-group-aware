@@ -53,6 +53,15 @@ extension SeerrMedia: Poster {
         }
     }
 
+    /// TMDB backdrop width for landscape posters: the tvOS hero and focused-poster backgrounds fill a 4K screen.
+    private static var landscapeBackdropSize: String {
+        #if os(tvOS)
+        "w1280"
+        #else
+        "w780"
+        #endif
+    }
+
     func imageSources(
         for displayType: PosterDisplayType,
         environment: Empty
@@ -60,7 +69,7 @@ extension SeerrMedia: Poster {
         let urls: [URL?] = switch displayType {
         case .landscape:
             [
-                SeerrImage.url(backdropPath, size: "w780"),
+                SeerrImage.url(backdropPath, size: Self.landscapeBackdropSize),
                 SeerrImage.url(posterPath, size: "w342"),
             ]
 

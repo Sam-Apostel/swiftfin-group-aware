@@ -8,10 +8,9 @@
 
 import SwiftUI
 
-// Seerr screens are iOS only (views live in `Swiftfin/Views/Seerr`).
-// #13, #14 and #15 append their routes to this file.
+// Seerr views have the same type names on both platforms:
+// iOS in `Swiftfin/Views/Seerr`, tvOS in `Swiftfin tvOS/Views/Seerr`.
 
-#if os(iOS)
 extension NavigationRoute {
 
     // MARK: - Settings
@@ -33,6 +32,8 @@ extension NavigationRoute {
         }
     }
 
+    #if os(iOS)
+
     // MARK: - Watchlists
 
     static var seerrWatchlists: NavigationRoute {
@@ -42,5 +43,18 @@ extension NavigationRoute {
             WatchlistsView()
         }
     }
+    #endif
+
+    #if os(tvOS)
+
+    // MARK: - Search
+
+    static var seerrSearch: NavigationRoute {
+        NavigationRoute(
+            id: "seerr-search"
+        ) {
+            SeerrSearchView()
+        }
+    }
+    #endif
 }
-#endif

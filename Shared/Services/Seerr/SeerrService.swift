@@ -453,6 +453,7 @@ final class SeerrService: ObservableObject {
         client = apiKeyClient ?? preferredSessionClient()
 
         checkBrowsingSession()
+        backfillHouseholdServerIfNeeded()
     }
 
     /// Points `client` at the API key, else at the preferred session. Keeps the same instance when nothing changed.

@@ -136,6 +136,9 @@ final class SeerrSettingsViewModel: ObservableObject {
 
         refresh()
 
+        // Share the URL (only the URL) with the household, so an Apple TV can find the server
+        seerrService.publishHouseholdServer()
+
         if !seerrService.hasAPIKey, seerrService.signedInUserIDs.isEmpty,
            let currentUserID = Container.shared.currentUserSession()?.user.id
         {

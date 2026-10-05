@@ -199,6 +199,21 @@ final class SeerrMediaDetailViewModel: ViewModel {
         submittedRequest?.requestedBy?.displayName ?? activeRequest?.requestedBy?.displayName
     }
 
+    /// The Jellyfin user a request is made as; `nil` without a user session.
+    ///
+    /// - iOS: the primary user.
+    /// - tvOS: a grown-up on the couch when the primary is a kid (kid-safe browsing),
+    ///   see `SeerrService.requesterJellyfinUserID(for:)`.
+    var requesterJellyfinUserID: String? {
+        guard let userSession else { return nil }
+
+        #if os(tvOS)
+        return seerrService.requesterJellyfinUserID(for: userSession.couch)
+        #else
+        return userSession.user.id
+        #endif
+    }
+
     /// Seasons that can be picked in the TV request sheet (specials and empty seasons are skipped, like Seerr does).
     var requestableSeasons: [SeerrSeason] {
         (details?.seasons ?? [])
@@ -328,10 +343,10 @@ final class SeerrMediaDetailViewModel: ViewModel {
             let session = try requireUserSession()
             let requestedSeasons = mediaType == .tv ? seasons : nil
 
-            // The primary user's own Quick Connect session, else the API key as them
+            // The requester's own Quick Connect session, else the API key as them
             // (or as the key owner when they have no Seerr account).
             let request = try await seerrService.perform(
-                asJellyfinUserID: session.user.id,
+                asJellyfinUserID: requesterJellyfinUserID ?? session.user.id,
                 fallbackToAPIKeyOwner: true
             ) { userClient in
                 try await userClient.request(
