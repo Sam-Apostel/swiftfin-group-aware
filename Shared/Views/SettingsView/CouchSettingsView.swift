@@ -37,6 +37,8 @@ struct CouchSettingsView: View {
             browsingSection
 
             kidsSection
+
+            ReadyAlertsSettingsSection()
         }
         .navigationTitle(L10n.CouchSettings.couchSettings)
         .onAppear {
