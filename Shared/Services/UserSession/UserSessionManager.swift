@@ -56,6 +56,18 @@ final class UserSessionManager: ObservableObject {
     @Published
     private(set) var pendingDeepLink: DeepLink?
 
+    /// Whether to ask "Still Sam, Lisa & Tuur?" before the couch keeps browsing.
+    ///
+    /// Set when `start()` restores a group couch (a cold launch), and when the app comes back
+    /// to the foreground signed in as a group couch, with nothing playing, after
+    /// `couchConfirmationInterval` or more in the background. Cleared by `signIn(userIDs:)`,
+    /// `confirmCouch()`, and whenever the couch is not a group (a solo couch never asks).
+    @Published
+    private(set) var shouldConfirmCouch = false
+
+    /// How long the app must be in the background before a group couch is asked to confirm.
+    static let couchConfirmationInterval: TimeInterval = 20 * 60
+
     let routePublisher = PassthroughSubject<NavigationRoute, Never>()
 
     var cancellables = Set<AnyCancellable>()
@@ -86,6 +98,11 @@ final class UserSessionManager: ObservableObject {
             }
 
             try await updateCurrentSession(with: resolveStoredSession())
+
+            // Yesterday's couch may not be today's: ask before browsing as everyone again
+            if currentSession?.couch.isGroup == true {
+                shouldConfirmCouch = true
+            }
 
             // A restored couch keeps its stored primary: on a cold launch (no foreground
             // notification) sync the kid flags too, so it turns stricter by itself
@@ -138,6 +155,15 @@ final class UserSessionManager: ObservableObject {
     @MainActor
     func signIn(userIDs: [String]) async throws {
         try await signIn(userIDs: userIDs, refreshingKids: true)
+
+        // Someone just picked this couch
+        shouldConfirmCouch = false
+    }
+
+    /// The people on the couch said they are still there ("Still Sam, Lisa & Tuur?" → Yes).
+    @MainActor
+    func confirmCouch() {
+        shouldConfirmCouch = false
     }
 
     /// `signIn(userIDs:)`, optionally without the bounded kids refresh first.
@@ -214,10 +240,13 @@ final class UserSessionManager: ObservableObject {
         do {
             let deepLinkSession = try session(for: deepLink)
             let currentSession = currentSession
-            let isSameUserSession = currentSession?.server.id == deepLinkSession.server.id && currentSession?.user.id == deepLinkSession
-                .user.id
 
-            if !isSameUserSession {
+            // A link for anyone on the couch (e.g. Sam's "It's ready" while the couch browses as Tuur)
+            // opens as the couch: switching users would break it up and drop kid-safe browsing
+            let isOnCurrentCouch = currentSession?.server.id == deepLinkSession.server.id
+                && currentSession?.couch.memberIDs.contains(deepLinkSession.user.id) == true
+
+            if !isOnCurrentCouch {
                 try await authenticate(
                     user: deepLinkSession.user,
                     authenticationAction: authenticationAction
@@ -255,6 +284,8 @@ final class UserSessionManager: ObservableObject {
 
     @MainActor
     func appWillEnterForeground() async {
+        let backgroundedInterval = Date.now.timeIntervalSince(Defaults[.backgroundTimeStamp])
+
         await refreshCurrentSession()
 
         Task {
@@ -264,10 +295,18 @@ final class UserSessionManager: ObservableObject {
         guard currentSession != nil else { return }
 
         if Defaults[.signOutOnBackground], !hasActivePlayback {
-            let backgroundedInterval = Date.now.timeIntervalSince(Defaults[.backgroundTimeStamp])
             if backgroundedInterval > Defaults[.backgroundSignOutInterval] {
                 await signOut(reason: .backgroundTimeout)
             }
+        }
+
+        // Still signed in as a group after a long break: the people on the couch may have changed
+        if let currentSession,
+           currentSession.couch.isGroup,
+           !hasActivePlayback,
+           backgroundedInterval >= Self.couchConfirmationInterval
+        {
+            shouldConfirmCouch = true
         }
 
         // Only while still signed in
@@ -407,6 +446,11 @@ final class UserSessionManager: ObservableObject {
             state = .signedOut
         } else {
             state = .signedIn
+        }
+
+        // Only a group couch is ever asked "Still Sam, Lisa & Tuur?"
+        if newSession?.couch.isGroup != true {
+            shouldConfirmCouch = false
         }
 
         newSession?.didStart()

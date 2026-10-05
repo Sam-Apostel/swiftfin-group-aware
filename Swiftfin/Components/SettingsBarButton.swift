@@ -10,6 +10,9 @@ import SwiftUI
 
 struct SettingsBarButton: View {
 
+    @Router
+    private var router
+
     let server: ServerState
     let user: UserState
     let couch: CouchGroup?
@@ -50,6 +53,26 @@ struct SettingsBarButton: View {
                 }
             }
         }
-        .accessibilityLabel(L10n.settings)
+        // Long-press: change who's on the couch without going through Settings
+        .contextMenu {
+            Button(
+                L10n.CouchSwitcher.changeWhosOnTheCouch,
+                systemImage: "sofa",
+                action: openCouchSwitcher
+            )
+        }
+        .accessibilityLabel(settingsAccessibilityLabel)
+        .accessibilityAction(named: L10n.CouchSwitcher.changeWhosOnTheCouch, openCouchSwitcher)
+    }
+
+    /// "Settings. On the couch: Sam, Lisa and Tuur" for a group couch, otherwise "Settings".
+    private var settingsAccessibilityLabel: String {
+        guard let couch, couch.isGroup else { return L10n.settings }
+
+        return L10n.CouchSwitcher.settingsAccessibilityLabel(couch.displayNames)
+    }
+
+    private func openCouchSwitcher() {
+        router.route(to: .couchSwitcher)
     }
 }

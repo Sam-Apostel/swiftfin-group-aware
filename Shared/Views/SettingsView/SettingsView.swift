@@ -80,7 +80,7 @@ struct SettingsView: View {
                     router.dismiss()
                 }
             } label: {
-                Text(L10n.CouchSettings.changeWhosWatching)
+                Text(L10n.CouchSwitcher.switchUserOrServer)
                     .frame(maxWidth: .infinity)
                     // Otherwise non-Liquid Glass only uses text height
                     .if(!UIDevice.supportsLiquidGlass) { button in
@@ -100,21 +100,18 @@ struct SettingsView: View {
             #if os(iOS)
             .controlSize(.large)
             #endif
+            .accessibilityHint(L10n.CouchSwitcher.switchUserOrServerHint)
         }
     }
 
+    /// Opens the couch switcher: add people or take them off without signing anyone out.
+    /// One focus stop on tvOS ("Couch settings" is the next row).
     @ViewBuilder
     private func couchMembersRow(couch: CouchGroup, server: ServerState) -> some View {
-        #if os(tvOS)
-        // A button, so the row is focusable with the Siri Remote
-        Button {
-            router.route(to: .couchSettings)
-        } label: {
+        ChevronButton(action: { router.route(to: .couchSwitcher) }) {
             couchMembersLabel(couch: couch, server: server)
         }
-        #else
-        couchMembersLabel(couch: couch, server: server)
-        #endif
+        .accessibilityHint(L10n.CouchSwitcher.changeWhosOnTheCouch)
     }
 
     @ViewBuilder

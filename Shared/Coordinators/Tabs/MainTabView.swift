@@ -143,6 +143,8 @@ struct MainTabView: View {
             .audienceWatchlistSaveErrorAlert()
             // "It's ready" banner (iOS) / alert (tvOS) on launch and couch start
             .readyAlertsBanner()
+            // "Still Sam, Lisa & Tuur?" after a cold launch or a long break
+            .couchStillHerePrompt(tabCoordinator: tabCoordinator)
             #if os(iOS)
             // "Vote for tonight": a TV on the couch started a vote
             .couchVotePrompt()
