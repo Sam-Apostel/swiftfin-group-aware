@@ -285,7 +285,8 @@ final class SeerrService: ObservableObject {
             } catch let error as SeerrError where error.isAuthenticationFailure {
                 // A 403 also means "missing permission": only an expired session fails `/auth/me`
                 guard await Self.isSessionExpired(memberClient) else {
-                    throw error
+                    // Still signed in: never say the sign-in ran out (#55)
+                    throw SeerrError.server(status: 403, message: L10n.Seerr.errorNoPermission)
                 }
 
                 if let renewedClient = await renewSession(jellyfinUserID: jellyfinUserID) {
@@ -633,7 +634,7 @@ final class SeerrService: ObservableObject {
                 )
 
             default:
-                // e.g. a proxy's 502 while Seerr restarts: worth retrying
+                // Any other status: worth retrying (a proxy's 502/503/504 arrives as `.unreachable`)
                 throw ErrorMessage(L10n.SeerrQuickConnect.errorQuickConnectDisabled)
             }
         }

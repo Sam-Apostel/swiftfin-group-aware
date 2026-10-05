@@ -17,7 +17,7 @@ extension L10n {
         // MARK: - Status
 
         static let available = "Available"
-        static let blocklisted = "Blocklisted"
+        static let blocklisted = "Blocked"
         static let declined = "Declined"
         static let notRequested = "Not requested"
         static let partiallyAvailable = "Partially available"

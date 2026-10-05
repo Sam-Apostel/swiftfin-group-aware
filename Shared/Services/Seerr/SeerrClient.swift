@@ -736,6 +736,11 @@ private struct SeerrClientDelegate: APIClientDelegate, Sendable {
             throw SeerrError.unauthorized
         }
 
+        // Seerr itself never answers 502/503/504: a reverse proxy in front of a Seerr that is down
+        if statusCode == 502 || statusCode == 503 || statusCode == 504 {
+            throw SeerrError.unreachable(host: SeerrError.displayHost(of: apiBaseURL))
+        }
+
         throw SeerrError.server(status: statusCode, message: body?.message ?? body?.error)
     }
 

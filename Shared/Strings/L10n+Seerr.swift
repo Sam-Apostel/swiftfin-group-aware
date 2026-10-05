@@ -47,6 +47,8 @@ extension L10n {
         static let errorUnauthorizedSuggestion = "Check the API key in Seerr under Settings → General."
         static let errorSessionExpired = "Your Seerr sign-in ran out"
         static let errorSessionExpiredSuggestion = "Sign in again in Seerr settings"
+        /// A signed-in person's request that Seerr refused: a missing permission, not an expired sign-in.
+        static let errorNoPermission = "Seerr doesn't allow this for this person. An admin can change their permissions in Seerr → Users."
         static let errorUnreachableSuggestion = "Check that the Seerr server is on, then try again. Your library still works."
         static let errorDecoding = "Seerr sent a response Couchfin couldn't read."
         static let errorInvalidURL = "Enter a valid Seerr server URL, like http://192.168.1.10:5055."
