@@ -33,13 +33,13 @@ extension NavigationRoute {
         }
     }
 
-    // MARK: - Watchlists (placeholder from #13; #15 replaces the destination with `WatchlistsView`)
+    // MARK: - Watchlists
 
     static var seerrWatchlists: NavigationRoute {
         NavigationRoute(
             id: "seerr-watchlists"
         ) {
-            SeerrWatchlistsPlaceholderView()
+            WatchlistsView()
         }
     }
 }
