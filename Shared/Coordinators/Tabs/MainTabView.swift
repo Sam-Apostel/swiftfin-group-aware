@@ -158,7 +158,8 @@ private struct FirstTabSettingsBarButton: View {
         {
             SettingsBarButton(
                 server: userSession.server,
-                user: userSession.user
+                user: userSession.user,
+                couch: userSession.couch
             ) {
                 router.route(to: .settings)
             }

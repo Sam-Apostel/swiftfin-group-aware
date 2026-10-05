@@ -20,6 +20,8 @@ struct SettingsView: View {
 
     @Default(.userAccentColor)
     private var accentColor
+    @Default(.Couch.lastMemberIDs)
+    private var lastCouchMemberIDs
 
     @InjectedObject(\.userSessionManager)
     private var userSessionManager: UserSessionManager
@@ -31,6 +33,7 @@ struct SettingsView: View {
 
     var body: some View {
         Form(image: .jellyfinBlobBlue) {
+            couchSection
             serverSection
             customizeSection
             diagnosticsSection
@@ -41,6 +44,113 @@ struct SettingsView: View {
                 router.dismiss()
             }
         #endif
+    }
+
+    // MARK: - Couch Section
+
+    @ViewBuilder
+    private var couchSection: some View {
+        if let userSession = userSessionManager.currentSession {
+            Section {
+                couchMembersRow(
+                    couch: userSession.couch,
+                    server: userSession.server
+                )
+
+                ChevronButton(
+                    L10n.CouchSettings.couchSettings,
+                    systemName: "sofa.fill"
+                ) {
+                    router.route(to: .couchSettings)
+                }
+            } header: {
+                Text(L10n.Couch.title)
+            }
+        }
+
+        Section {
+            Button {
+                Task { @MainActor in
+                    UIDevice.impact(.medium)
+                    await userSessionManager.signOut(reason: .explicit)
+                    router.dismiss()
+                }
+            } label: {
+                Text(L10n.CouchSettings.changeWhosWatching)
+                    .frame(maxWidth: .infinity)
+                    // Otherwise non-Liquid Glass only uses text height
+                    .if(!UIDevice.supportsLiquidGlass) { button in
+                        button
+                            .frame(maxHeight: .infinity)
+                    }
+            }
+            .listRowInsets(.zero)
+            .listRowBackground(Color.clear)
+            #if os(iOS)
+            .listRowSeparator(.hidden)
+            #endif
+            .fontWeight(.semibold)
+            .backport
+            .buttonStyle(.glassProminent.shadow(false))
+            .tint(accentColor)
+            #if os(iOS)
+            .controlSize(.large)
+            #endif
+        }
+    }
+
+    @ViewBuilder
+    private func couchMembersRow(couch: CouchGroup, server: ServerState) -> some View {
+        #if os(tvOS)
+        // A button, so the row is focusable with the Siri Remote
+        Button {
+            router.route(to: .couchSettings)
+        } label: {
+            couchMembersLabel(couch: couch, server: server)
+        }
+        #else
+        couchMembersLabel(couch: couch, server: server)
+        #endif
+    }
+
+    @ViewBuilder
+    private func couchMembersLabel(couch: CouchGroup, server: ServerState) -> some View {
+        HStack(spacing: UIDevice.isTV ? 30 : 12) {
+            CouchAvatarStack(
+                users: couch.members,
+                server: server,
+                size: UIDevice.isTV ? 60 : 40
+            )
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L10n.CouchSettings.onTheCouch(couch.displayNames))
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+
+                if let browsingAs = browsingAsDescription(couch: couch) {
+                    Text(browsingAs)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// "Browsing as Tuur (kid-safe)" when kid-safe browsing made a restricted
+    /// member the primary instead of the first person picked.
+    private func browsingAsDescription(couch: CouchGroup) -> String? {
+        guard couch.isGroup, couch.primary.isRestricted else { return nil }
+
+        let firstPickID = lastCouchMemberIDs.first { couch.memberIDs.contains($0) }
+
+        if let firstPickID, firstPickID == couch.primary.id {
+            return nil
+        }
+
+        return L10n.CouchSettings.browsingAsKidSafe(couch.primary.username)
     }
 
     // MARK: - Server Section
@@ -77,36 +187,6 @@ struct SettingsView: View {
                 }
                 #endif
             }
-        }
-
-        Section {
-            Button {
-                Task { @MainActor in
-                    UIDevice.impact(.medium)
-                    await userSessionManager.signOut(reason: .explicit)
-                    router.dismiss()
-                }
-            } label: {
-                Text(L10n.switchUser)
-                    .frame(maxWidth: .infinity)
-                    // Otherwise non-Liquid Glass only uses text height
-                    .if(!UIDevice.supportsLiquidGlass) { button in
-                        button
-                            .frame(maxHeight: .infinity)
-                    }
-            }
-            .listRowInsets(.zero)
-            .listRowBackground(Color.clear)
-            #if os(iOS)
-            .listRowSeparator(.hidden)
-            #endif
-            .fontWeight(.semibold)
-            .backport
-            .buttonStyle(.glassProminent.shadow(false))
-            .tint(accentColor)
-            #if os(iOS)
-            .controlSize(.large)
-            #endif
         }
     }
 

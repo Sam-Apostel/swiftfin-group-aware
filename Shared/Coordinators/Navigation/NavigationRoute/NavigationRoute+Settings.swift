@@ -61,6 +61,14 @@ extension NavigationRoute {
     }
     #endif
 
+    static var couchSettings: NavigationRoute {
+        NavigationRoute(
+            id: "couchSettings"
+        ) {
+            CouchSettingsView()
+        }
+    }
+
     static var createDeviceProfile: NavigationRoute {
         NavigationRoute(
             id: "createDeviceProfile",

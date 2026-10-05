@@ -12,21 +12,42 @@ struct SettingsBarButton: View {
 
     let server: ServerState
     let user: UserState
+    let couch: CouchGroup?
     let action: () -> Void
+
+    init(
+        server: ServerState,
+        user: UserState,
+        couch: CouchGroup? = nil,
+        action: @escaping () -> Void
+    ) {
+        self.server = server
+        self.user = user
+        self.couch = couch
+        self.action = action
+    }
 
     var body: some View {
         Button(action: action) {
-            AlternateLayoutView {
-                // Seems necessary for button layout
-                Image(systemName: "gearshape.fill")
-            } content: {
-                UserProfileImage(
-                    userID: user.id,
-                    source: user.profileImageSource(
-                        client: server.client
-                    ),
-                    pipeline: .Swiftfin.local
+            if let couch, couch.isGroup {
+                CouchAvatarStack(
+                    users: couch.members,
+                    server: server,
+                    size: 28
                 )
+            } else {
+                AlternateLayoutView {
+                    // Seems necessary for button layout
+                    Image(systemName: "gearshape.fill")
+                } content: {
+                    UserProfileImage(
+                        userID: user.id,
+                        source: user.profileImageSource(
+                            client: server.client
+                        ),
+                        pipeline: .Swiftfin.local
+                    )
+                }
             }
         }
         .accessibilityLabel(L10n.settings)
