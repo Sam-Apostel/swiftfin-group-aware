@@ -29,10 +29,8 @@ struct SettingsView: View {
     @Router
     private var router
 
-    #if os(iOS)
     @InjectedObject(\.seerrService)
     private var seerrService: SeerrService
-    #endif
 
     // MARK: - Body
 
@@ -200,7 +198,6 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var requestsSection: some View {
-        #if os(iOS)
         Section {
             ChevronButton(
                 L10n.SeerrSettings.title,
@@ -214,10 +211,8 @@ struct SettingsView: View {
         } footer: {
             Text(L10n.SeerrSettings.requestsFooter)
         }
-        #endif
     }
 
-    #if os(iOS)
     private var seerrHostDescription: String {
         guard seerrService.isConfigured, let serverURL = seerrService.serverURL else {
             return L10n.SeerrSettings.notConnected
@@ -225,7 +220,6 @@ struct SettingsView: View {
 
         return serverURL.host() ?? serverURL.absoluteString
     }
-    #endif
 
     // MARK: - Customization Section
 

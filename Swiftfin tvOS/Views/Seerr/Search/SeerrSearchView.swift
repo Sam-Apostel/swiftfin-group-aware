@@ -8,14 +8,101 @@
 
 import SwiftUI
 
-/// tvOS placeholder for the pushed Seerr search screen (`NavigationRoute.seerrSearch`).
+/// Searches TMDB through Seerr with the standard tvOS search keyboard (and dictation).
 ///
-/// Replaced by the tvOS Discover issue.
+/// A pushed screen, so the Discover hero keeps the initial focus. Reuses `DiscoverViewModel`
+/// for its debounced, paged and cancellable search; its rows (`refresh`) are never loaded here.
 struct SeerrSearchView: View {
+
+    @Router
+    private var router
+
+    @State
+    private var searchQuery = ""
+
+    @StateObject
+    private var viewModel = DiscoverViewModel()
 
     init() {}
 
+    private let columns: [GridItem] = Array(
+        repeating: GridItem(.flexible(), spacing: EdgeInsets.itemSpacing, alignment: .top),
+        count: 6
+    )
+
+    private var isQueryEmpty: Bool {
+        searchQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var isSearching: Bool {
+        viewModel.background.is(.searching)
+    }
+
+    // MARK: - Results
+
+    private var resultsGrid: some View {
+        ScrollView {
+            LazyVGrid(columns: columns, spacing: 60) {
+                ForEach(viewModel.searchResults) { media in
+                    PosterButton(
+                        item: media,
+                        displayType: .portrait
+                    ) { namespace in
+                        media.libraryDidSelectElement(router: router, in: namespace)
+                    }
+                    .onAppear {
+                        if media.id == viewModel.searchResults.last?.id {
+                            viewModel.getNextSearchPage()
+                        }
+                    }
+                }
+            }
+            .edgePadding()
+            .focusSection()
+        }
+        .scrollClipDisabled()
+        .scrollIndicators(.hidden)
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if isQueryEmpty {
+            ContentUnavailableView(
+                L10n.SeerrTV.searchHint,
+                systemImage: "magnifyingglass"
+            )
+        } else if viewModel.searchResults.isNotEmpty {
+            resultsGrid
+        } else if isSearching || !viewModel.hasSearched {
+            ProgressView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        } else if let error = viewModel.searchError {
+            ContentUnavailableView(
+                L10n.SeerrDiscover.searchFailed,
+                systemImage: "exclamationmark.magnifyingglass",
+                description: Text(error.localizedDescription)
+            )
+        } else {
+            ContentUnavailableView.search(text: searchQuery)
+        }
+    }
+
+    // MARK: - Body
+
     var body: some View {
-        ContentUnavailableView(L10n.SeerrDiscover.notConfiguredTitle, systemImage: "popcorn")
+        content
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .animation(.linear(duration: 0.2), value: isSearching)
+            .ignoresSafeArea(edges: .horizontal)
+            .searchable(
+                text: $searchQuery,
+                prompt: L10n.SeerrDiscover.searchPrompt
+            )
+            .onChange(of: searchQuery) {
+                viewModel.searchQuery = searchQuery
+            }
+            // Same chrome as the Search tab: no navigation bar, the native search field on top
+            .toolbar(.hidden, for: .navigationBar)
+            .modifier(SearchSafeAreaModifier())
     }
 }
