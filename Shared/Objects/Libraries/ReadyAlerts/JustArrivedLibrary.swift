@@ -21,10 +21,15 @@ import JellyfinAPI
 /// (`CouchItemFilter.filter(_:members:memberResults:primaryID:excludePlayedBy:)`).
 struct JustArrivedLibrary: BaseItemKindLibrary {
 
-    /// The home shows nothing until every row loaded, so a slow refresh (an unreachable Seerr
-    /// times out after 20 s per person) isn't awaited longer than this. It keeps running,
-    /// and the row uses the arrivals the service already had.
-    private static let refreshWaitLimit: Duration = .seconds(4)
+    /// The rows below this one wait for it, so a slow refresh (an unreachable Seerr times out after 20 s
+    /// per person) isn't awaited longer than this. It keeps running, and the row uses the arrivals
+    /// the service already had. When the refresh ends, the home refreshes this row by itself
+    /// (`ContentGroupViewModel` observes `ReadyAlertsService.arrivals`).
+    ///
+    /// - Returns: 1.5 s when the service already has arrivals from an earlier refresh, 4 s on a cold start.
+    private static func refreshWaitLimit(hasCachedArrivals: Bool) -> Duration {
+        hasCachedArrivals ? .milliseconds(1500) : .seconds(4)
+    }
 
     let couch: CouchGroup
     let libraryItemTypes: [BaseItemKind] = [.movie, .series]
@@ -47,11 +52,13 @@ struct JustArrivedLibrary: BaseItemKindLibrary {
 
         // The service throttles itself, so a home refresh doesn't hit the server every time.
         if pageState.pageOffset == 0 {
+            let waitLimit = Self.refreshWaitLimit(hasCachedArrivals: service.lastRefreshDate != nil)
+
             let refresh = Task {
                 await service.refresh(session: session)
             }
 
-            await Self.wait(for: refresh, atMost: Self.refreshWaitLimit)
+            await Self.wait(for: refresh, atMost: waitLimit)
         }
 
         var seenItemIDs: Set<String> = []

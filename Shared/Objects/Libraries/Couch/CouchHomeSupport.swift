@@ -281,6 +281,9 @@ enum CouchHomeSupport {
     ///
     /// Ratings can't tell a toddler show from a family film, so this uses genres
     /// ("Kids", "Children"). Episodes are judged by their series' genres too.
+    ///
+    /// Only what the items don't carry is looked up (`toddlerDetails(for:session:)`): the series of episodes,
+    /// and items that came without genres, or without the provider ids a pick is matched by.
     static func removingToddlerContent(
         _ items: [BaseItemDto],
         couch: CouchGroup,
@@ -290,31 +293,21 @@ enum CouchHomeSupport {
 
         let picks = CouchPicks(couch: couch)
 
-        // Episodes rarely carry genres themselves: also look up their series.
-        var lookupIDs = CouchItemFilter.uniqueIDs(of: items)
-        var lookupIDSet = Set(lookupIDs)
+        var lookupIDs: [String] = []
+        var lookupIDSet: Set<String> = []
 
         for item in items {
-            guard let seriesID = item.seriesID,
-                  lookupIDSet.insert(seriesID).inserted
-            else { continue }
+            if let id = item.id, needsToddlerDetails(item), lookupIDSet.insert(id).inserted {
+                lookupIDs.append(id)
+            }
 
-            lookupIDs.append(seriesID)
+            // Episodes rarely carry genres themselves: also look up their series.
+            if let seriesID = item.seriesID, lookupIDSet.insert(seriesID).inserted {
+                lookupIDs.append(seriesID)
+            }
         }
 
-        var details: [String: BaseItemDto] = [:]
-
-        do {
-            let detailItems = try await CouchItemFilter.fetchItems(
-                ids: lookupIDs,
-                session: session,
-                fields: [.genres, .providerIDs],
-                enableImages: false
-            )
-            details = itemsKeyedByID(detailItems)
-        } catch {
-            logger.error("Couch: could not fetch genres for the toddler filter: \(error.localizedDescription)")
-        }
+        let details = await toddlerDetails(for: lookupIDs, session: session)
 
         return items.filter { item in
             let detailItem = item.id.flatMap { details[$0] } ?? item
@@ -334,6 +327,16 @@ enum CouchHomeSupport {
         }
     }
 
+    /// Whether the toddler filter has to look the item up: it came without genres, or it could be a pick
+    /// (a movie or a series) and came without the provider ids its TMDB id is read from.
+    private static func needsToddlerDetails(_ item: BaseItemDto) -> Bool {
+        if item.genres == nil {
+            return true
+        }
+
+        return AudienceWatchlistEntry.mediaKind(of: item.type) != nil && item.providerIDs == nil
+    }
+
     /// Whether these genres mark toddler content.
     static func isToddlerContent(genres: [String]) -> Bool {
         genres.contains { genre in
@@ -341,6 +344,100 @@ enum CouchHomeSupport {
 
             return toddlerGenreKeywords.contains { genre.contains($0) }
         }
+    }
+
+    // MARK: - Toddler details cache
+
+    /// How long looked up genres and provider ids are reused: the couch rows of one home refresh
+    /// look up many of the same series and items.
+    private static let toddlerDetailsLifetime: TimeInterval = 60
+
+    /// Looked up items (`.genres` and `.providerIDs` only), by item id, with when they were fetched.
+    ///
+    /// Genres and provider ids are the item's metadata, the same for every user. Items a user can't access
+    /// are never returned, so never cached.
+    private static var toddlerDetailsCache: [String: (item: BaseItemDto, fetchedAt: Date)] = [:]
+
+    /// The lookups that are running, by item id, so rows that load at the same time share them.
+    private static var toddlerDetailsLookups: [String: Task<[String: BaseItemDto], Never>] = [:]
+
+    /// The items with these ids, with their genres and provider ids, from the cache or fetched as `session`.
+    ///
+    /// Never throws: a failed lookup is logged, and its items are missing from the result.
+    private static func toddlerDetails(
+        for ids: [String],
+        session: UserSession
+    ) async -> [String: BaseItemDto] {
+        guard ids.isNotEmpty else { return [:] }
+
+        let now = Date.now
+        toddlerDetailsCache = toddlerDetailsCache.filter { now.timeIntervalSince($0.value.fetchedAt) < toddlerDetailsLifetime }
+
+        var details: [String: BaseItemDto] = [:]
+        var runningLookups: [Task<[String: BaseItemDto], Never>] = []
+        var missingIDs: [String] = []
+
+        for id in ids {
+            if let cached = toddlerDetailsCache[id] {
+                details[id] = cached.item
+            } else if let lookup = toddlerDetailsLookups[id] {
+                if !runningLookups.contains(lookup) {
+                    runningLookups.append(lookup)
+                }
+            } else {
+                missingIDs.append(id)
+            }
+        }
+
+        if missingIDs.isNotEmpty {
+            let lookupIDs = missingIDs
+
+            let lookup = Task { @MainActor () -> [String: BaseItemDto] in
+                var fetched: [String: BaseItemDto] = [:]
+
+                do {
+                    let detailItems = try await CouchItemFilter.fetchItems(
+                        ids: lookupIDs,
+                        session: session,
+                        fields: [.genres, .providerIDs],
+                        enableImages: false
+                    )
+                    fetched = CouchHomeSupport.itemsKeyedByID(detailItems)
+                } catch {
+                    CouchHomeSupport.logger.error("Couch: could not fetch genres for the toddler filter: \(error.localizedDescription)")
+                }
+
+                let fetchedAt = Date.now
+
+                for (id, item) in fetched {
+                    CouchHomeSupport.toddlerDetailsCache[id] = (item: item, fetchedAt: fetchedAt)
+                }
+
+                for id in lookupIDs {
+                    CouchHomeSupport.toddlerDetailsLookups[id] = nil
+                }
+
+                return fetched
+            }
+
+            for id in lookupIDs {
+                toddlerDetailsLookups[id] = lookup
+            }
+
+            runningLookups.append(lookup)
+        }
+
+        let requestedIDs = Set(ids)
+
+        for lookup in runningLookups {
+            let fetched = await lookup.value
+
+            for (id, item) in fetched where requestedIDs.contains(id) {
+                details[id] = item
+            }
+        }
+
+        return details
     }
 
     // MARK: - Helpers

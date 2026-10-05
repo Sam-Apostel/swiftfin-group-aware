@@ -33,7 +33,8 @@ struct CouchNewForEveryoneLibrary: BaseItemKindLibrary {
 
         var parameters = Paths.GetItemsParameters()
         parameters.enableUserData = true
-        parameters.fields = PosterSubtitleField.itemFields
+        // Genres and provider ids: the toddler filter doesn't have to look these items up again
+        parameters.fields = PosterSubtitleField.itemFields + [.providerIDs]
         parameters.includeItemTypes = [.movie, .series]
         parameters.isRecursive = true
         parameters.limit = Self.windowSize(for: pageState)

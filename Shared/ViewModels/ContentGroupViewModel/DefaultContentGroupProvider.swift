@@ -32,6 +32,11 @@ struct DefaultContentGroupProvider: ContentGroupProvider {
         groupCouch
     }
 
+    /// A group's couch rows each wait for every member, so they show up as they load.
+    var revealsProgressively: Bool {
+        groupCouch != nil
+    }
+
     /// The current couch, when more than one person is on it.
     private var groupCouch: CouchGroup? {
         guard let couch = userSession?.couch, couch.isGroup else { return nil }

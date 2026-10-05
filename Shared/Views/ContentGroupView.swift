@@ -54,6 +54,13 @@ struct ContentGroupView<Provider: ContentGroupProvider>: View {
                         .onPreferenceChange(ContentGroupCustomizationKey.self) { value in
                             contentGroupOptions = value
                         }
+
+                    // More groups are on their way (`ContentGroupProvider.revealsProgressively`)
+                    if viewModel.state == .refreshing {
+                        ProgressView()
+                            .frame(maxWidth: .infinity)
+                            .padding(.bottom, 40)
+                    }
                 }
             }
             .trackingFrame(for: .scrollView)
@@ -79,36 +86,59 @@ struct ContentGroupView<Provider: ContentGroupProvider>: View {
         }
     }
 
+    /// Whether the groups are shown: once loaded, and while they load when the provider reveals them
+    /// progressively (`ContentGroupProvider.revealsProgressively`).
+    ///
+    /// The groups stay in the same branch of `body` from the first group shown until the refresh ends,
+    /// so the scroll position and the tvOS focus are kept when the state becomes `.content`.
+    private var showsGroups: Bool {
+        guard viewModel.groups.isNotEmpty else { return false }
+
+        switch viewModel.state {
+        case .content:
+            return true
+        case .refreshing:
+            return viewModel.provider.revealsProgressively
+        case .error, .initial:
+            return false
+        }
+    }
+
+    @ViewBuilder
+    private var stateView: some View {
+        switch viewModel.state {
+        case .content:
+            ContentUnavailableView(
+                L10n.noResults.localizedCapitalized,
+                systemImage: "rectangle.on.rectangle.slash"
+            )
+            .focusable()
+            #if os(tvOS)
+            .coordinatedFocus(.fallback)
+            #endif
+
+        case .error:
+            viewModel.error.map(ErrorView.init)
+                #if os(tvOS)
+                    .coordinatedFocus(.fallback)
+                #endif
+
+        case .initial, .refreshing:
+            ProgressView()
+                #if os(tvOS)
+                    .coordinatedFocus(.placeholder)
+                #endif
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .ignoresSafeArea(edges: .all)
+        }
+    }
+
     var body: some View {
         ZStack {
-            switch viewModel.state {
-            case .content:
-                if viewModel.groups.isEmpty {
-                    ContentUnavailableView(
-                        L10n.noResults.localizedCapitalized,
-                        systemImage: "rectangle.on.rectangle.slash"
-                    )
-                    .focusable()
-                    #if os(tvOS)
-                    .coordinatedFocus(.fallback)
-                    #endif
-                } else {
-                    contentView
-                }
-
-            case .error:
-                viewModel.error.map(ErrorView.init)
-                    #if os(tvOS)
-                        .coordinatedFocus(.fallback)
-                    #endif
-
-            case .initial, .refreshing:
-                ProgressView()
-                    #if os(tvOS)
-                        .coordinatedFocus(.placeholder)
-                    #endif
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .ignoresSafeArea(edges: .all)
+            if showsGroups {
+                contentView
+            } else {
+                stateView
             }
         }
         .animation(.linear(duration: 0.2), value: viewModel.state)

@@ -32,14 +32,7 @@ struct CouchResumeLibrary: BaseItemKindLibrary {
 
         guard members.isNotEmpty else { return [] }
 
-        let primaryItems = try await ResumeItemsLibrary(mediaTypes: [.video]).retrievePage(
-            environment: .default,
-            pageState: LibraryPageState(
-                pageOffset: 0,
-                pageSize: CouchHomeSupport.memberWindowSize,
-                userSession: primary
-            )
-        )
+        let primaryItems = try await Self.resumeItems(for: primary)
 
         let ids = CouchItemFilter.uniqueIDs(of: primaryItems)
 
@@ -110,6 +103,23 @@ struct CouchResumeLibrary: BaseItemKindLibrary {
         guard (userData.playbackPositionTicks ?? 0) > 0 else { return }
 
         viewModel.scheduleRefreshForItemUserData(minimumInterval: 30)
+    }
+
+    /// The user's own resume items, like `ResumeItemsLibrary` (video), with the provider ids too:
+    /// with genres and provider ids, the toddler filter doesn't look movies up again.
+    private static func resumeItems(for session: UserSession) async throws -> [BaseItemDto] {
+        var parameters = Paths.GetResumeItemsParameters()
+        parameters.enableUserData = true
+        parameters.fields = PosterSubtitleField.itemFields + [.providerIDs]
+        parameters.limit = CouchHomeSupport.memberWindowSize
+        parameters.mediaTypes = [.video]
+        parameters.startIndex = 0
+        parameters.userID = session.user.id
+
+        let request = Paths.getResumeItems(parameters: parameters)
+        let response = try await session.client.send(request)
+
+        return response.value.items ?? []
     }
 
     /// Whether the member has a resume position in the item.

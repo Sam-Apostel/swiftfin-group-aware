@@ -43,11 +43,19 @@ final class ContentGroupViewModel<Provider: ContentGroupProvider>: ViewModel {
     private var lastRefreshDate = Date.distantPast
     private var lastRefreshSignalDate = Date.distantPast
 
-    /// The ids of the watchlist picks for exactly the couch (`provider.picksCouch`)
+    /// The ids of the watchlist picks for the couch (`provider.picksCouch`, `CouchHomeSupport.pickEntries(for:)`)
     /// when the groups were last refreshed. `nil` until the first refresh, or when the provider has no couch.
     private var refreshedCouchPickIDs: Set<String>?
-    /// Asks for one more picks comparison, e.g. after a refresh ended.
+    /// The ids of the arrivals the couch's members see ("Just arrived") when the groups were last refreshed.
+    /// `nil` until the first refresh, or when the provider has no couch.
+    private var refreshedArrivalIDs: Set<String>?
+    /// Asks for one more picks and arrivals comparison, e.g. after a refresh ended.
     private let couchPicksCheck = PassthroughSubject<Void, Never>()
+    /// The refresh of the "Just arrived" rows after the arrivals changed.
+    private var arrivalsRefreshTask: Task<Void, Never>?
+
+    /// Whether a full refresh is showing the groups as they load (`provider.revealsProgressively`).
+    private var isRevealing = false
 
     private var hasPendingRefreshSignals: Bool {
         lastRefreshSignalDate > lastRefreshDate
@@ -70,6 +78,7 @@ final class ContentGroupViewModel<Provider: ContentGroupProvider>: ViewModel {
 
         if provider.picksCouch != nil {
             observeCouchPicks()
+            observeArrivals()
         }
     }
 
@@ -90,8 +99,15 @@ final class ContentGroupViewModel<Provider: ContentGroupProvider>: ViewModel {
 
     @Function(\Action.Cases.refresh)
     private func _refresh() async throws {
-        // Read before the rows fetch: picks that change while they fetch trigger one more refresh
+        // The full refresh that is revealing the groups loads every one of them already,
+        // and showing all of them now could put a group above a visible one.
+        if StateTask.isBackground, isRevealing {
+            return
+        }
+
+        // Read before the rows fetch: picks or arrivals that change while they fetch trigger one more refresh
         refreshedCouchPickIDs = currentCouchPickIDs()
+        refreshedArrivalIDs = currentArrivalIDs()
 
         if StateTask.isBackground {
             try await backgroundRefresh()
@@ -150,13 +166,73 @@ final class ContentGroupViewModel<Provider: ContentGroupProvider>: ViewModel {
 
         let newGroups = try await provider.makeGroups(environment: provider.environment)
 
-        try await refreshViewModels(
-            for: newGroups,
-            inBackground: false
-        )
+        if provider.revealsProgressively {
+            candidateGroups = newGroups
 
-        candidateGroups = newGroups
+            isRevealing = true
+            defer { isRevealing = false }
+
+            await revealViewModels(of: newGroups)
+        } else {
+            try await refreshViewModels(
+                for: newGroups,
+                inBackground: false
+            )
+
+            candidateGroups = newGroups
+        }
+
         resolveGroups()
+    }
+
+    /// Refreshes the view models of `newGroups` concurrently and, each time one finishes, shows the longest
+    /// prefix of `newGroups` whose view models all finished (`_shouldBeResolved` rows only).
+    ///
+    /// - A group is never shown above a visible group: the prefix only grows.
+    /// - Empty groups count as finished, so they don't hold up the groups below them.
+    /// - The view leaves the spinner as soon as the shown prefix isn't empty. On tvOS the cinematic hero
+    ///   is the first group, so the first groups shown always include it (when it has anything to show)
+    ///   and the first focus lands on it, not on a row that moves.
+    private func revealViewModels(of newGroups: [any ContentGroup]) async {
+        let viewModels = newGroups.map { getViewModel(for: $0) }
+
+        // Groups that share a view model (the tvOS cinematic hero and its "Recently Added" row)
+        // finish together: every group points at the first group with its view model.
+        let objects = viewModels.map { $0 as AnyObject }
+        let owners: [Int] = objects.indices.map { index in
+            objects[..<index].firstIndex { $0 === objects[index] } ?? index
+        }
+
+        var finishedOwners: Set<Int> = []
+
+        await withTaskGroup(of: Int.self) { group in
+            for index in owners.indices where owners[index] == index {
+                let viewModel = viewModels[index]
+
+                group.addTask {
+                    await viewModel.refresh()
+                    return index
+                }
+            }
+
+            for await finishedIndex in group {
+                finishedOwners.insert(finishedIndex)
+
+                let finishedCount = owners.firstIndex { !finishedOwners.contains($0) } ?? owners.count
+
+                showFinishedPrefix(of: newGroups, count: finishedCount)
+            }
+        }
+    }
+
+    private func showFinishedPrefix(of newGroups: [any ContentGroup], count: Int) {
+        let prefix = newGroups
+            .prefix(count)
+            .filter(\._shouldBeResolved)
+
+        guard prefix.map(\.id) != groups.map(\.id) else { return }
+
+        groups = prefix
     }
 }
 
@@ -221,10 +297,11 @@ extension ContentGroupViewModel {
         .store(in: &cancellables)
     }
 
+    /// The picks for this couch, defined once for Home and the decider (`CouchHomeSupport.pickEntries(for:)`).
     private func currentCouchPickIDs() -> Set<String>? {
         guard let couch = provider.picksCouch else { return nil }
 
-        let entries = Container.shared.audienceWatchlistStore().entries(forExactAudience: couch.memberIDs)
+        let entries = CouchHomeSupport.pickEntries(for: couch)
         return Set(entries.map(\.id))
     }
 
@@ -241,5 +318,73 @@ extension ContentGroupViewModel {
 
         logger.info("Couch picks changed, refreshing the home")
         background.refresh()
+    }
+}
+
+// MARK: - Just arrived
+
+@MainActor
+extension ContentGroupViewModel {
+
+    /// Refreshes the "Just arrived" rows when the arrivals for this couch's members change, for example
+    /// when a slow `ReadyAlertsService` refresh ends after the row stopped waiting for it.
+    private func observeArrivals() {
+        let service = Container.shared.readyAlertsService()
+
+        // `$arrivals` emits before the value is set, the debounce also lets several changes settle
+        Publishers.Merge(
+            service.$arrivals.map { _ in () },
+            couchPicksCheck
+        )
+        .debounce(for: 1, scheduler: RunLoop.main)
+        .sink { [weak self] _ in
+            self?.refreshIfArrivalsChanged()
+        }
+        .store(in: &cancellables)
+    }
+
+    private func currentArrivalIDs() -> Set<String>? {
+        guard let couch = provider.picksCouch else { return nil }
+
+        let arrivals = Container.shared.readyAlertsService().arrivals(forMembers: couch.memberIDs)
+        return Set(arrivals.map(\.id))
+    }
+
+    /// Only the "Just arrived" rows depend on the arrivals, so only they are refreshed in the background,
+    /// without the full-screen spinner and without moving the tvOS focus.
+    private func refreshIfArrivalsChanged() {
+        guard let refreshedArrivalIDs,
+              let arrivalIDs = currentArrivalIDs(),
+              arrivalIDs != refreshedArrivalIDs
+        else { return }
+
+        // A running refresh compares again when it ends
+        guard state == .content, !background.is(.refreshing), arrivalsRefreshTask == nil else { return }
+
+        // Read before the row fetches: arrivals that change while it fetches trigger one more refresh
+        self.refreshedArrivalIDs = arrivalIDs
+
+        let justArrivedGroups = candidateGroups.compactMap { $0 as? PosterGroup<JustArrivedLibrary> }
+
+        guard justArrivedGroups.isNotEmpty else { return }
+
+        logger.info("Arrivals changed, refreshing Just arrived")
+
+        arrivalsRefreshTask = Task { [weak self] in
+            for group in justArrivedGroups {
+                await group.viewModel.background.refresh()
+            }
+
+            guard let self else { return }
+
+            self.arrivalsRefreshTask = nil
+
+            // A refresh that started meanwhile shows the groups itself
+            if self.state == .content, !self.background.is(.refreshing) {
+                self.resolveGroups()
+            }
+
+            self.couchPicksCheck.send()
+        }
     }
 }

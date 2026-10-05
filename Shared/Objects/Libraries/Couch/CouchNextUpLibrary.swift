@@ -35,13 +35,18 @@ struct CouchNextUpLibrary: BaseItemKindLibrary {
 
         guard members.isNotEmpty else { return [] }
 
-        let primaryEpisodes = try await Self.nextUp(for: primary)
+        // The primary user's and the members' Next Up are requested together
+        async let primaryRequest = Self.nextUp(for: primary)
+        async let memberRequests = CouchHomeSupport.perSession(members) { member in
+            try await Self.nextUp(for: member)
+        }
+
+        // Leaving early cancels the members' requests, which isn't recorded as a member failure
+        let primaryEpisodes = try await primaryRequest
 
         guard primaryEpisodes.isNotEmpty else { return [] }
 
-        let memberResults = await CouchHomeSupport.perSession(members) { member in
-            try await Self.nextUp(for: member)
-        }
+        let memberResults = await memberRequests
         let memberLists = memberResults.compactMap(\.self)
 
         guard memberLists.isNotEmpty else { return [] }
