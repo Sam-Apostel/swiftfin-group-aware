@@ -177,7 +177,9 @@ extension SelectUserView {
             #if os(iOS)
             .controlSize(.large)
             #endif
-            .disabled(couchMembers.isEmpty || isStartingCouch)
+            // Not disabled while starting: on tvOS a disabled button loses focus,
+            // and `onStart` already ignores taps while a start is in progress.
+            .disabled(couchMembers.isEmpty)
             .focused($focusedButton, equals: .start)
         }
 
