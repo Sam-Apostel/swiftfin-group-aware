@@ -321,9 +321,7 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
         }
 
         // The server just reset resume points: never offer a stale one. The next refresh rebuilds it.
-        couchResumeTask?.cancel()
-        couchResumeTask = nil
-        couchResumePlan = nil
+        clearCouchResumePlan()
 
         if forEveryone {
             await CouchPlayedFeedback.mirror(itemID: itemID, isPlayed: isPlayed, in: userSession)
@@ -511,6 +509,17 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
     }
 
     // MARK: - Couch resume points
+
+    /// Drops the couch resume plan until the next refresh, e.g. once playback starts:
+    /// the positions it was built from are about to change, and the item page
+    /// isn't refreshed when the player closes.
+    func clearCouchResumePlan() {
+        guard couchResumePlan != nil || couchResumeTask != nil else { return }
+
+        couchResumeTask?.cancel()
+        couchResumeTask = nil
+        couchResumePlan = nil
+    }
 
     /// Fetches every other member's user data for the item Play would start, in the
     /// background, and builds `couchResumePlan`. Clears it on a solo couch.

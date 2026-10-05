@@ -42,11 +42,17 @@ struct PlayButton: View {
         return plan
     }
 
-    /// "Sam is at 1:10:05"
+    /// "Sam is at 1:10:05", or "Sam hasn't started" when the primary user is partway through.
     private var resumeHint: String? {
         guard let hint = resumePlan?.hint else { return nil }
 
         let names = ListFormatter.localizedString(byJoining: hint.names)
+
+        if hint.ticks == 0 {
+            return hint.names.count == 1
+                ? L10n.CouchItem.hasNotStarted(names)
+                : L10n.CouchItem.haveNotStarted(names)
+        }
 
         return hint.names.count == 1
             ? L10n.CouchItem.isAt(names, time: hint.timecode)
@@ -91,6 +97,9 @@ struct PlayButton: View {
                 queue: queue
             )
         )
+
+        // Positions change while watching: never offer a stale resume point after the player closes.
+        provider.clearCouchResumePlan()
     }
 
     @ViewBuilder

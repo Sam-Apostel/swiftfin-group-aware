@@ -15,7 +15,8 @@ import Foundation
 /// Members who finished the item (`isPlayed`) count as finished, not as "at 0",
 /// and positions in the first 2 minutes count as not started.
 ///
-/// Play asks only when someone is at a point the primary user isn't at. When
+/// Play asks when someone is at a point the primary user isn't at, including
+/// someone who hasn't started while the primary user is partway through. When
 /// every position agrees, Play stays one tap.
 struct CouchResumePlan: Equatable {
 
@@ -64,19 +65,38 @@ struct CouchResumePlan: Equatable {
     /// Every distinct resume point, furthest first.
     let points: [Point]
 
+    /// The other members who haven't started (and haven't finished), in couch order.
+    let notStartedNames: [String]
+
     init(itemID: String, members: [Member]) {
         self.itemID = itemID
         self.points = Self.points(for: members)
+        self.notStartedNames = members
+            .filter { !$0.isPrimary && !$0.isPlayed && $0.positionTicks <= Self.toleranceTicks }
+            .map(\.name)
     }
 
-    /// Whether Play should ask whose resume point to start from.
+    /// Whether Play should ask whose resume point to start from: someone is at a point
+    /// the primary user isn't at, or the primary user is partway through while someone
+    /// else hasn't started, so Play would silently skip ahead for them.
     var needsChoice: Bool {
-        points.contains { !$0.includesPrimary }
+        if points.contains(where: { !$0.includesPrimary }) {
+            return true
+        }
+
+        return points.contains(where: \.includesPrimary) && !notStartedNames.isEmpty
     }
 
     /// The furthest point the primary user isn't at, for "Sam is at 1:10:05".
+    /// When the only difference is members who haven't started: a point at 0 with them.
     var hint: Point? {
-        points.first { !$0.includesPrimary }
+        if let point = points.first(where: { !$0.includesPrimary }) {
+            return point
+        }
+
+        guard needsChoice else { return nil }
+
+        return Point(ticks: 0, names: notStartedNames, includesPrimary: false)
     }
 
     // MARK: - Clustering

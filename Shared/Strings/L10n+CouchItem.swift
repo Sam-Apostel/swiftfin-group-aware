@@ -68,6 +68,16 @@ extension L10n {
             "\(names) are at \(time)"
         }
 
+        /// "Sam hasn't started"
+        static func hasNotStarted(_ name: String) -> String {
+            "\(name) hasn't started"
+        }
+
+        /// "Sam and Lisa haven't started"
+        static func haveNotStarted(_ names: String) -> String {
+            "\(names) haven't started"
+        }
+
         /// Title of the dialog that asks whose resume point to start from.
         static let whereToStart = "Where should we start?"
 
