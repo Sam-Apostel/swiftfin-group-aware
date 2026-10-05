@@ -15,29 +15,114 @@ import FoundationNetworking
 
 /// A client for the Seerr (Jellyseerr / Overseerr) REST API under `<server>/api/v1`.
 ///
-/// Authenticates with the admin API key (`X-Api-Key`). Calls that act on behalf
-/// of a person pass `asUser` (a Seerr user id), sent as `X-Api-User`.
+/// A client authenticates in one of two ways (`AuthMode`):
+/// - the admin API key (`X-Api-Key`). Calls that act on behalf of a person pass
+///   `asUser` (a Seerr user id), sent as `X-Api-User`;
+/// - a person's own Seerr session (`connect.sid`), e.g. from Jellyfin Quick Connect.
 ///
-/// - Important: The API key is admin-equivalent. It is only added in the
-///   `APIClientDelegate`, never stored on requests or logged by this type.
+/// - Important: The API key is admin-equivalent and a session cookie is
+///   password-equivalent. Both are only added in the `APIClientDelegate`, never
+///   stored on requests or logged by this type. Seerr clients never use a cookie
+///   jar: cookie storage is turned off and a session is sent as a manual `Cookie`
+///   header, so the sessions of different people can't mix.
 final class SeerrClient: Sendable {
+
+    /// How a `SeerrClient` authenticates.
+    enum AuthMode: Hashable, Sendable, CustomStringConvertible, CustomDebugStringConvertible {
+
+        /// The admin API key (`X-Api-Key`).
+        ///
+        /// With `asUser`, every call acts as that Seerr user (`X-Api-User`)
+        /// unless the call passes its own `asUser`.
+        case apiKey(String, asUser: Int?)
+
+        /// A Seerr session cookie (the `connect.sid` value), e.g. from Jellyfin Quick Connect.
+        ///
+        /// The session's user is the caller: `asUser` arguments are ignored.
+        case session(cookie: String)
+
+        /// Redacted: never contains the key or the cookie.
+        var description: String {
+            switch self {
+            case let .apiKey(_, asUser):
+                if let asUser {
+                    "apiKey(<redacted>, asUser: \(asUser))"
+                } else {
+                    "apiKey(<redacted>)"
+                }
+
+            case .session:
+                "session(<redacted>)"
+            }
+        }
+
+        var debugDescription: String {
+            description
+        }
+
+        /// The `X-Api-User` sent when a call passes no `asUser`.
+        var defaultUser: Int? {
+            switch self {
+            case let .apiKey(_, asUser):
+                asUser
+            case .session:
+                nil
+            }
+        }
+
+        var isSession: Bool {
+            switch self {
+            case .apiKey:
+                false
+            case .session:
+                true
+            }
+        }
+    }
+
+    /// The name of Seerr's (express-session) session cookie.
+    static let sessionCookieName = "connect.sid"
 
     /// The Seerr server URL, as configured (no `/api/v1`).
     let baseURL: URL
     /// `baseURL` + `/api/v1`.
     let apiBaseURL: URL
+    /// `nil` for an anonymous client: only public endpoints and sign-in work.
+    let auth: AuthMode?
 
     private let apiClient: APIClient
     private let userIDCache = SeerrUserIDCache()
 
+    /// An API key client: `init(baseURL:auth: .apiKey(apiKey, asUser: nil), ...)`.
+    ///
     /// - Parameters:
     ///   - baseURL: The Seerr server URL, e.g. `http://192.168.1.10:5055` or `https://example.com/seerr`.
     ///   - apiKey: Settings → General → API Key.
     ///   - sessionConfiguration: Defaults to a 20 second request timeout.
     ///   - sessionDelegate: e.g. a Pulse `URLSessionProxyDelegate` that redacts `X-Api-Key`.
-    init(
+    convenience init(
         baseURL: URL,
         apiKey: String,
+        sessionConfiguration: URLSessionConfiguration? = nil,
+        sessionDelegate: URLSessionDelegate? = nil
+    ) {
+        self.init(
+            baseURL: baseURL,
+            auth: .apiKey(apiKey, asUser: nil),
+            sessionConfiguration: sessionConfiguration,
+            sessionDelegate: sessionDelegate
+        )
+    }
+
+    /// - Parameters:
+    ///   - baseURL: The Seerr server URL, e.g. `http://192.168.1.10:5055` or `https://example.com/seerr`.
+    ///   - auth: The API key or a session cookie; `nil` for public endpoints and sign-in only.
+    ///   - sessionConfiguration: Defaults to a 20 second request timeout. Cookie storage is
+    ///     turned off on a copy of it.
+    ///   - sessionDelegate: e.g. a Pulse `URLSessionProxyDelegate` that redacts `X-Api-Key` and `Cookie`.
+    init(
+        baseURL: URL,
+        auth: AuthMode?,
         sessionConfiguration: URLSessionConfiguration? = nil,
         sessionDelegate: URLSessionDelegate? = nil
     ) {
@@ -46,23 +131,38 @@ final class SeerrClient: Sendable {
 
         self.baseURL = baseURL
         self.apiBaseURL = apiBaseURL
-
-        let sessionConfiguration = sessionConfiguration ?? {
-            let configuration = URLSessionConfiguration.default
-            configuration.timeoutIntervalForRequest = 20
-            return configuration
-        }()
+        self.auth = auth
 
         var configuration = APIClient.Configuration(
             baseURL: apiBaseURL,
-            sessionConfiguration: sessionConfiguration,
-            delegate: SeerrClientDelegate(apiKey: apiKey, apiBaseURL: apiBaseURL)
+            sessionConfiguration: SeerrClient.cookielessConfiguration(from: sessionConfiguration),
+            delegate: SeerrClientDelegate(auth: auth, apiBaseURL: apiBaseURL)
         )
         configuration.sessionDelegate = sessionDelegate
         configuration.decoder = .seerr()
         configuration.encoder = .seerr()
 
         self.apiClient = APIClient(configuration: configuration)
+    }
+
+    /// A copy of `configuration` (default: a 20 second request timeout) that neither stores nor sends cookies.
+    ///
+    /// Copied, so a shared configuration like `.swiftfin` is never changed.
+    private static func cookielessConfiguration(from configuration: URLSessionConfiguration?) -> URLSessionConfiguration {
+        let copy: URLSessionConfiguration
+
+        if let configuration, let configurationCopy = configuration.copy() as? URLSessionConfiguration {
+            copy = configurationCopy
+        } else {
+            copy = URLSessionConfiguration.default
+            copy.timeoutIntervalForRequest = 20
+        }
+
+        copy.httpCookieStorage = nil
+        copy.httpShouldSetCookies = false
+        copy.httpCookieAcceptPolicy = .never
+
+        return copy
     }
 
     // MARK: - Server
@@ -72,9 +172,108 @@ final class SeerrClient: Sendable {
         try await send(Request(path: "/status"))
     }
 
-    /// `GET /auth/me`. Validates the API key (or the `asUser` id).
+    /// `GET /auth/me`. Validates the API key (or the `asUser` id), or the session.
     func me(asUser: Int? = nil) async throws -> SeerrUser {
         try await send(Request(path: "/auth/me"), asUser: asUser)
+    }
+
+    // MARK: - Quick Connect (Seerr 3.4+, Jellyfin only)
+
+    /// `POST /auth/jellyfin/quickconnect/initiate`. Public.
+    ///
+    /// Starts a Jellyfin Quick Connect request on Seerr's behalf. Authorize `code` on
+    /// Jellyfin (`Paths.authorizeQuickConnect`) as the person signing in, then pass
+    /// `secret` to `authenticateQuickConnect(secret:)`.
+    ///
+    /// - Throws: `SeerrError.server(status: 403, ...)` when Seerr doesn't use Jellyfin,
+    ///           `SeerrError.server(status: 500, ...)` when Jellyfin refused (Quick Connect disabled),
+    ///           `SeerrError.server(status: 404, ...)` on servers older than 3.4.
+    func initiateQuickConnect() async throws -> SeerrQuickConnect {
+        try await send(Request(path: "/auth/jellyfin/quickconnect/initiate", method: .post))
+    }
+
+    /// `GET /auth/jellyfin/quickconnect/check?secret=`. Public.
+    ///
+    /// Whether the Quick Connect request was authorized on Jellyfin yet.
+    func isQuickConnectAuthorized(secret: String) async throws -> Bool {
+        let response: SeerrQuickConnectState = try await send(
+            Request(path: "/auth/jellyfin/quickconnect/check", query: [("secret", secret)])
+        )
+        return response.authenticated ?? false
+    }
+
+    /// `POST /auth/jellyfin/quickconnect/authenticate`. Public.
+    ///
+    /// Signs in with an authorized Quick Connect request and returns the new Seerr
+    /// session (`connect.sid`, valid for 30 days) and its user. The cookie is read
+    /// from `Set-Cookie`; it is never stored in a cookie jar.
+    ///
+    /// - Throws: `SeerrError.unauthorized` / `SeerrError.server` when the request is not
+    ///           authorized (`INVALID_CREDENTIALS`) or the user may not sign in (`403 Access denied.`).
+    func authenticateQuickConnect(secret: String) async throws -> SeerrSignIn {
+        let request = Request<SeerrUser>(
+            path: "/auth/jellyfin/quickconnect/authenticate",
+            method: .post,
+            body: SeerrQuickConnectSecretBody(secret: secret)
+        )
+        let response = try await data(for: request, asUser: nil)
+        let user = try decode(SeerrUser.self, from: response.data)
+
+        let setCookie = (response.response as? HTTPURLResponse)?.value(forHTTPHeaderField: "Set-Cookie")
+
+        guard let cookie = setCookie.flatMap(SeerrClient.sessionCookie(fromSetCookie:)) else {
+            throw SeerrError.server(status: response.statusCode ?? 200, message: L10n.SeerrQuickConnect.errorNoSession)
+        }
+
+        return SeerrSignIn(user: user, cookie: cookie)
+    }
+
+    /// `POST /auth/logout`: ends this client's session on the server. Does nothing for other auth modes.
+    func signOut() async throws {
+        guard auth?.isSession == true else { return }
+
+        _ = try await data(for: Request<Void>(path: "/auth/logout", method: .post), asUser: nil)
+    }
+
+    /// The `connect.sid` value in a `Set-Cookie` header. Several cookies may be folded into one
+    /// header, separated by commas (`Expires` dates also contain commas).
+    static func sessionCookie(fromSetCookie header: String) -> String? {
+        let prefix = "\(sessionCookieName)="
+
+        for part in header.components(separatedBy: ",") {
+            let trimmed = part.trimmingCharacters(in: .whitespaces)
+
+            guard trimmed.hasPrefix(prefix) else { continue }
+
+            let value = trimmed
+                .dropFirst(prefix.count)
+                .prefix { $0 != ";" }
+                .trimmingCharacters(in: .whitespaces)
+
+            if value.isEmpty == false {
+                return value
+            }
+        }
+
+        return nil
+    }
+
+    /// Whether a Seerr version (`/status`) supports Jellyfin Quick Connect (3.4.0+).
+    ///
+    /// Development builds (`develop-<commit>`) and unknown formats are assumed to support it;
+    /// `initiateQuickConnect()` then tells for sure.
+    static func supportsQuickConnect(version: String) -> Bool {
+        let numbers = version
+            .trimmingCharacters(in: .whitespaces)
+            .drop { $0 == "v" || $0 == "V" }
+            .split(separator: ".")
+            .map { component in Int(component.prefix { $0.isNumber }) }
+
+        guard numbers.count >= 2, let major = numbers[0], let minor = numbers[1] else {
+            return true
+        }
+
+        return major > 3 || (major == 3 && minor >= 4)
     }
 
     // MARK: - Discover
@@ -324,7 +523,8 @@ final class SeerrClient: Sendable {
     private func data(for request: Request<some Any>, asUser: Int?) async throws -> Response<Data> {
         var request = request
 
-        if let asUser {
+        // Only the API key can act as someone else; a session always acts as its own user.
+        if case .apiKey = auth, let asUser = asUser ?? auth?.defaultUser {
             var headers = request.headers ?? [:]
             headers["X-Api-User"] = String(asUser)
             request.headers = headers
@@ -424,7 +624,7 @@ extension SeerrClient {
 
 // MARK: - SeerrClientDelegate
 
-/// Adds the API key, encodes query items strictly and maps error responses to `SeerrError`.
+/// Adds the API key or the session cookie, encodes query items strictly and maps error responses to `SeerrError`.
 private struct SeerrClientDelegate: APIClientDelegate, Sendable {
 
     /// Seerr rejects query values containing raw reserved characters (`:/?#[]@!$&'()*+,;=`)
@@ -433,11 +633,24 @@ private struct SeerrClientDelegate: APIClientDelegate, Sendable {
         charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
     )
 
-    let apiKey: String
+    let auth: SeerrClient.AuthMode?
     let apiBaseURL: URL
 
     func client(_ client: APIClient, willSendRequest request: inout URLRequest) async throws {
-        request.setValue(apiKey, forHTTPHeaderField: "X-Api-Key")
+        switch auth {
+        case let .apiKey(apiKey, _):
+            request.setValue(apiKey, forHTTPHeaderField: "X-Api-Key")
+
+        case let .session(cookie):
+            // Accept both the bare value and a whole `connect.sid=<value>` pair
+            let pair = cookie.hasPrefix("\(SeerrClient.sessionCookieName)=")
+                ? cookie
+                : "\(SeerrClient.sessionCookieName)=\(cookie)"
+            request.setValue(pair, forHTTPHeaderField: "Cookie")
+
+        case nil:
+            break
+        }
     }
 
     func client(_ client: APIClient, makeURLForRequest request: Request<some Any>) throws -> URL? {
@@ -558,6 +771,41 @@ private struct SeerrWatchlistBody: Encodable, Sendable {
 private struct SeerrImportUsersBody: Encodable, Sendable {
 
     let jellyfinUserIds: [String]
+}
+
+private struct SeerrQuickConnectSecretBody: Encodable, Sendable {
+
+    let secret: String
+}
+
+/// `{ authenticated }` from `/auth/jellyfin/quickconnect/check`.
+private struct SeerrQuickConnectState: Decodable, Sendable {
+
+    let authenticated: Bool?
+}
+
+// MARK: - Quick Connect
+
+/// A pending Jellyfin Quick Connect request started by Seerr.
+struct SeerrQuickConnect: Decodable, Sendable {
+
+    /// The code to authorize on Jellyfin (`Paths.authorizeQuickConnect(code:)`).
+    let code: String
+    /// Proves the request to Seerr. Never log it.
+    let secret: String
+}
+
+/// The result of signing in to Seerr.
+struct SeerrSignIn: Sendable, CustomStringConvertible {
+
+    let user: SeerrUser
+    /// The `connect.sid` value. Store it in the keychain only, never log it.
+    let cookie: String
+
+    /// Redacted: never contains the cookie.
+    var description: String {
+        "SeerrSignIn(userID: \(user.id))"
+    }
 }
 
 // MARK: - SeerrUserIDCache

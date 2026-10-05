@@ -326,18 +326,20 @@ final class SeerrMediaDetailViewModel: ViewModel {
 
         do {
             let session = try requireUserSession()
-            let seerrUserID = await seerrService.seerrUserID(for: session.user)
+            let requestedSeasons = mediaType == .tv ? seasons : nil
 
-            if seerrUserID == nil {
-                logger.warning("No Seerr user for the primary user, requesting as the API key owner")
+            // The primary user's own Quick Connect session, else the API key as them
+            // (or as the key owner when they have no Seerr account).
+            let request = try await seerrService.perform(
+                asJellyfinUserID: session.user.id,
+                fallbackToAPIKeyOwner: true
+            ) { userClient in
+                try await userClient.request(
+                    mediaType: mediaType,
+                    tmdbID: tmdbID,
+                    seasons: requestedSeasons
+                )
             }
-
-            let request = try await client.request(
-                mediaType: mediaType,
-                tmdbID: tmdbID,
-                seasons: mediaType == .tv ? seasons : nil,
-                asUser: seerrUserID
-            )
 
             submittedRequest = request
             hasSubmittedRequest = true
@@ -452,32 +454,33 @@ final class SeerrMediaDetailViewModel: ViewModel {
         removing: Set<String>,
         title: String
     ) async {
-        guard let client = seerrService.client else { return }
+        guard seerrService.isConfigured else { return }
 
         for jellyfinUserID in adding.union(removing).sorted() {
-            // Logs and returns nil when the person can't be mapped (or imported) into Seerr
-            guard let seerrUserID = await seerrService.seerrUserID(forJellyfinUserID: jellyfinUserID) else { continue }
+            let isAdding = adding.contains(jellyfinUserID)
 
+            // Each member's own Quick Connect session, else the API key as them.
+            // Throws when the person can't act on Seerr (not signed in / no account).
             do {
-                if adding.contains(jellyfinUserID) {
-                    try await client.addToWatchlist(
-                        mediaType: mediaType,
-                        tmdbID: tmdbID,
-                        title: title,
-                        asUser: seerrUserID
-                    )
-                } else {
-                    try await client.removeFromWatchlist(
-                        mediaType: mediaType,
-                        tmdbID: tmdbID,
-                        asUser: seerrUserID
-                    )
+                try await seerrService.perform(asJellyfinUserID: jellyfinUserID) { userClient in
+                    if isAdding {
+                        try await userClient.addToWatchlist(
+                            mediaType: mediaType,
+                            tmdbID: tmdbID,
+                            title: title
+                        )
+                    } else {
+                        try await userClient.removeFromWatchlist(
+                            mediaType: mediaType,
+                            tmdbID: tmdbID
+                        )
+                    }
                 }
             } catch {
                 logger.warning(
                     "Failed to sync a Seerr watchlist",
                     metadata: [
-                        "seerrUserID": .stringConvertible(seerrUserID),
+                        "jellyfinUserID": .string(jellyfinUserID),
                         "error": .string(error.localizedDescription),
                     ]
                 )

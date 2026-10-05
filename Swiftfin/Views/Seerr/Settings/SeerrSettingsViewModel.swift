@@ -27,10 +27,15 @@ final class SeerrSettingsViewModel: ObservableObject {
             /// Was just imported from Jellyfin into Seerr.
             case imported(seerrName: String)
             case notFound
+            /// Can't be looked up yet: no API key and nobody signed in with Quick Connect.
+            case unavailable
         }
 
         let user: UserState
         var mapping: Mapping
+        /// Whether this person can sign in with Quick Connect from this device
+        /// (their Jellyfin access token is stored here).
+        var canSignIn: Bool
 
         var id: String {
             user.id
@@ -45,6 +50,9 @@ final class SeerrSettingsViewModel: ObservableObject {
     private(set) var people: [Person] = []
     @Published
     private(set) var version: String?
+    /// The Jellyfin user ids currently signing in with Quick Connect.
+    @Published
+    private(set) var signingInUserIDs: Set<String> = []
 
     @Published
     var error: Error?
@@ -62,10 +70,24 @@ final class SeerrSettingsViewModel: ObservableObject {
         Container.shared.currentUserSession()?.server
     }
 
+    /// `nil` until the server version is known.
+    var supportsQuickConnect: Bool? {
+        version.map(SeerrClient.supportsQuickConnect(version:))
+    }
+
+    var isSigningIn: Bool {
+        signingInUserIDs.isNotEmpty
+    }
+
+    /// People that can sign in with Quick Connect from this device and aren't signed in yet.
+    var peopleToSignIn: [Person] {
+        people.filter { $0.canSignIn && !seerrService.signedInUserIDs.contains($0.id) }
+    }
+
     // MARK: - Load
 
     func load() {
-        guard seerrService.isConfigured else {
+        guard seerrService.serverURL != nil else {
             refreshTask?.cancel()
             version = nil
             people = []
@@ -78,6 +100,10 @@ final class SeerrSettingsViewModel: ObservableObject {
     // MARK: - Connect
 
     /// Validates and saves the Seerr connection.
+    ///
+    /// Without an API key the server is saved for Quick Connect, and the current
+    /// user is signed in right away when nobody is signed in yet.
+    ///
     /// Returns `true` on success; on failure `error` is set.
     func connect(url: String, apiKey: String) async -> Bool {
         guard !isConnecting else { return false }
@@ -88,16 +114,15 @@ final class SeerrSettingsViewModel: ObservableObject {
 
         let apiKey = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        guard apiKey.isNotEmpty else {
-            error = ErrorMessage(L10n.SeerrSettings.missingAPIKey)
-            return false
-        }
-
         isConnecting = true
         defer { isConnecting = false }
 
         do {
-            try await seerrService.configure(url: serverURL, apiKey: apiKey)
+            if apiKey.isEmpty {
+                try await seerrService.configure(url: serverURL)
+            } else {
+                try await seerrService.configure(url: serverURL, apiKey: apiKey)
+            }
         } catch is CancellationError {
             return false
         } catch {
@@ -110,7 +135,65 @@ final class SeerrSettingsViewModel: ObservableObject {
         }
 
         refresh()
+
+        if !seerrService.hasAPIKey, seerrService.signedInUserIDs.isEmpty,
+           let currentUserID = Container.shared.currentUserSession()?.user.id
+        {
+            return await signIn(jellyfinUserID: currentUserID)
+        }
+
         return true
+    }
+
+    // MARK: - Quick Connect
+
+    /// Signs one person in to Seerr with Jellyfin Quick Connect.
+    /// Returns `true` on success; on failure `error` is set.
+    @discardableResult
+    func signIn(jellyfinUserID: String) async -> Bool {
+        guard !signingInUserIDs.contains(jellyfinUserID) else { return false }
+
+        signingInUserIDs.insert(jellyfinUserID)
+        defer { signingInUserIDs.remove(jellyfinUserID) }
+
+        do {
+            try await seerrService.signInWithQuickConnect(jellyfinUserID: jellyfinUserID)
+        } catch is CancellationError {
+            return false
+        } catch {
+            logger.error(
+                "Failed to sign in to Seerr with Quick Connect",
+                metadata: [
+                    "jellyfinUserID": .string(jellyfinUserID),
+                    "error": .string(error.localizedDescription),
+                ]
+            )
+            self.error = error
+            return false
+        }
+
+        refresh()
+        return true
+    }
+
+    /// Signs in everyone who can sign in from this device, one after the other.
+    /// Stops at the first failure, which is shown through `error`.
+    func signInEveryone() async -> Bool {
+        for person in peopleToSignIn {
+            guard await signIn(jellyfinUserID: person.id) else { return false }
+        }
+
+        return true
+    }
+
+    func signOut(jellyfinUserID: String) {
+        seerrService.signOut(jellyfinUserID: jellyfinUserID)
+        refresh()
+    }
+
+    func removeAPIKey() {
+        seerrService.removeAPIKey()
+        refresh()
     }
 
     // MARK: - Disconnect
@@ -136,13 +219,13 @@ final class SeerrSettingsViewModel: ObservableObject {
     }
 
     private func refreshVersion() async {
-        guard let client = seerrService.client else {
+        guard seerrService.serverURL != nil else {
             version = nil
             return
         }
 
         do {
-            let status = try await client.status()
+            let status = try await seerrService.status()
 
             guard !Task.isCancelled else { return }
 
@@ -159,12 +242,14 @@ final class SeerrSettingsViewModel: ObservableObject {
     }
 
     private func refreshPeople() async {
-        guard let server, let client = seerrService.client else {
+        guard let server, seerrService.serverURL != nil else {
             people = []
             return
         }
 
         let currentUserID = Container.shared.currentUserSession()?.user.id
+        let eligibleUserIDs = seerrService.quickConnectEligibleUserIDs()
+        let client = seerrService.client
 
         let users = StoredValues[.User.users]
             .filter { $0.serverID == server.id }
@@ -178,7 +263,15 @@ final class SeerrSettingsViewModel: ObservableObject {
                 return lhs.username.localizedCaseInsensitiveCompare(rhs.username) == .orderedAscending
             }
 
-        people = users.map { Person(user: $0, mapping: .loading) }
+        people = users.map { user in
+            Person(
+                user: user,
+                mapping: client == nil ? .unavailable : .loading,
+                canSignIn: eligibleUserIDs.contains(user.id)
+            )
+        }
+
+        guard let client else { return }
 
         // Seerr users that exist before mapping, to tell "found" from "imported".
         // `nil` when the list can't be fetched: everyone mapped then shows as found.
@@ -241,6 +334,11 @@ final class SeerrSettingsViewModel: ObservableObject {
     }
 
     private func seerrName(for user: UserState, seerrUserID: Int, client: SeerrClient) async -> String {
+        // A session always answers as its own user, so it can't look up someone else
+        guard client.auth?.isSession != true else {
+            return user.username
+        }
+
         do {
             let seerrUser = try await client.me(asUser: seerrUserID)
 

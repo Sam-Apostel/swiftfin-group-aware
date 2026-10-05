@@ -36,8 +36,17 @@ struct SeerrSettingsView: View {
     @StateObject
     private var viewModel = SeerrSettingsViewModel()
 
+    private var isBusy: Bool {
+        viewModel.isConnecting || viewModel.isSigningIn
+    }
+
     private var isConnectDisabled: Bool {
-        viewModel.isConnecting || url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || apiKey.isEmpty
+        isBusy || url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// A server is saved, with or without an API key.
+    private var hasServer: Bool {
+        seerrService.serverURL != nil
     }
 
     // MARK: - Body
@@ -48,8 +57,12 @@ struct SeerrSettingsView: View {
 
             connectSection
 
-            if seerrService.isConfigured {
+            if hasServer {
                 statusSection
+
+                if viewModel.supportsQuickConnect != false {
+                    quickConnectSection
+                }
 
                 peopleSection
 
@@ -58,7 +71,7 @@ struct SeerrSettingsView: View {
         }
         .navigationTitle(L10n.SeerrSettings.title)
         .topBarTrailing {
-            if viewModel.isConnecting {
+            if isBusy {
                 ProgressView()
             }
         }
@@ -66,7 +79,7 @@ struct SeerrSettingsView: View {
             url = seerrService.serverURL?.absoluteString ?? ""
             viewModel.load()
 
-            if !seerrService.isConfigured {
+            if !hasServer {
                 focusedField = .url
             }
         }
@@ -86,7 +99,7 @@ struct SeerrSettingsView: View {
         .errorMessage($viewModel.error)
     }
 
-    // MARK: - Connect
+    // MARK: - Actions
 
     private func connect() {
         guard !isConnectDisabled else { return }
@@ -101,6 +114,22 @@ struct SeerrSettingsView: View {
                 UIDevice.feedback(.success)
                 url = seerrService.serverURL?.absoluteString ?? url
                 apiKey = ""
+            }
+        }
+    }
+
+    private func signIn(_ person: SeerrSettingsViewModel.Person) {
+        Task { @MainActor in
+            if await viewModel.signIn(jellyfinUserID: person.id) {
+                UIDevice.feedback(.success)
+            }
+        }
+    }
+
+    private func signInEveryone() {
+        Task { @MainActor in
+            if await viewModel.signInEveryone() {
+                UIDevice.feedback(.success)
             }
         }
     }
@@ -124,7 +153,7 @@ struct SeerrSettingsView: View {
             .onSubmit {
                 focusedField = .apiKey
             }
-            .disabled(viewModel.isConnecting)
+            .disabled(isBusy)
 
             SecureField(
                 L10n.SeerrSettings.apiKey,
@@ -136,9 +165,9 @@ struct SeerrSettingsView: View {
             .autocorrectionDisabled()
             .textInputAutocapitalization(.never)
             .focused($focusedField, equals: .apiKey)
-            .disabled(viewModel.isConnecting)
+            .disabled(isBusy)
         } footer: {
-            Text(L10n.SeerrSettings.apiKeyFooter)
+            Text(L10n.SeerrQuickConnect.apiKeyOptionalFooter)
         } learnMore: {
             LabeledContent(
                 L10n.url,
@@ -147,6 +176,10 @@ struct SeerrSettingsView: View {
             LabeledContent(
                 L10n.SeerrSettings.apiKey,
                 value: L10n.SeerrSettings.apiKeyDescription
+            )
+            LabeledContent(
+                L10n.SeerrQuickConnect.title,
+                value: L10n.SeerrQuickConnect.description
             )
             LabeledContent(
                 L10n.SeerrSettings.asEachPerson,
@@ -167,7 +200,7 @@ struct SeerrSettingsView: View {
                     if viewModel.isConnecting {
                         ProgressView()
                     } else {
-                        Text(seerrService.isConfigured ? L10n.SeerrSettings.update : L10n.connect)
+                        Text(hasServer ? L10n.SeerrSettings.update : L10n.connect)
                     }
                 }
                 .frame(maxWidth: .infinity)
@@ -190,16 +223,74 @@ struct SeerrSettingsView: View {
     @ViewBuilder
     private var statusSection: some View {
         Section(L10n.status) {
-            Label {
-                if let version = viewModel.version {
-                    Text(L10n.SeerrSettings.connectedTo(version))
-                } else {
-                    Text(L10n.SeerrSettings.connected)
+            if seerrService.isConfigured {
+                Label {
+                    if let version = viewModel.version {
+                        Text(L10n.SeerrSettings.connectedTo(version))
+                    } else {
+                        Text(L10n.SeerrSettings.connected)
+                    }
+                } icon: {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
                 }
-            } icon: {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
+            } else {
+                Label {
+                    Text(L10n.SeerrQuickConnect.finishSetup)
+                } icon: {
+                    Image(systemName: "exclamationmark.circle.fill")
+                        .foregroundStyle(.orange)
+                }
             }
+
+            if seerrService.hasAPIKey {
+                Label {
+                    Text(L10n.SeerrQuickConnect.apiKeySaved)
+                } icon: {
+                    Image(systemName: "key.fill")
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    // MARK: - Quick Connect Section
+
+    @ViewBuilder
+    private var quickConnectSection: some View {
+        Section {
+            if viewModel.peopleToSignIn.isEmpty, viewModel.people.isNotEmpty {
+                Label {
+                    Text(L10n.SeerrQuickConnect.everyoneSignedIn)
+                } icon: {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                }
+            } else {
+                Button {
+                    signInEveryone()
+                } label: {
+                    Label {
+                        Text(
+                            viewModel.peopleToSignIn.count > 1
+                                ? L10n.SeerrQuickConnect.signInEveryone
+                                : L10n.SeerrQuickConnect.signInWithJellyfin
+                        )
+                    } icon: {
+                        if viewModel.isSigningIn {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "person.badge.key.fill")
+                        }
+                    }
+                }
+                .foregroundStyle(accentColor)
+                .disabled(isBusy || viewModel.peopleToSignIn.isEmpty)
+            }
+        } header: {
+            Text(L10n.SeerrQuickConnect.title)
+        } footer: {
+            Text(L10n.SeerrQuickConnect.footer)
         }
     }
 
@@ -215,7 +306,11 @@ struct SeerrSettingsView: View {
                 ForEach(viewModel.people) { person in
                     PersonRow(
                         person: person,
-                        server: viewModel.server
+                        server: viewModel.server,
+                        quickConnect: quickConnectState(for: person),
+                        isDisabled: isBusy,
+                        onSignIn: { signIn(person) },
+                        onSignOut: { viewModel.signOut(jellyfinUserID: person.id) }
                     )
                 }
             }
@@ -226,16 +321,38 @@ struct SeerrSettingsView: View {
         }
     }
 
+    private func quickConnectState(for person: SeerrSettingsViewModel.Person) -> PersonRow.QuickConnectState {
+        if viewModel.signingInUserIDs.contains(person.id) {
+            return .signingIn
+        }
+        if seerrService.signedInUserIDs.contains(person.id) {
+            return .signedIn
+        }
+        if person.canSignIn, viewModel.supportsQuickConnect != false {
+            return .signedOut
+        }
+        return .unavailable
+    }
+
     // MARK: - Disconnect Section
 
     @ViewBuilder
     private var disconnectSection: some View {
         Section {
+            if seerrService.hasAPIKey, viewModel.supportsQuickConnect == true {
+                Button(L10n.SeerrQuickConnect.removeAPIKey, role: .destructive) {
+                    UIDevice.impact(.light)
+                    viewModel.removeAPIKey()
+                }
+                .frame(maxWidth: .infinity)
+                .disabled(isBusy)
+            }
+
             Button(L10n.SeerrSettings.disconnect, role: .destructive) {
                 isDisconnectPresented = true
             }
             .frame(maxWidth: .infinity)
-            .disabled(viewModel.isConnecting)
+            .disabled(isBusy)
         }
     }
 }
