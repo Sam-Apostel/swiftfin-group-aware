@@ -33,8 +33,8 @@ enum CouchItemFilter {
 
     /// Keeps the items that every member can access and that weren't watched, following `excludePlayedBy`.
     ///
-    /// An item counts as watched by a member when it is marked played for them,
-    /// when they have a resume position in it, or (a series) when they played some of its episodes.
+    /// An item counts as watched by a member as `hasWatched(_:)` says: marked played for them,
+    /// at least half watched, or (a series) some of its episodes played.
     ///
     /// - Parameters:
     ///   - items: The items to filter. Their order is kept.
@@ -191,7 +191,7 @@ enum CouchItemFilter {
     ///   counts for `excludePlayedBy`, as in `filter(_:memberResults:excludePlayedBy:)`.
     /// - When a restricted member other than the primary user couldn't be checked (`nil` result),
     ///   only items verified by a checked restricted member who is at least as restricted
-    ///   (`UserState.restrictionScore`) are kept. When there is no such member, this returns `[]`:
+    ///   (`isAtLeastAsRestricted(_:as:)`) are kept. When there is no such member, this returns `[]`:
     ///   a row never shows what a child on the couch might not be allowed to see.
     ///
     /// - Parameters:
@@ -216,27 +216,47 @@ enum CouchItemFilter {
 
         let checks = Array(zip(members, memberResults))
 
-        // The strictest restricted member that couldn't be checked
-        let uncheckedRestrictionScore = checks
+        // The restricted members that couldn't be checked
+        let uncheckedMembers = checks
             .filter { check in
                 check.1 == nil && check.0.isRestricted && check.0.id != primaryID
             }
-            .map { check in check.0.restrictionScore }
-            .min()
+            .map { check in check.0 }
+
+        // The restricted members that were checked
+        let checkedRestrictedMembers = checks
+            .filter { check in
+                check.1 != nil && check.0.isRestricted
+            }
+            .map { check in check.0 }
 
         let filtered = filter(items, memberResults: memberResults, excludePlayedBy: excludePlayedBy)
 
-        guard let uncheckedRestrictionScore else { return filtered }
+        guard uncheckedMembers.isNotEmpty else { return filtered }
 
-        // Someone checked must stand in for them: restricted at least as much
-        let hasStandIn = checks.contains { check in
-            check.1 != nil && check.0.isRestricted && check.0.restrictionScore <= uncheckedRestrictionScore
+        // Someone checked must stand in for each of them: restricted at least as much
+        let hasStandIns = uncheckedMembers.allSatisfy { uncheckedMember in
+            checkedRestrictedMembers.contains { checkedMember in
+                isAtLeastAsRestricted(checkedMember, as: uncheckedMember)
+            }
         }
 
-        guard hasStandIn else { return [] }
+        guard hasStandIns else { return [] }
 
-        // `filtered` only keeps items every checked member can access, the stand-in included
+        // `filtered` only keeps items every checked member can access, the stand-ins included
         return filtered
+    }
+
+    /// Whether `member` can stand in for `other`: at least as restricted (`UserState.restrictionScore`),
+    /// and, when `other` has a server age limit, an age limit that is at least as low.
+    ///
+    /// Two kids both score `-1`, so without the second rule a 12+ kid would stand in for a 6+ kid.
+    static func isAtLeastAsRestricted(_ member: UserState, as other: UserState) -> Bool {
+        guard member.restrictionScore <= other.restrictionScore else { return false }
+        guard let otherRating = other.data.policy?.maxParentalRating else { return true }
+        guard let memberRating = member.data.policy?.maxParentalRating else { return false }
+
+        return memberRating <= otherRating
     }
 
     /// Whether the item's user data says the member watched it.
