@@ -63,8 +63,8 @@ jobs:
             -skipMacroValidation \
             -skipPackagePluginValidation \
             CODE_SIGNING_ALLOWED=NO \
-            > "$log" 2>&1
-          status=$?
+            > "$log" 2>&1 && status=0 || status=$?
+          # (`run:` uses `bash -e`: without the `||` a failed build exits here, before the summary below.)
 
           # Print a compact, de-duplicated error summary at the END of the log so it is easy to read
           # (agents fetch the tail of this log to fix compile errors).
