@@ -41,5 +41,8 @@ extension L10n {
         static func pickedFor(_ names: String) -> String {
             "Picked for \(names)"
         }
+
+        /// Home row on a couch with a kid and grown-ups: family films everyone on the couch can watch.
+        static let familyMovieNight = "Family movie night"
     }
 }

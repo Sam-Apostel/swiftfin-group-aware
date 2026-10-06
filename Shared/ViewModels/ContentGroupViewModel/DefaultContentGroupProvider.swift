@@ -18,7 +18,7 @@ struct DefaultContentGroupProvider: ContentGroupProvider {
 
     let id: String = "default-content-group-provider"
 
-    /// "Home", or who's on the couch when a group is watching together ("Sam & Lisa", "Together").
+    /// "Home", or who's on the couch when a group is watching together ("Sam & Lisa", "Sam, Lisa & Tuur").
     var displayTitle: String {
         if let couch = groupCouch {
             return L10n.Couch.homeTitle(couch: couch)
@@ -27,9 +27,10 @@ struct DefaultContentGroupProvider: ContentGroupProvider {
         return L10n.home
     }
 
-    /// A group's home has a "Picked for…" row that follows the watchlist live.
+    /// Every home has a "Picked for…" row that follows the watchlist live:
+    /// "Picked for Sam & Lisa" on a group's home, "Picked for you" when watching alone.
     var picksCouch: CouchGroup? {
-        groupCouch
+        userSession?.couch
     }
 
     /// A group's couch rows each wait for every member, so they show up as they load.
@@ -90,6 +91,17 @@ struct DefaultContentGroupProvider: ContentGroupProvider {
         )
         #endif
 
+        // Watching alone: "What should I watch?" and "Picked for you", the same picks the decider uses
+        if let couch = userSession?.couch {
+            CouchDeciderEntryGroup(couch: couch)
+
+            PosterGroup(
+                id: "couch-picked",
+                library: CouchPickedLibrary(couch: couch),
+                posterDisplayType: .portrait
+            )
+        }
+
         if Defaults[.ReadyAlerts.showJustArrivedRow], let couch = userSession?.couch {
             PosterGroup(id: "ready-just-arrived", library: JustArrivedLibrary(couch: couch), posterDisplayType: .portrait)
         }
@@ -146,6 +158,15 @@ struct DefaultContentGroupProvider: ContentGroupProvider {
             library: CouchPickedLibrary(couch: couch),
             posterDisplayType: .portrait
         )
+
+        // A kid with grown-ups: family films everyone can watch, checked with every member's account
+        if CouchHomeSupport.hasKidAndAdults(couch) {
+            PosterGroup(
+                id: "couch-family",
+                library: CouchFamilyLibrary(couch: couch),
+                posterDisplayType: .portrait
+            )
+        }
 
         if Defaults[.ReadyAlerts.showJustArrivedRow] {
             PosterGroup(id: "ready-just-arrived", library: JustArrivedLibrary(couch: couch), posterDisplayType: .portrait)

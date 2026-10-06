@@ -129,7 +129,7 @@ struct SettingsView: View {
                     .foregroundStyle(.primary)
                     .lineLimit(2)
 
-                if let browsingAs = browsingAsDescription(couch: couch) {
+                if let browsingAs = CouchStatus.browsingAsDescription(couch: couch, lastMemberIDs: lastCouchMemberIDs) {
                     Text(browsingAs)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
@@ -138,20 +138,6 @@ struct SettingsView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-    }
-
-    /// "Browsing as Tuur (kid-safe)" when kid-safe browsing made a restricted
-    /// member the primary instead of the first person picked.
-    private func browsingAsDescription(couch: CouchGroup) -> String? {
-        guard couch.isGroup, couch.primary.isRestricted else { return nil }
-
-        let firstPickID = lastCouchMemberIDs.first { couch.memberIDs.contains($0) }
-
-        if let firstPickID, firstPickID == couch.primary.id {
-            return nil
-        }
-
-        return L10n.CouchSettings.browsingAsKidSafe(couch.primary.username)
     }
 
     // MARK: - Server Section

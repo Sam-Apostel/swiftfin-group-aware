@@ -9,11 +9,14 @@
 import Foundation
 import JellyfinAPI
 
-/// "Picked for Sam and Lisa": the household watchlist entries (`AudienceWatchlistStore`)
-/// whose audience is **exactly** the people on the couch, resolved to library items.
+/// The household watchlist entries (`AudienceWatchlistStore`) for this couch, resolved to library items:
+/// the same picks the decider uses (`CouchHomeSupport.pickEntries(for:)`).
 ///
-/// Picks for only some of the people on the couch (a show picked for the kid alone)
-/// don't show up while others are on the couch too.
+/// - A group, "Picked for Sam and Lisa": the picks whose audience is **exactly** the people on the couch.
+///   Picks for only some of them (a show picked for the kid alone) don't show up while others are on the couch too.
+/// - Alone, "Picked for you": every pick that includes this person ("Just Sam", "Sam & Lisa", …).
+///
+/// Like the group row, picks are exempt from the "watched" filter: the ones everyone already played come last.
 struct CouchPickedLibrary: BaseItemKindLibrary {
 
     let couch: CouchGroup
@@ -23,7 +26,9 @@ struct CouchPickedLibrary: BaseItemKindLibrary {
     init(couch: CouchGroup) {
         self.couch = couch
         self.parent = .init(
-            displayTitle: L10n.CouchHome.pickedFor(couch.displayNames),
+            displayTitle: couch.isGroup
+                ? L10n.CouchHome.pickedFor(couch.displayNames)
+                : L10n.CouchDecider.pickedForYou,
             id: "couch-picked"
         )
     }

@@ -12,23 +12,29 @@ import Foundation
 
 extension L10n.Couch {
 
-    /// The home navigation title for a couch.
+    /// The home navigation title for a couch. Never "Together": everyone sees who it is for.
     ///
     /// - One member: their name, e.g. "Sam".
     /// - Two members: both names, e.g. "Sam & Lisa".
-    /// - Three or more: "Together".
+    /// - Three members: every name, e.g. "Sam, Lisa & Tuur".
+    /// - Four or more: the first name and how many others, e.g. "Sam & 3 others".
+    ///
+    /// Grown-ups come first, in pick order, so a kid-safe couch that browses as Tuur still reads
+    /// "Sam, Lisa & Tuur" (`CouchGroup.members` puts the primary user first).
     static func homeTitle(couch: CouchGroup) -> String {
-        let names = couch.members.map(\.username)
+        let names = (couch.grownUps + couch.members.filter(\.isRestricted)).map(\.username)
 
         switch names.count {
         case 0:
-            return L10n.CouchSettings.together
+            return L10n.home
         case 1:
             return names[0]
         case 2:
             return "\(names[0]) & \(names[1])"
+        case 3:
+            return "\(names[0]), \(names[1]) & \(names[2])"
         default:
-            return L10n.CouchSettings.together
+            return "\(names[0]) & \(names.count - 1) others"
         }
     }
 }
