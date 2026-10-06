@@ -41,6 +41,9 @@ struct ReadyAlertsBannerModifier: ViewModifier {
     /// Lets the home and its focus settle before announcing.
     private static let settleDelay: Duration = .seconds(2)
 
+    /// How often a found arrival checks whether "Still Sam, Lisa & Tuur?" was answered.
+    private static let couchConfirmationPollInterval: Duration = .milliseconds(500)
+
     #if os(iOS)
     /// How long the banner stays on screen.
     private static let autoDismissDelay: Duration = .seconds(8)
@@ -55,6 +58,10 @@ struct ReadyAlertsBannerModifier: ViewModifier {
     @Environment(\.accessibilityVoiceOverEnabled)
     private var isVoiceOverEnabled
     #endif
+
+    /// Set by `couchStillHerePrompt(tabCoordinator:)`, which wraps this modifier in `MainTabView`.
+    @Environment(\.couchTabCoordinator)
+    private var couchTabCoordinator
 
     func body(content: Content) -> some View {
         content
@@ -175,6 +182,34 @@ struct ReadyAlertsBannerModifier: ViewModifier {
         }
     }
 
+    /// Waits while "Still Sam, Lisa & Tuur?" is unanswered, then until its alert and any sheet it opened
+    /// ("Change…" opens the couch switcher) are gone. Only one alert can show at a time, and arrivals
+    /// are recorded as announced before they are presented, so a collision would lose them.
+    ///
+    /// - Returns: `false` when cancelled.
+    @MainActor
+    private func waitForCouchConfirmation(userSessionManager: UserSessionManager) async -> Bool {
+        guard userSessionManager.shouldConfirmCouch else { return true }
+
+        var clearChecks = 0
+
+        // Three clear checks in a row: the alert finished animating out, and a route started by
+        // "Change…" (after a short delay) is seen
+        while clearChecks < 3 {
+            if userSessionManager.shouldConfirmCouch || couchTabCoordinator?.isPresentingRoute == true {
+                clearChecks = 0
+            } else {
+                clearChecks += 1
+            }
+
+            try? await Task.sleep(for: Self.couchConfirmationPollInterval)
+
+            guard !Task.isCancelled else { return false }
+        }
+
+        return true
+    }
+
     /// Refreshes the arrivals and presents the ones nobody on the couch was told about on this device.
     ///
     /// The arrivals are recorded as announced **before** they are presented,
@@ -199,6 +234,8 @@ struct ReadyAlertsBannerModifier: ViewModifier {
         let service = Container.shared.readyAlertsService()
 
         await service.refresh(session: session)
+
+        guard await waitForCouchConfirmation(userSessionManager: userSessionManager) else { return }
 
         // Playback may have started, or the couch changed, while refreshing.
         guard !Task.isCancelled,
