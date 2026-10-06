@@ -41,7 +41,27 @@ extension CouchDeciderView {
             UIDevice.isTV ? 20 : 8
         }
 
+        /// The id of the Undo / "Hidden: N" chip, for scrolling it into view.
+        private static let hiddenChipID = "hidden-chip"
+
         var body: some View {
+            ScrollViewReader { proxy in
+                chipRow
+                    .onChange(of: hiddenChip) { _, newChip in
+                        // The chip sits at the end of a row that is usually wider than the screen:
+                        // show "Undo" when it appears, so it can be seen (iPhone) and reached (tvOS).
+                        guard newChip == .undo else { return }
+
+                        DispatchQueue.main.async {
+                            withAnimation(.easeInOut(duration: 0.3)) {
+                                proxy.scrollTo(Self.hiddenChipID, anchor: .trailing)
+                            }
+                        }
+                    }
+            }
+        }
+
+        private var chipRow: some View {
             ScrollView(.horizontal) {
                 HStack(spacing: chipSpacing) {
                     lengthChips
@@ -168,7 +188,7 @@ extension CouchDeciderView {
                     Label(L10n.CouchDecider.hiddenCount(count), systemImage: "eye.slash")
                 }
             }
-            .id("hidden-chip")
+            .id(Self.hiddenChipID)
             .accessibilityLabel(hiddenChipAccessibilityLabel(chip))
             .transition(.opacity.combined(with: .scale))
         }

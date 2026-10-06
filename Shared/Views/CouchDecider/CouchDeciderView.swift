@@ -334,7 +334,8 @@ struct CouchDeciderView: View {
         }
         .font(UIDevice.isTV ? .caption : .footnote)
         .fontWeight(.semibold)
-        .lineLimit(2)
+        // The orange badge is long, and on iPhone shares the row with Vote and Close
+        .lineLimit(UIDevice.isTV ? 2 : 3)
         .padding(.horizontal, UIDevice.isTV ? 16 : 10)
         .padding(.vertical, UIDevice.isTV ? 8 : 5)
         .background(.ultraThinMaterial, in: .capsule)
