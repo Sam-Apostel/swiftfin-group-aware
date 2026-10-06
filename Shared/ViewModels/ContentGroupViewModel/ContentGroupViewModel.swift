@@ -88,7 +88,21 @@ final class ContentGroupViewModel<Provider: ContentGroupProvider>: ViewModel {
     ) {
         guard interval > staleThreshold || hasPendingRefreshSignals else { return }
 
+        // See `refreshFromPull()`
+        guard !isRevealing else { return }
+
         background.refresh()
+    }
+
+    /// Pull to refresh: a background refresh, except while a full refresh is revealing the groups,
+    /// which loads every one of them already.
+    ///
+    /// A background send that ends clears `StateCore`'s repeat check of the running full refresh,
+    /// which would let a second full refresh (e.g. `refreshIfPendingChanges()`) reveal its groups at the same time.
+    func refreshFromPull() async {
+        guard !isRevealing else { return }
+
+        await background.refresh()
     }
 
     func refreshIfPendingChanges() {

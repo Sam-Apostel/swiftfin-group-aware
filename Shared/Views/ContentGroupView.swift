@@ -74,7 +74,7 @@ struct ContentGroupView<Provider: ContentGroupProvider>: View {
             #endif
             .scrollIndicators(.hidden)
             .refreshable {
-                await viewModel.background.refresh()
+                await viewModel.refreshFromPull()
             }
             .onReceive(tabItemSelected) { event in
                 if event.isRepeat, event.isRoot {
