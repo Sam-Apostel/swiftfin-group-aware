@@ -88,14 +88,19 @@ enum CouchStatus {
 
     // MARK: - Member health
 
-    /// The members on this couch whose last request failed, in couch order.
+    /// The members on this couch whose last request failed, in couch order. Empty on a solo couch.
+    ///
+    /// Only a group's couch rows check members (`CouchHomeSupport.perSession`), so only they clear a failure
+    /// again: a solo couch would keep showing one left over from an earlier group couch.
     ///
     /// - Parameter failures: `CouchMemberHealth.failures`, by Jellyfin user id.
     static func memberIssues(
         couch: CouchGroup,
         failures: [String: CouchMemberHealth.Kind]
     ) -> [MemberIssue] {
-        couch.members.compactMap { member in
+        guard couch.isGroup else { return [] }
+
+        return couch.members.compactMap { member in
             guard let kind = failures[member.id] else { return nil }
 
             return MemberIssue(member: member, kind: kind)
@@ -169,9 +174,10 @@ final class CouchSignInAgain {
     private func signInCouchAgain(couchID: String) async {
         let userSessionManager = Container.shared.userSessionManager()
 
-        // Let the sign-in sheet finish closing before the session changes
+        // Let the sign-in sheet finish closing before the session changes and the tabs are rebuilt.
+        // After Quick Connect the sheet only starts closing 600 ms after the notification.
         do {
-            try await Task.sleep(for: .milliseconds(600))
+            try await Task.sleep(for: .milliseconds(1200))
 
             while userSessionManager.hasActivePlayback {
                 try await Task.sleep(for: Self.playbackPollInterval)

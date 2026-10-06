@@ -56,6 +56,13 @@ final class UserSessionManager: ObservableObject {
     @Published
     private(set) var pendingDeepLink: DeepLink?
 
+    /// Bumped by every successful `signIn(userIDs:)`. The tabs and Home are rebuilt for it
+    /// (`UserSessionRootView`), also when the couch and the primary user stay the same: a member who
+    /// signed in again only gets a member session with the new token in the new `UserSession`,
+    /// and the existing Home would keep using the old one.
+    @Published
+    private(set) var signInGeneration = 0
+
     /// Whether to ask "Still Sam, Lisa & Tuur?" before the couch keeps browsing.
     ///
     /// Set when `start()` restores a group couch (a cold launch), and when the app comes back
@@ -158,6 +165,7 @@ final class UserSessionManager: ObservableObject {
 
         // Someone just picked this couch
         shouldConfirmCouch = false
+        signInGeneration += 1
     }
 
     /// The people on the couch said they are still there ("Still Sam, Lisa & Tuur?" → Yes).

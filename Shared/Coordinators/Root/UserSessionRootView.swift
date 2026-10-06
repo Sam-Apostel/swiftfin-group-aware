@@ -21,7 +21,7 @@ struct UserSessionRootView: View {
     private var sessionViewID: String? {
         guard let currentSession = userSessionManager.currentSession else { return nil }
 
-        return "\(currentSession.user.id)-\(currentSession.couch.id)"
+        return "\(currentSession.user.id)-\(currentSession.couch.id)-\(userSessionManager.signInGeneration)"
     }
 
     var body: some View {
@@ -45,7 +45,8 @@ struct UserSessionRootView: View {
                     MainTabView()
                 }
                 // Rebuild tabs and home whenever the people on the couch change,
-                // or the couch browses as another member (same people, new primary)
+                // the couch browses as another member (same people, new primary),
+                // or the couch was signed in again (a member's new sign-in, `signInGeneration`)
                 .id(sessionViewID)
             }
         }
