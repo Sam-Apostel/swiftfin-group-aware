@@ -403,7 +403,7 @@ final class SeerrService: ObservableObject {
 
     // MARK: - Private
 
-    private var keychain: KeychainSwift {
+    private var keychain: CouchfinKeychain {
         Container.shared.keychainService()
     }
 
@@ -776,16 +776,16 @@ final class SeerrService: ObservableObject {
         serverID.replacing(".", with: "_")
     }
 
-    private static func serverURLKey(serverID: String) -> Defaults.Key<String?> {
+    static func serverURLKey(serverID: String) -> Defaults.Key<String?> {
         Defaults.Key<String?>("seerrServerURL_\(storageID(serverID))", suite: .appSuite)
     }
 
-    private static func apiKeyKeychainKey(serverID: String) -> String {
+    static func apiKeyKeychainKey(serverID: String) -> String {
         "seerrAPIKey-\(serverID)"
     }
 
     /// One Seerr session (`connect.sid`) per Jellyfin user and server.
-    private static func sessionKeychainKey(serverID: String, jellyfinUserID: String) -> String {
+    static func sessionKeychainKey(serverID: String, jellyfinUserID: String) -> String {
         "seerrSession-\(serverID)-\(jellyfinUserID)"
     }
 }
