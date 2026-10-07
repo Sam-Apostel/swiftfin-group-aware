@@ -157,6 +157,9 @@ final class UserSessionManager: ObservableObject {
 
         Defaults[.lastSignedInUserID] = .signedOut
         Defaults[.Couch.memberIDs] = []
+        #if os(tvOS)
+        TopShelfPublisher.clear()
+        #endif
         await refreshCurrentSession()
 
         logger.info(
@@ -186,10 +189,18 @@ final class UserSessionManager: ObservableObject {
         do {
             let deepLinkSession = try session(for: deepLink)
             let currentSession = currentSession
-            let isSameUserSession = currentSession?.server.id == deepLinkSession.server.id && currentSession?.user.id == deepLinkSession
-                .user.id
+            let isSameServer = currentSession?.server.id == deepLinkSession.server.id
+            let currentMemberIDs = currentSession?.couch.memberIDs ?? []
 
-            if !isSameUserSession {
+            // A link for a couch (from the Top Shelf) puts exactly those people on the couch.
+            // A link for one person keeps the current couch when they're already on it.
+            let isSameCouch: Bool = if let couchMemberIDs = deepLink.couchMemberIDs {
+                isSameServer && Set(couchMemberIDs) == currentMemberIDs
+            } else {
+                isSameServer && currentMemberIDs.contains(deepLinkSession.user.id)
+            }
+
+            if !isSameCouch {
                 try await authenticate(
                     user: deepLinkSession.user,
                     authenticationAction: authenticationAction
@@ -199,7 +210,7 @@ final class UserSessionManager: ObservableObject {
                     await stopActivePlayback()
                 }
 
-                try await signIn(userID: deepLinkSession.user.id)
+                try await signIn(userIDs: deepLink.couchMemberIDs ?? [deepLinkSession.user.id])
             }
 
             pendingDeepLink = deepLink

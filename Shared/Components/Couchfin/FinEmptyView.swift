@@ -8,7 +8,7 @@
 
 import SwiftUI
 
-/// Couchfin's empty state: the fin, one line, one action.
+/// Couchfin's empty state: the fin swims off the leading edge above one line and one action.
 struct FinEmptyView<Actions: View>: View {
 
     private let title: String
@@ -26,14 +26,16 @@ struct FinEmptyView<Actions: View>: View {
     }
 
     private var finWidth: CGFloat {
-        UIDevice.isTV ? 520 : 240
+        UIDevice.isTV ? 760 : 340
     }
 
     var body: some View {
         VStack(spacing: UIDevice.isTV ? 28 : 14) {
-            FinView()
+            FinView(variant: .swimming)
                 .frame(width: finWidth)
-                .rotationEffect(.degrees(-6))
+                // the head leaves through the leading edge
+                .offset(x: -finWidth * 0.3)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.bottom, UIDevice.isTV ? 20 : 8)
 
             Text(title)

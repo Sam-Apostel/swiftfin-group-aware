@@ -10,15 +10,18 @@ import SwiftUI
 
 /// The Couchfin fin, straight from the brand artwork: textured body, glowing rim.
 ///
-/// Use it the way the brand guide says: one per screen, entering from an edge,
+/// Use it the way the brand guide says: one per screen, swimming off the leading edge,
 /// never on top of artwork or video.
 struct FinView: View {
 
     enum Variant {
         /// The whole fish: round head on the leading side, forked tail on the trailing side.
         case fish
-        /// Only the tail, for swimming off an edge.
+        /// Only the tail.
         case tail
+        /// The whole fish with its head progressively blurred, bending away:
+        /// place it so the head leaves through the leading edge.
+        case swimming
 
         var resource: ImageResource {
             switch self {
@@ -26,6 +29,8 @@ struct FinView: View {
                 .couchfinFin
             case .tail:
                 .couchfinTail
+            case .swimming:
+                .couchfinFinSwimming
             }
         }
     }

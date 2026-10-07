@@ -38,7 +38,9 @@ Mockups are HTML (`mockups/*.html`, open in a browser); poster art in them is pl
 
 ## Rules
 
-1. Show the fin whole — its tail is its character. Never crop it to a sliver.
+1. The fin swims off the leading edge: head out of frame and progressively blurred
+   (`couchfin-fin-swimming`), tail crisp and in view. The tail is its character — never
+   crop the tail.
 2. One fin per screen. Ambient (10–20 %) behind chrome; full strength only when it *is*
    the content: couch picker, empty states, About.
 3. Never over artwork or video. The player has no fin.
