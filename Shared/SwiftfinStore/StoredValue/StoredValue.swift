@@ -154,6 +154,7 @@ enum StoredValues {
                     }
                 }
                 #endif
+
             case .sql:
                 try? AnyStoredData.store(
                     value: newValue,
