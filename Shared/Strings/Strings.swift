@@ -1746,8 +1746,6 @@ internal enum L10n {
   internal static let supportsMediaControl = L10n.tr("Localizable", "supportsMediaControl", fallback: "Media control")
   /// Persistent identifier
   internal static let supportsPersistentIdentifier = L10n.tr("Localizable", "supportsPersistentIdentifier", fallback: "Persistent identifier")
-  /// Switch user
-  internal static let switchUser = L10n.tr("Localizable", "switchUser", fallback: "Switch user")
   /// SyncPlay
   internal static let syncPlay = L10n.tr("Localizable", "syncPlay", fallback: "SyncPlay")
   /// System
