@@ -88,7 +88,8 @@ enum TopShelfPublisher {
             )
         )
 
-        sections.append(await justLandedSection(session: session))
+        let justLanded = await justLandedSection(session: session)
+        sections.append(justLanded)
 
         // Every other couch: saved couches, then recent ones
         var seenCouches: Set<Set<String>> = [Set(currentMemberIDs)]
@@ -263,6 +264,7 @@ enum TopShelfPublisher {
                 (.backdrop, item.id, item.backdropImageTags?.first),
                 (.primary, item.id, item.imageTags?[ImageType.primary.rawValue]),
             ]
+
         case .poster:
             [
                 (.primary, item.seriesID, item.seriesPrimaryImageTag),
