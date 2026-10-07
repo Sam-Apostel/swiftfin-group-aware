@@ -197,9 +197,8 @@ struct PagingLibraryView<Library: PagingLibrary>: View where Library.Element: Li
                     if viewModel.isSearchActive, viewModel.background.is(.searching) {
                         ProgressView()
                     } else if viewModel.displayedElements.isEmpty {
-                        ContentUnavailableView(
-                            viewModel.isSearchActive ? L10n.noResults.localizedCapitalized : L10n.noItems.localizedCapitalized,
-                            systemImage: viewModel.isSearchActive ? "magnifyingglass" : "rectangle.on.rectangle.slash"
+                        FinEmptyView(
+                            viewModel.isSearchActive ? L10n.noResults.localizedCapitalized : L10n.noItems.localizedCapitalized
                         )
                         .focusable()
                         #if os(tvOS)

@@ -1,0 +1,69 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="cf.css">
+<style>body{width:1460px}
+.lib{height:96px;border-radius:20px;position:relative;overflow:hidden;display:flex;align-items:flex-end;padding:14px 16px;font:800 20px 'SF Pro Rounded',Nunito,sans-serif}
+.lib:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(1,6,26,.85),rgba(1,6,26,.1))}
+.lib span{position:relative;z-index:1}.lib small{display:block;font:500 12px Inter;color:var(--t2);margin-top:2px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:12px 10px;padding:0 20px}
+.grid3 .poster{width:100%;height:auto;aspect-ratio:2/3}
+.search{margin:8px 20px 0;height:44px;border-radius:22px;background:rgba(255,255,255,.08);border:1px solid var(--hair);display:flex;align-items:center;gap:10px;padding:0 16px;font:500 16px Inter;color:var(--t2)}
+.sheet{position:absolute;left:0;right:0;bottom:0;top:120px;border-radius:34px 34px 0 0;background:linear-gradient(180deg,#071552,#01061A 60%);border-top:1px solid rgba(63,237,253,.25);box-shadow:0 -20px 60px rgba(0,0,0,.6);padding:12px 22px;overflow:hidden}
+.grab{width:40px;height:5px;border-radius:3px;background:rgba(255,255,255,.25);margin:0 auto 14px}
+.pp{display:grid;grid-template-columns:repeat(4,1fr);gap:16px 8px;margin-top:12px}
+.pp div{text-align:center;font:600 13px Inter}
+.pp .a{width:62px;height:62px;border-radius:50%;margin:0 auto 6px;display:grid;place-items:center;font:800 24px 'SF Pro Rounded',Nunito,sans-serif}
+.pp .on .a{box-shadow:0 0 0 3px #071552,0 0 0 5px #F949FA,0 0 18px rgba(249,73,250,.5)}
+</style></head><body><div class="board">
+
+<div><div class="phone"><div class="abyss-bg"></div><div class="island"></div>
+<div class="fin" data-fin='{"flip":true,"opacity":0.18,"texture":false}' style="width:300px;right:-140px;top:40px;transform:rotate(-8deg)"></div>
+<div class="status"><span>9:41</span><span class="r">●●● ▮</span></div>
+<div class="scroll" style="padding-top:60px">
+ <div style="display:flex;justify-content:space-between;align-items:center;padding:0 20px"><h1 class="lt">Library</h1><span class="avbtn" style="display:flex;padding:3px;border-radius:22px;background:rgba(255,255,255,.08)"><span class="stack"><span class="av" style="background:#ff6fae;width:34px;height:34px">L</span><span class="av" style="background:#33c4a4;width:34px;height:34px">S</span></span></span></div>
+ <div style="display:flex;gap:8px;padding:14px 20px 4px"><span class="chip on">Shows</span><span class="chip">Movies</span><span class="chip">Kids</span><span class="chip">Live TV</span></div>
+ <div style="display:flex;justify-content:space-between;padding:10px 20px;font:600 13px Inter;color:var(--t2)"><span>412 shows</span><span style="color:var(--glint)">Recently added ⌄ &nbsp; ⚙︎ Filters</span></div>
+ <div class="grid3">
+  <div><div class="poster" data-poster="Saltwater Kids" data-progress="40"></div></div><div><div class="poster" data-poster="Northbound"></div></div><div><div class="poster" data-poster="Monday Club"></div></div>
+  <div><div class="poster" data-poster="Kilowatt"></div></div><div><div class="poster" data-poster="Sundown Diner"></div></div><div><div class="poster" data-poster="Brass &amp; Bone" data-progress="80"></div></div>
+  <div><div class="poster" data-poster="Ice Station 9"></div></div><div><div class="poster" data-poster="Velvet Static"></div></div><div><div class="poster" data-poster="The Orchard"></div></div>
+ </div>
+</div>
+<div class="tabbar"><div class="tab"><span data-i="home"></span>Home</div><div class="tab on"><span data-i="lib"></span>Library</div><div class="tab"><span data-i="inbox"></span>Discover</div><div class="tab"><span data-i="search"></span>Search</div></div>
+<div class="home-ind"></div></div>
+<div class="caption"><b>Library: libraries become chips, not a page.</b> Today "Media" is a grid of library tiles you tap through. Now the tab opens straight on your first library; switch with chips. Sort + filters collapse into one line.<small>Favourites/collections/Live TV are just more chips.</small></div></div>
+
+<div><div class="phone"><div class="abyss-bg"></div><div class="island"></div>
+<div class="status"><span>9:41</span><span class="r">●●● ▮</span></div>
+<div class="scroll" style="padding-top:60px">
+ <h1 class="lt" style="padding:0 20px">Search</h1>
+ <div class="search"><span data-i="search" style="width:18px;height:18px"></span><span style="color:#fff">harb</span><span style="width:2px;height:20px;background:var(--glint);margin-left:-8px"></span></div>
+ <div style="display:flex;gap:8px;padding:12px 20px 0"><span class="chip on">All</span><span class="chip">Shows</span><span class="chip">Movies</span><span class="chip">People</span></div>
+ <div class="sec"><h2>In your library</h2></div>
+ <div style="padding:0 20px;display:flex;flex-direction:column;gap:12px">
+  <div style="display:flex;gap:12px;align-items:center"><div class="poster" data-poster="Harbor Lights" data-notitle="1" style="width:56px;height:84px;border-radius:10px"></div><div><div style="font:700 16px Inter">Harbor Lights</div><div style="font:500 13px Inter;color:var(--t2)">Series · 2024 · 3 seasons</div><div style="font:600 12px Inter;color:var(--glint);margin-top:4px">● S2 E4 · 18m left</div></div></div>
+  <div style="display:flex;gap:12px;align-items:center"><div class="poster" data-poster="Brass &amp; Bone" data-notitle="1" style="width:56px;height:84px;border-radius:10px"></div><div><div style="font:700 16px Inter">The Harbourmaster</div><div style="font:500 13px Inter;color:var(--t2)">Movie · 2019 · 1h 48m</div></div></div>
+ </div>
+ <div class="sec"><h2>Not in your library</h2><span style="color:#F949FA">via Seerr</span></div>
+ <div style="padding:0 20px;display:flex;gap:12px;align-items:center"><div class="poster" data-poster="Tidewater" data-notitle="1" style="width:56px;height:84px;border-radius:10px;opacity:.75"></div><div style="flex:1"><div style="font:700 16px Inter">Harbor Nights</div><div style="font:500 13px Inter;color:var(--t2)">Movie · 2026</div></div><span class="chip" style="border-color:rgba(249,73,250,.5)">Request</span></div>
+</div>
+<div class="tabbar"><div class="tab"><span data-i="home"></span>Home</div><div class="tab"><span data-i="lib"></span>Library</div><div class="tab"><span data-i="inbox"></span>Discover</div><div class="tab on"><span data-i="search"></span>Search</div></div>
+<div class="home-ind"></div></div>
+<div class="caption"><b>One search for everything.</b> Library results first with resume state in glint; Seerr results below, in bloom, one tap to request. Removes the need for the separate Discover search field.<small>Filter chips replace the filter drawer here.</small></div></div>
+
+<div><div class="phone"><div class="island"></div>
+<div style="position:absolute;inset:0" data-poster="Tidewater" data-notitle="1"></div><div style="position:absolute;inset:0;background:rgba(1,6,26,.55)"></div>
+<div class="status"><span>9:41</span><span class="r">●●● ▮</span></div>
+<div class="sheet"><div class="grab"></div>
+ <div class="fin" data-fin='{"flip":true,"opacity":0.35,"texture":false}' style="width:260px;right:-120px;top:-20px"></div>
+ <div class="kicker">Tidewater</div>
+ <div class="rounded" style="font:800 28px 'SF Pro Rounded',Nunito,sans-serif;margin-top:4px">Who's it for?</div>
+ <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap"><span class="chip">Just me</span><span class="chip on" style="border-color:rgba(249,73,250,.6);background:rgba(192,38,245,.3);box-shadow:0 0 14px rgba(249,73,250,.3)">🛋️ The couch</span><span class="chip">Everyone</span><span class="chip">🧸 Tuur</span></div>
+ <div class="pp">
+  <div class="on"><div class="a" style="background:#33c4a4">S</div>Sam</div><div class="on"><div class="a" style="background:#ff6fae">L</div>Lisa</div><div><div class="a" style="background:#ffb347">T</div>Tuur</div><div><div class="a" style="background:#7a5cff">M</div>Mona</div>
+ </div>
+ <div style="position:absolute;left:22px;right:22px;bottom:40px">
+  <div style="text-align:center;font:600 14px Inter;color:var(--t2);margin-bottom:12px">Shows up in <b style="color:#fff">Picked for Sam &amp; Lisa</b></div>
+  <div class="btn glow" style="width:100%;justify-content:center;height:54px;border-radius:27px">Save</div></div>
+</div><div class="home-ind"></div></div>
+<div class="caption"><b>"Who's it for?" speaks bloom.</b> Magenta = "together" everywhere: couch chips, the For… button, picked rows. The sheet tells you where the pick will show up, instead of "For Sam &amp; Lisa".<small>Remove-from-watchlist moves to a swipe / long-press on the sheet header.</small></div></div>
+
+</div><script src="fin.js"></script><script src="posters.js"></script><script src="icons.js"></script></body></html>

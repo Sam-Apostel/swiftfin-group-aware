@@ -58,10 +58,9 @@ struct WatchlistsView: View {
     @ViewBuilder
     private var emptyView: some View {
         ScrollView {
-            ContentUnavailableView(
+            FinEmptyView(
                 L10n.Watchlists.emptyTitle,
-                systemImage: "bookmark",
-                description: Text(L10n.Watchlists.emptyDescription)
+                description: L10n.Watchlists.emptyDescription
             )
             .frame(maxWidth: .infinity)
             .padding(.top, 80)
@@ -71,10 +70,9 @@ struct WatchlistsView: View {
     @ViewBuilder
     private var noMatchesView: some View {
         ScrollView {
-            ContentUnavailableView(
+            FinEmptyView(
                 L10n.Watchlists.noMatchesTitle,
-                systemImage: "line.3.horizontal.decrease.circle",
-                description: Text(L10n.Watchlists.noMatchesDescription)
+                description: L10n.Watchlists.noMatchesDescription
             )
             .frame(maxWidth: .infinity)
             .padding(.top, 80)

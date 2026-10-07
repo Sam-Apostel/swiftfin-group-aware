@@ -4,7 +4,7 @@ const ART={
  "Saltwater Kids":["#0f6b73","#ffd166","#062a2e"], "Ember Road":["#5c1a0d","#ff8a3d","#1f0904"],
  "Glasshouse":["#1f4d3a","#b9f5d0","#0a1f17"], "Small Hours":["#2a2f6b","#ff6fae","#0d0f2a"],
  "Velvet Static":["#3d0f3f","#ff4fd8","#14031a"], "Low Tide":["#29506b","#9fe3ff","#0b1b26"],
- "The Orchard":["#6b2f2f","#ffc2a8","#230f0f"], "Kilowatt":["#111","#f5e000","#000"],
+ "The Orchard":["#6b2f2f","#ffc2a8","#230f0f"], "Kilowatt":["#222222","#f5e000","#000000"],
  "Harbor Lights":["#0d2140","#ffb347","#050c18"], "Quiet Planet":["#18303f","#cfe8ef","#08131a"],
  "Brass & Bone":["#4a3820","#e9c46a","#1a1309"], "Monday Club":["#3a2a6b","#a5f0c5","#130d26"],
  "Sundown Diner":["#6b1f3a","#ffcf7a","#220a13"], "Ice Station 9":["#1c3b57","#e6f7ff","#081420"]

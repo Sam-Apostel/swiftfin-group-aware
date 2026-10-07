@@ -55,6 +55,9 @@ struct PosterButton<Item: Poster>: View {
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay { overlay.posterStyle(displayType) }
+        #if os(tvOS)
+        .overlay { PosterFocusRimOverlay().posterStyle(displayType) }
+        #endif
         .contentShape(.contextMenuPreview, Rectangle())
         .matchedTransitionSource(id: "item", in: namespace)
         .subtleShadow()

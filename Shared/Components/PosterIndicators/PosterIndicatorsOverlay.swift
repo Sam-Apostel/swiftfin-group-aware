@@ -122,18 +122,40 @@ struct PosterIndicatorsOverlay: View {
 
 struct PosterSelectionOverlay: View {
 
-    @Default(.accentColor)
-    private var accentColor
-
     @Environment(\.isSelected)
     private var isSelected
 
     var body: some View {
         if isSelected {
             ContainerRelativeShape()
-                .stroke(accentColor, lineWidth: UIDevice.isTV ? 12 : 8)
+                .stroke(
+                    LinearGradient(colors: Color.Couchfin.rimColors, startPoint: .topLeading, endPoint: .bottomTrailing),
+                    lineWidth: UIDevice.isTV ? 12 : 8
+                )
                 .clipped()
                 .accessibilityHidden(true)
         }
     }
 }
+
+#if os(tvOS)
+/// The focused poster is traced with the fin's rim.
+struct PosterFocusRimOverlay: View {
+
+    @Environment(\.isFocused)
+    private var isFocused
+
+    var body: some View {
+        ContainerRelativeShape()
+            .strokeBorder(
+                LinearGradient(colors: Color.Couchfin.rimColors, startPoint: .topLeading, endPoint: .bottomTrailing),
+                lineWidth: 5
+            )
+            .shadow(color: Color.Couchfin.glint.opacity(0.7), radius: 12)
+            .opacity(isFocused ? 1 : 0)
+            .animation(.easeOut(duration: 0.18), value: isFocused)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+    }
+}
+#endif
