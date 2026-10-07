@@ -6,13 +6,9 @@
 // Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
-import Defaults
 import SwiftUI
 
 struct ProgressIndicator: View {
-
-    @Default(.accentColor)
-    private var accentColor
 
     let title: String
     let progress: Double
@@ -44,7 +40,8 @@ struct ProgressIndicator: View {
     private var progressBar: some View {
         ProgressView(value: normalizedProgress)
             .progressViewStyle(.playback)
-            .foregroundStyle(accentColor)
+            .foregroundStyle(Color.Couchfin.rim)
+            .shadow(color: Color.Couchfin.glint.opacity(0.5), radius: 4)
             .frame(height: 6)
             .padding(.horizontal, 5)
             .padding(.bottom, 5)
@@ -54,7 +51,7 @@ struct ProgressIndicator: View {
     @ViewBuilder
     private var compactProgressBar: some View {
         Rectangle()
-            .fill(accentColor)
+            .fill(Color.Couchfin.rim)
             .scaleEffect(x: normalizedProgress, y: 1, anchor: .leading)
             .frame(maxWidth: .infinity, alignment: .leading)
             .frame(height: 6)

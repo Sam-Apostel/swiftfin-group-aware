@@ -155,7 +155,7 @@ extension VideoPlayer.PlaybackControls {
                 .frame(maxWidth: sliderSize != .zero ? insetSliderWidth : .infinity)
                 .scaleEffect(x: isScrubbing ? xScale : 1, y: 1, anchor: .center)
                 .frame(height: isScrubbing ? 20 : 10)
-                .foregroundStyle(manager.state == .loadingItem ? .gray : .primary)
+                .foregroundStyle(manager.state == .loadingItem ? AnyShapeStyle(Color.gray) : AnyShapeStyle(Color.Couchfin.rim))
             }
             .animation(.linear(duration: 0.05), value: scrubbedSeconds)
             .frame(height: 10)

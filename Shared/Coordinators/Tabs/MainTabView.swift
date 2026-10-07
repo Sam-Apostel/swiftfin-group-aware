@@ -71,6 +71,7 @@ struct MainTabView: View {
         NavigationInjectionView(coordinator: tab.coordinator) {
             tab.item.content
                 #if os(iOS)
+                    .couchfinBackground()
                     .if(tabCoordinator.tabs.first?.item.id == tab.item.id) { view in
                         view.topBarTrailing {
                             FirstTabSettingsBarButton()
@@ -140,7 +141,11 @@ struct MainTabView: View {
             .audienceWatchlistSaveErrorAlert()
             #if os(tvOS)
             .background(alignment: .top) {
-                FocusedPosterCinematicBackgroundView()
+                ZStack(alignment: .top) {
+                    AbyssBackground()
+
+                    FocusedPosterCinematicBackgroundView()
+                }
             }
             #endif
     }

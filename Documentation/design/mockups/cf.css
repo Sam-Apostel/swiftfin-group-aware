@@ -1,0 +1,65 @@
+:root{
+  --abyss:#01061A; --deep:#020D33; --trench:#071552; --surface:rgba(20,40,120,.28); --hair:rgba(120,160,255,.14);
+  --fin:#1238FF; --bio:#00B9FB; --glint:#3FEDFD; --violet:#7A5CFF; --magenta:#F949FA; --orchid:#C026F5;
+  --t1:#F2F5FF; --t2:#9FB0D9; --t3:#5C6A99;
+  --rim:linear-gradient(90deg,#00B9FB,#3FEDFD 45%,#7A5CFF 75%,#F949FA);
+  --rimv:linear-gradient(180deg,#3FEDFD,#7A5CFF 60%,#F949FA);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#0b0d14;font-family:-apple-system,"SF Pro Text","Inter","Helvetica Neue",Arial,sans-serif;color:var(--t1);-webkit-font-smoothing:antialiased}
+.rounded{font-family:"SF Pro Rounded","Nunito","Varela Round",-apple-system,sans-serif}
+.board{display:flex;gap:48px;padding:48px;flex-wrap:wrap;align-items:flex-start}
+.caption{font:600 15px/1.4 -apple-system,Inter,sans-serif;color:#c9d2ef;max-width:393px;margin-top:14px}
+.caption b{color:#fff}.caption small{display:block;color:#7d89b3;font-weight:400;margin-top:4px}
+/* phone */
+.phone{width:393px;height:852px;border-radius:54px;background:var(--abyss);position:relative;overflow:hidden;box-shadow:0 0 0 10px #1a1c24,0 0 0 11px #333,0 30px 80px rgba(0,0,0,.6)}
+.status{height:54px;display:flex;justify-content:space-between;align-items:center;padding:14px 34px 0 44px;font:600 17px -apple-system,Inter,sans-serif;position:relative;z-index:5}
+.status .r{font-size:13px;letter-spacing:2px}
+.island{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:124px;height:36px;background:#000;border-radius:20px;z-index:6}
+.abyss-bg{position:absolute;inset:0;background:
+ radial-gradient(120% 60% at 100% 0%,rgba(18,56,255,.28),transparent 60%),
+ radial-gradient(80% 40% at 0% 100%,rgba(192,38,245,.12),transparent 70%),
+ linear-gradient(180deg,#020A2A,#01061A 55%)}
+.scroll{position:absolute;inset:0;overflow:hidden;padding-top:54px}
+.tabbar{position:absolute;left:16px;right:16px;bottom:26px;height:64px;border-radius:32px;background:rgba(10,20,60,.55);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid var(--hair);display:flex;justify-content:space-around;align-items:center;z-index:10;box-shadow:0 10px 30px rgba(0,0,0,.5)}
+.tab{display:flex;flex-direction:column;align-items:center;gap:3px;font:600 10px -apple-system,Inter,sans-serif;color:var(--t2);width:78px;padding:6px 0;border-radius:24px}
+.tab svg{width:24px;height:24px}
+.tab.on{color:#fff;background:rgba(18,56,255,.35);box-shadow:inset 0 0 0 1px rgba(63,237,253,.25)}
+.home-ind{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);width:134px;height:5px;border-radius:3px;background:#fff;z-index:11}
+h1.lt{font:800 34px/1.1 "SF Pro Rounded","Nunito",-apple-system,sans-serif;letter-spacing:-.5px}
+.sec{display:flex;justify-content:space-between;align-items:baseline;padding:0 20px;margin:22px 0 10px}
+.sec h2{font:700 20px "SF Pro Rounded","Nunito",-apple-system,sans-serif;letter-spacing:-.2px}
+.sec span{font:500 14px -apple-system,Inter,sans-serif;color:var(--t2)}
+.row{display:flex;gap:12px;padding:0 20px;overflow:hidden}
+.poster{flex:none;width:112px;height:168px;border-radius:14px;position:relative;overflow:hidden}
+.poster.land{width:252px;height:142px}
+.poster .t{position:absolute;left:10px;right:10px;bottom:10px;font:800 15px/1.05 "SF Pro Rounded","Nunito",sans-serif;text-shadow:0 2px 8px rgba(0,0,0,.5)}
+.poster .bar{position:absolute;left:10px;right:10px;bottom:8px;height:4px;border-radius:2px;background:rgba(255,255,255,.22);overflow:hidden}
+.poster .bar i{display:block;height:100%;background:var(--rim);box-shadow:0 0 8px #3FEDFD}
+.under{font:600 13px -apple-system,Inter,sans-serif;margin-top:7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.under small{display:block;font-weight:500;color:var(--t2);margin-top:2px}
+.btn{display:inline-flex;align-items:center;gap:8px;height:48px;padding:0 22px;border-radius:24px;font:700 16px -apple-system,Inter,sans-serif}
+.btn.play{background:#fff;color:#020A2A}
+.btn.glow{background:linear-gradient(90deg,#1238FF,#5B2BFF 70%,#C026F5);color:#fff;box-shadow:0 0 0 1px rgba(63,237,253,.5) inset,0 6px 24px rgba(18,56,255,.55)}
+.btn.glass{background:rgba(255,255,255,.12);backdrop-filter:blur(20px);color:#fff;border:1px solid rgba(255,255,255,.12)}
+.circle{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.1)}
+.circle svg{width:22px;height:22px}
+.chip{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 14px;border-radius:17px;background:rgba(255,255,255,.08);border:1px solid var(--hair);font:600 14px -apple-system,Inter,sans-serif;color:var(--t1);white-space:nowrap}
+.chip.on{background:rgba(18,56,255,.4);border-color:rgba(63,237,253,.55);box-shadow:0 0 14px rgba(63,237,253,.25)}
+.av{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font:700 12px "SF Pro Rounded",Nunito,sans-serif;color:#fff;flex:none}
+.stack{display:flex}.stack .av{margin-left:-8px;box-shadow:0 0 0 2px var(--abyss)}.stack .av:first-child{margin-left:0}
+.fin{position:absolute;pointer-events:none}
+/* settings */
+.group{margin:0 16px 18px;border-radius:22px;background:rgba(18,40,120,.22);border:1px solid var(--hair);overflow:hidden}
+.cell{display:flex;align-items:center;gap:12px;min-height:52px;padding:0 16px;font:500 16px -apple-system,Inter,sans-serif;position:relative}
+.cell+.cell:before{content:"";position:absolute;top:0;left:56px;right:0;height:1px;background:var(--hair)}
+.cell .ic{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;flex:none}
+.cell .ic svg{width:18px;height:18px}
+.cell .v{margin-left:auto;color:var(--t2);font-size:15px;display:flex;align-items:center;gap:6px}
+.cell .chev{color:var(--t3);font-size:18px;margin-left:6px}
+.toggle{margin-left:auto;width:51px;height:31px;border-radius:16px;background:rgba(255,255,255,.16);position:relative;flex:none}
+.toggle.on{background:linear-gradient(90deg,#1238FF,#7A5CFF)}
+.toggle:after{content:"";position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 2px 4px rgba(0,0,0,.3)}
+.toggle.on:after{left:22px}
+.ghead{font:600 13px -apple-system,Inter,sans-serif;color:var(--t2);text-transform:uppercase;letter-spacing:.6px;margin:0 32px 8px}
+.gfoot{font:400 13px/1.35 -apple-system,Inter,sans-serif;color:var(--t3);margin:-10px 32px 18px}

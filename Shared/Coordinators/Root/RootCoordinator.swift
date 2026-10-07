@@ -41,7 +41,7 @@ final class RootCoordinator: ObservableObject {
     }
 
     private var started = false
-    private var selectedAccentColor: Color = .jellyfinPurple
+    private var selectedAccentColor: Color = Color.Couchfin.accent
     private var accentColorCancellable: AnyCancellable?
     private var appearanceCancellable: AnyCancellable?
     private var currentSessionCancellable: AnyCancellable?
@@ -111,21 +111,14 @@ final class RootCoordinator: ObservableObject {
         appearanceCancellable?.cancel()
         splashScreenCancellable?.cancel()
 
+        // Couchfin is always dark water with a fin-blue tint.
         accentColorCancellable = Task {
-            applyAccentColor(Defaults[.userAccentColor])
-
-            for await newValue in Defaults.updates(.userAccentColor) {
-                applyAccentColor(newValue)
-            }
+            applyAccentColor(Color.Couchfin.accent)
         }
         .asAnyCancellable()
 
         appearanceCancellable = Task {
-            applyAppearance(Defaults[.userAppearance])
-
-            for await newValue in Defaults.updates(.userAppearance) {
-                applyAppearance(newValue)
-            }
+            applyAppearance(.dark)
         }
         .asAnyCancellable()
     }
@@ -136,25 +129,12 @@ final class RootCoordinator: ObservableObject {
         splashScreenCancellable?.cancel()
 
         accentColorCancellable = Task {
-            applyAccentColor(.jellyfinPurple)
+            applyAccentColor(Color.Couchfin.accent)
         }
         .asAnyCancellable()
 
         appearanceCancellable = Task {
-            applyAppAppearance()
-
-            for await newValue in Defaults.updates(.appAppearance) {
-                guard !Defaults[.selectUserUseSplashscreen] else { continue }
-
-                applyAppearance(newValue)
-            }
-        }
-        .asAnyCancellable()
-
-        splashScreenCancellable = Task {
-            for await _ in Defaults.updates(.selectUserUseSplashscreen) {
-                applyAppAppearance()
-            }
+            applyAppearance(.dark)
         }
         .asAnyCancellable()
     }
@@ -184,14 +164,5 @@ final class RootCoordinator: ObservableObject {
         Defaults[.appearance] = appearance
         UIApplication.shared.setAppearance(appearance.style)
         applyAccentColor(selectedAccentColor)
-    }
-
-    @MainActor
-    private func applyAppAppearance() {
-        if Defaults[.selectUserUseSplashscreen] {
-            applyAppearance(.dark)
-        } else {
-            applyAppearance(Defaults[.appAppearance])
-        }
     }
 }
