@@ -103,7 +103,7 @@ struct ContentGroupView<Provider: ContentGroupProvider>: View {
                     #endif
 
             case .initial, .refreshing:
-                ProgressView()
+                SwimmingFin()
                     #if os(tvOS)
                         .coordinatedFocus(.placeholder)
                     #endif

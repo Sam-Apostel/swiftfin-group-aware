@@ -624,7 +624,7 @@ struct SelectUserView: View {
         ZStack {
             switch viewModel.state {
             case .initial, .loading:
-                ProgressView()
+                SwimmingFin()
             case .content:
                 if viewModel.servers.isEmpty {
                     ConnectToJellyfinView()

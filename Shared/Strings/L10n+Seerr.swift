@@ -37,7 +37,7 @@ extension L10n {
         static let errorNotConfiguredSuggestion = "Connect your Seerr server in Settings."
         static let errorUnauthorized = "Seerr rejected the API key."
         static let errorUnauthorizedSuggestion = "Check the API key in Seerr under Settings → General."
-        static let errorDecoding = "Seerr sent a response Swiftfin couldn't read."
+        static let errorDecoding = "Seerr sent a response Couchfin couldn't read."
         static let errorInvalidURL = "Enter a valid Seerr server URL, like http://192.168.1.10:5055."
         static let errorNoServer = "Sign in to a Jellyfin server before connecting Seerr."
 

@@ -188,7 +188,7 @@ struct PagingLibraryView<Library: PagingLibrary>: View where Library.Element: Li
             ZStack {
                 switch viewModel.state {
                 case .initial, .refreshing:
-                    ProgressView()
+                    SwimmingFin()
                         #if os(tvOS)
                             .coordinatedFocus(.placeholder)
                         #endif

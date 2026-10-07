@@ -67,7 +67,7 @@ struct SwimmingFin: View {
     @Environment(\.accessibilityReduceMotion)
     private var reduceMotion
 
-    var width: CGFloat = 56
+    var width: CGFloat = UIDevice.isTV ? 120 : 64
 
     var body: some View {
         TimelineView(.animation(paused: reduceMotion)) { context in

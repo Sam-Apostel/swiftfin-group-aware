@@ -188,7 +188,7 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var lookSection: some View {
-        Section(L10n.CouchfinSettings.look) {
+        Section {
             ChevronButton(
                 L10n.CouchfinSettings.homeAndLibraries,
                 systemName: "house.fill"
@@ -202,6 +202,8 @@ struct SettingsView: View {
             ) {
                 router.route(to: .posterSettings)
             }
+        } header: {
+            Text(L10n.CouchfinSettings.look)
         } footer: {
             Text(L10n.viewsMayRequireRestart)
         }

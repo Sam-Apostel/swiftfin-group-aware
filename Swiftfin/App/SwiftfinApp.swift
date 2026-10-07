@@ -21,6 +21,15 @@ struct SwiftfinApp: App {
         // Sometimes the tab bar won't appear properly on push, always have material background.
         UITabBar.appearance().scrollEdgeAppearance = UITabBarAppearance(idiom: .unspecified)
 
+        // Couchfin's voice: rounded titles
+        let navigationBar = UINavigationBar.appearance()
+        navigationBar.largeTitleTextAttributes = [
+            .font: UIFont.couchfinRounded(size: 34, weight: .heavy, relativeTo: .largeTitle),
+        ]
+        navigationBar.titleTextAttributes = [
+            .font: UIFont.couchfinRounded(size: 17, weight: .bold, relativeTo: .headline),
+        ]
+
         SwiftfinSpotlight().addSwiftfinToSpotlight()
     }
 
