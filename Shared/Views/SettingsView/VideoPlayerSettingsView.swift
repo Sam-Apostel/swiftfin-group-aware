@@ -13,6 +13,14 @@ import SwiftUI
 
 struct VideoPlayerSettingsView: View {
 
+    /// The video player settings are split over two screens in Settings.
+    enum Page {
+        /// Player, quality, autoplay, skip lengths and the player's controls.
+        case playback
+        /// Audio and subtitle languages, modes and the subtitle look.
+        case audioAndSubtitles
+    }
+
     #if os(tvOS)
     typealias PlatformPicker = ListRowMenu
     #else
@@ -70,7 +78,10 @@ struct VideoPlayerSettingsView: View {
     @StateObject
     private var viewModel: ServerUserAdminViewModel
 
-    init() {
+    let page: Page
+
+    init(page: Page = .playback) {
+        self.page = page
         _viewModel =
             StateObject(wrappedValue: ServerUserAdminViewModel(user: Container.shared.currentUserSession()?.user.data ?? UserDto()))
     }
@@ -86,32 +97,27 @@ struct VideoPlayerSettingsView: View {
     // MARK: - Body
 
     var body: some View {
-        Form(systemImage: "tv") {
-            engineSettings
+        Form(systemImage: page == .playback ? "play.rectangle" : "captions.bubble") {
+            switch page {
+            case .playback:
+                engineSettings
 
-            #if os(iOS)
-            gestureSettings
-            #endif
+                whileWatchingSettings
 
-            buttonSettings
+                controlSettings
+            case .audioAndSubtitles:
+                audioSettings
 
-            resumeSettings
-
-            sliderSettings
-
-            supplementSettings
-
-            timestampSettings
-
-            audioSettings
-
-            subtitleSettings
+                subtitleSettings
+            }
         }
         .onFirstAppear {
             viewModel.refresh()
         }
         .toolbarTitleDisplayMode(.inline)
-        .navigationTitle(L10n.videoPlayer.localizedCapitalized)
+        .navigationTitle(
+            page == .playback ? L10n.CouchfinSettings.playback : L10n.CouchfinSettings.audioAndSubtitles
+        )
         .topBarTrailing {
             if viewModel.background.is(.updating) || viewModel.background.is(.refreshing) {
                 ProgressView()
@@ -132,7 +138,7 @@ struct VideoPlayerSettingsView: View {
 
     @ViewBuilder
     private var engineSettings: some View {
-        Section(L10n.playback) {
+        Section(L10n.player) {
             #if os(iOS)
             videoPlayerPicker
             #else
@@ -155,19 +161,6 @@ struct VideoPlayerSettingsView: View {
             )
         }
     }
-
-    // MARK: - Gesture Settings
-
-    #if os(iOS)
-    @ViewBuilder
-    private var gestureSettings: some View {
-        Section(L10n.gestures) {
-            ChevronButton(L10n.gestures) {
-                router.route(to: .gestureSettings)
-            }
-        }
-    }
-    #endif
 
     // MARK: - Button Settings
 
@@ -193,9 +186,18 @@ struct VideoPlayerSettingsView: View {
         }
     }
 
+    // MARK: - While Watching Settings
+
     @ViewBuilder
-    private var buttonSettings: some View {
-        Section(L10n.buttons) {
+    private var whileWatchingSettings: some View {
+        Section {
+            Toggle(L10n.autoPlay, isOn: Binding(
+                get: { viewModel.user.configuration?.enableNextEpisodeAutoPlay == true },
+                set: { newValue in
+                    updateConfiguration { $0.enableNextEpisodeAutoPlay = newValue }
+                }
+            ))
+
             jumpIntervalPicker(
                 title: L10n.jumpBackwardLength,
                 selection: $jumpBackwardLength
@@ -206,6 +208,26 @@ struct VideoPlayerSettingsView: View {
                 selection: $jumpForwardLength
             )
 
+            Stepper(L10n.resumeOffset, value: $resumeOffset, in: 0 ... 30, step: 1) {
+                LabeledContent(L10n.resumeOffset) {
+                    Text(resumeOffset, format: SecondFormatter())
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            PlatformPicker(L10n.trailingValue, selection: $trailingTimestampType)
+        } header: {
+            Text(L10n.CouchfinSettings.whileWatching)
+        } footer: {
+            Text(L10n.resumeOffsetDescription)
+        }
+    }
+
+    // MARK: - Control Settings
+
+    @ViewBuilder
+    private var controlSettings: some View {
+        Section(L10n.CouchfinSettings.controls) {
             ChevronButton(L10n.barButtons) {
                 router.route(to: .actionBarButtonSelector(
                     selectedButtonsBinding: $barActionButtons
@@ -217,6 +239,22 @@ struct VideoPlayerSettingsView: View {
                     selectedButtonsBinding: $menuActionButtons
                 ))
             }
+
+            #if os(iOS)
+            ChevronButton(L10n.gestures) {
+                router.route(to: .gestureSettings)
+            }
+            #endif
+
+            ChevronButton(L10n.supplements) {
+                router.route(to: .supplementSelector(
+                    selectedSupplementsBinding: $supplements
+                ))
+            }
+
+            Toggle(L10n.chapterSlider, isOn: $chapterSlider)
+
+            PlatformPicker(L10n.previewImage, selection: $previewImageScrubbing)
         }
         .onChange(of: barActionButtons) {
             let enabled = barActionButtons.contains(.autoPlay) || menuActionButtons.contains(.autoPlay)
@@ -225,64 +263,6 @@ struct VideoPlayerSettingsView: View {
         .onChange(of: menuActionButtons) {
             let enabled = menuActionButtons.contains(.autoPlay) || barActionButtons.contains(.autoPlay)
             updateConfiguration { $0.enableNextEpisodeAutoPlay = enabled }
-        }
-    }
-
-    // MARK: - Resume Settings
-
-    @ViewBuilder
-    private var resumeSettings: some View {
-        Section {
-            Stepper(L10n.resumeOffset, value: $resumeOffset, in: 0 ... 30, step: 1) {
-                LabeledContent(L10n.resumeOffset) {
-                    Text(resumeOffset, format: SecondFormatter())
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Toggle(L10n.autoPlay, isOn: Binding(
-                get: { viewModel.user.configuration?.enableNextEpisodeAutoPlay == true },
-                set: { newValue in
-                    updateConfiguration { $0.enableNextEpisodeAutoPlay = newValue }
-                }
-            ))
-        } header: {
-            Text(L10n.resume)
-        } footer: {
-            Text(L10n.resumeOffsetDescription)
-        }
-    }
-
-    // MARK: - Slider Settings
-
-    @ViewBuilder
-    private var sliderSettings: some View {
-        Section(L10n.slider) {
-            Toggle(L10n.chapterSlider, isOn: $chapterSlider)
-
-            PlatformPicker(L10n.previewImage, selection: $previewImageScrubbing)
-        }
-    }
-
-    // MARK: - Supplement Settings
-
-    @ViewBuilder
-    private var supplementSettings: some View {
-        Section(L10n.supplements) {
-            ChevronButton(L10n.supplements) {
-                router.route(to: .supplementSelector(
-                    selectedSupplementsBinding: $supplements
-                ))
-            }
-        }
-    }
-
-    // MARK: - Timestamp Settings
-
-    @ViewBuilder
-    private var timestampSettings: some View {
-        Section(L10n.timestamp) {
-            PlatformPicker(L10n.trailingValue, selection: $trailingTimestampType)
         }
     }
 

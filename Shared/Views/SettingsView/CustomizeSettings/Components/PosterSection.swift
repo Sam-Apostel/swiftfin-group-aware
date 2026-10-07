@@ -161,6 +161,8 @@ extension CustomizeSettingsView {
                 } header: {
                     Text(L10n.episode)
                 }
+
+                ItemSection(isEmbedded: true)
             } image: {
                 CenteredLazyVGrid(
                     data: [.portrait, .square, .landscape],
@@ -173,7 +175,7 @@ extension CustomizeSettingsView {
                 }
             }
             .environment(\.posterConfiguration, posterConfiguration)
-            .navigationTitle(L10n.posters)
+            .navigationTitle(L10n.CouchfinSettings.postersAndItems)
         }
     }
 }

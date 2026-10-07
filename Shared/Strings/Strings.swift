@@ -6,12 +6,8 @@ import Foundation
 internal enum L10n {
   /// About
   internal static let about = L10n.tr("Localizable", "about", fallback: "About")
-  /// About - when learning more about the app
-  internal static let aboutApp = L10n.tr("Localizable", "aboutApp", fallback: "About")
   /// Absolute
   internal static let absolute = L10n.tr("Localizable", "absolute", fallback: "Absolute")
-  /// Accent color
-  internal static let accentColor = L10n.tr("Localizable", "accentColor", fallback: "Accent color")
   /// Access
   internal static let access = L10n.tr("Localizable", "access", fallback: "Access")
   /// The end time must come after the start time.
@@ -124,10 +120,6 @@ internal enum L10n {
   internal static let apiKeysCapitalized = L10n.tr("Localizable", "apiKeysCapitalized", fallback: "API Keys")
   /// External applications require an API key to communicate with your server.
   internal static let apiKeysDescription = L10n.tr("Localizable", "apiKeysDescription", fallback: "External applications require an API key to communicate with your server.")
-  /// Appearance
-  internal static let appearance = L10n.tr("Localizable", "appearance", fallback: "Appearance")
-  /// App icon
-  internal static let appIcon = L10n.tr("Localizable", "appIcon", fallback: "App icon")
   /// Application name
   internal static let applicationName = L10n.tr("Localizable", "applicationName", fallback: "Application name")
   /// Arranger
@@ -454,8 +446,6 @@ internal enum L10n {
   internal static let customFailedLoginDescription = L10n.tr("Localizable", "customFailedLoginDescription", fallback: "Manually set the number of failed login attempts allowed before locking the user.")
   /// Custom failed logins
   internal static let customFailedLogins = L10n.tr("Localizable", "customFailedLogins", fallback: "Custom failed logins")
-  /// Customize
-  internal static let customize = L10n.tr("Localizable", "customize", fallback: "Customize")
   /// Provide a custom jump interval in seconds.
   internal static let customJumpIntervalDescription = L10n.tr("Localizable", "customJumpIntervalDescription", fallback: "Provide a custom jump interval in seconds.")
   /// Custom name
@@ -1516,8 +1506,6 @@ internal enum L10n {
   internal static let restoring = L10n.tr("Localizable", "restoring", fallback: "Restoring")
   /// The server is restarting to restore from this backup. You may need to log back in when the restore completes.
   internal static let restoringMessage = L10n.tr("Localizable", "restoringMessage", fallback: "The server is restarting to restore from this backup. You may need to log back in when the restore completes.")
-  /// Resume
-  internal static let resume = L10n.tr("Localizable", "resume", fallback: "Resume")
   /// Resume offset
   internal static let resumeOffset = L10n.tr("Localizable", "resumeOffset", fallback: "Resume offset")
   /// Resume content seconds before the recorded resume time.
@@ -1628,22 +1616,14 @@ internal enum L10n {
   internal static let settings = L10n.tr("Localizable", "settings", fallback: "Settings")
   /// Short
   internal static let short = L10n.tr("Localizable", "short", fallback: "Short")
-  /// Show favorited
-  internal static let showFavorited = L10n.tr("Localizable", "showFavorited", fallback: "Show favorited")
   /// Show missing episodes
   internal static let showMissingEpisodes = L10n.tr("Localizable", "showMissingEpisodes", fallback: "Show missing episodes")
   /// Show missing seasons
   internal static let showMissingSeasons = L10n.tr("Localizable", "showMissingSeasons", fallback: "Show missing seasons")
-  /// Show progress
-  internal static let showProgress = L10n.tr("Localizable", "showProgress", fallback: "Show progress")
   /// Show recommendations
   internal static let showRecommendations = L10n.tr("Localizable", "showRecommendations", fallback: "Show recommendations")
   /// Show title - Controls title visibility on media posters. People and chapter titles, and episode season and episode locators, remain visible.
   internal static let showTitle = L10n.tr("Localizable", "showTitle", fallback: "Show title")
-  /// Show unwatched
-  internal static let showUnwatched = L10n.tr("Localizable", "showUnwatched", fallback: "Show unwatched")
-  /// Show watched
-  internal static let showWatched = L10n.tr("Localizable", "showWatched", fallback: "Show watched")
   /// Shutdown server
   internal static let shutdownServer = L10n.tr("Localizable", "shutdownServer", fallback: "Shutdown server")
   /// Are you sure you want to shutdown the server?
@@ -1662,16 +1642,12 @@ internal enum L10n {
   internal static let signoutBackgroundFooter = L10n.tr("Localizable", "signoutBackgroundFooter", fallback: "Signs out the last user when Swiftfin has been in the background without media playback after some time.")
   /// Sign out on close
   internal static let signoutClose = L10n.tr("Localizable", "signoutClose", fallback: "Sign out on close")
-  /// Signs out the last user when Swiftfin has been force closed.
-  internal static let signoutCloseFooter = L10n.tr("Localizable", "signoutCloseFooter", fallback: "Signs out the last user when Swiftfin has been force closed.")
   /// Simple
   internal static let simple = L10n.tr("Localizable", "simple", fallback: "Simple")
   /// Size
   internal static let size = L10n.tr("Localizable", "size", fallback: "Size")
   /// Skip duplicates
   internal static let skipDuplicates = L10n.tr("Localizable", "skipDuplicates", fallback: "Skip duplicates")
-  /// Slider
-  internal static let slider = L10n.tr("Localizable", "slider", fallback: "Slider")
   /// Slow scrub
   internal static let slowScrub = L10n.tr("Localizable", "slowScrub", fallback: "Slow scrub")
   /// Slow scrubbing
@@ -1694,8 +1670,6 @@ internal enum L10n {
   internal static let sourceCode = L10n.tr("Localizable", "sourceCode", fallback: "Source code")
   /// Special features
   internal static let specialFeatures = L10n.tr("Localizable", "specialFeatures", fallback: "Special features")
-  /// Splashscreen
-  internal static let splashscreen = L10n.tr("Localizable", "splashscreen", fallback: "Splashscreen")
   /// When all servers are selected, use the splashscreen from a single server or a random server.
   internal static let splashscreenFooter = L10n.tr("Localizable", "splashscreenFooter", fallback: "When all servers are selected, use the splashscreen from a single server or a random server.")
   /// Split

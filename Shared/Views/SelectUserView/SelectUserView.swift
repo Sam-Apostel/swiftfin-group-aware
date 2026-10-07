@@ -453,18 +453,33 @@ struct SelectUserView: View {
 
     @ViewBuilder
     private var splashScreenBackground: some View {
-        if selectUserUseSplashscreen, splashScreenImageSources.isNotEmpty {
-            AlternateLayoutView {
-                Color.clear
-            } content: {
-                ImageView(splashScreenImageSources)
-                    .pipeline(.Swiftfin.local)
-                    .aspectRatio(contentMode: .fill)
-                    .id(splashScreenImageSources)
+        ZStack {
+            AbyssBackground()
+
+            if selectUserUseSplashscreen, splashScreenImageSources.isNotEmpty {
+                AlternateLayoutView {
+                    Color.clear
+                } content: {
+                    ImageView(splashScreenImageSources)
+                        .pipeline(.Swiftfin.local)
+                        .aspectRatio(contentMode: .fill)
+                        .id(splashScreenImageSources)
+                }
+                .overlay {
+                    Color.Couchfin.abyss
+                        .opacity(0.88)
+                }
             }
-            .overlay {
-                Color.black
-                    .opacity(0.9)
+        }
+        .overlay(alignment: .bottomLeading) {
+            // The fin swims in from the leading edge, behind the people.
+            if !isEditing {
+                FinView()
+                    .frame(width: UIDevice.isTV ? 1100 : 520)
+                    .rotationEffect(.degrees(8))
+                    .offset(x: UIDevice.isTV ? -420 : -250, y: UIDevice.isTV ? -160 : -150)
+                    .opacity(UIDevice.isTV ? 0.55 : 0.85)
+                    .transition(.opacity)
             }
         }
     }
@@ -474,8 +489,7 @@ struct SelectUserView: View {
         if !isEditing, userItems.isNotEmpty {
             VStack(spacing: UIDevice.isTV ? 8 : 4) {
                 Text(L10n.CouchPicker.title)
-                    .font(UIDevice.isTV ? .title3 : .title2)
-                    .fontWeight(.bold)
+                    .font(.system(UIDevice.isTV ? .title2 : .title, design: .rounded, weight: .heavy))
 
                 Text(L10n.CouchPicker.subtitle)
                     .font(UIDevice.isTV ? .callout : .subheadline)
@@ -627,12 +641,11 @@ struct SelectUserView: View {
             viewModel.getServers()
         }
         .toolbar {
+            #if os(tvOS)
             ToolbarItem(placement: .principal) {
-                Image(.jellyfinBlobBlue)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: UIDevice.isTV ? 100 : 30)
+                EmptyView()
             }
+            #endif
 
             #if os(iOS)
             if horizontalSizeClass == .compact {

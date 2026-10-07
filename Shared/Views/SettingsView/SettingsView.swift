@@ -11,17 +11,16 @@ import FactoryKit
 import JellyfinAPI
 import SwiftUI
 
+/// Settings, grouped by what you're doing: who's on the couch, watching, how it looks,
+/// and the connections behind it. Everything app-wide and diagnostic lives in About.
 struct SettingsView: View {
 
-    #if os(iOS)
-    @Default(.userAppearance)
-    private var appearance
-    #endif
-
-    @Default(.userAccentColor)
-    private var accentColor
     @Default(.Couch.lastMemberIDs)
     private var lastCouchMemberIDs
+    @Default(.Couch.kidSafeBrowsing)
+    private var kidSafeBrowsing
+    @Default(.VideoPlayer.videoPlayerType)
+    private var videoPlayerType
 
     @InjectedObject(\.userSessionManager)
     private var userSessionManager: UserSessionManager
@@ -37,12 +36,15 @@ struct SettingsView: View {
     // MARK: - Body
 
     var body: some View {
-        Form(image: .jellyfinBlobBlue) {
+        Form {
             couchSection
-            serverSection
-            requestsSection
-            customizeSection
-            diagnosticsSection
+            watchingSection
+            lookSection
+            connectionsSection
+            aboutSection
+        } image: {
+            FinView()
+                .frame(maxWidth: 520)
         }
         #if os(iOS)
         .navigationTitle(L10n.settings)
@@ -62,15 +64,6 @@ struct SettingsView: View {
                     couch: userSession.couch,
                     server: userSession.server
                 )
-
-                ChevronButton(
-                    L10n.CouchSettings.couchSettings,
-                    systemName: "sofa.fill"
-                ) {
-                    router.route(to: .couchSettings)
-                }
-            } header: {
-                Text(L10n.Couch.title)
             }
         }
 
@@ -82,7 +75,7 @@ struct SettingsView: View {
                     router.dismiss()
                 }
             } label: {
-                Text(L10n.CouchSettings.changeWhosWatching)
+                Label(L10n.CouchSettings.changeWhosWatching, systemImage: "sofa.fill")
                     .frame(maxWidth: .infinity)
                     // Otherwise non-Liquid Glass only uses text height
                     .if(!UIDevice.supportsLiquidGlass) { button in
@@ -98,7 +91,7 @@ struct SettingsView: View {
             .fontWeight(.semibold)
             .backport
             .buttonStyle(.glassProminent.shadow(false))
-            .tint(accentColor)
+            .tint(Color.Couchfin.fin)
             #if os(iOS)
             .controlSize(.large)
             #endif
@@ -159,12 +152,67 @@ struct SettingsView: View {
         return L10n.CouchSettings.browsingAsKidSafe(couch.primary.username)
     }
 
-    // MARK: - Server Section
+    // MARK: - Watching Section
 
     @ViewBuilder
-    private var serverSection: some View {
+    private var watchingSection: some View {
+        Section(L10n.CouchfinSettings.watching) {
+            ChevronButton(
+                L10n.CouchfinSettings.playback,
+                content: videoPlayerType.displayTitle,
+                systemName: "play.fill"
+            ) {
+                router.route(to: .playbackSettings)
+            }
+
+            ChevronButton(
+                L10n.CouchfinSettings.audioAndSubtitles,
+                systemName: "captions.bubble.fill"
+            ) {
+                router.route(to: .audioSubtitleSettings)
+            }
+
+            if userSessionManager.currentSession != nil {
+                ChevronButton(
+                    L10n.CouchfinSettings.couchAndKids,
+                    content: kidSafeBrowsing ? L10n.Couch.kidSafeBrowsing : "",
+                    systemName: "figure.and.child.holdinghands"
+                ) {
+                    router.route(to: .couchSettings)
+                }
+            }
+        }
+    }
+
+    // MARK: - Look Section
+
+    @ViewBuilder
+    private var lookSection: some View {
+        Section(L10n.CouchfinSettings.look) {
+            ChevronButton(
+                L10n.CouchfinSettings.homeAndLibraries,
+                systemName: "house.fill"
+            ) {
+                router.route(to: .customizeSettingsView)
+            }
+
+            ChevronButton(
+                L10n.CouchfinSettings.postersAndItems,
+                systemName: "rectangle.portrait.on.rectangle.portrait.fill"
+            ) {
+                router.route(to: .posterSettings)
+            }
+        } footer: {
+            Text(L10n.viewsMayRequireRestart)
+        }
+    }
+
+    // MARK: - Connections Section
+
+    @ViewBuilder
+    private var connectionsSection: some View {
         if let userSession = userSessionManager.currentSession {
-            Section {
+            Section(L10n.CouchfinSettings.connections) {
                 UserProfileRow(user: userSession.user.data) {
                     router.route(to: .localUserSettings(user: userSession.user.data))
                 }
@@ -186,35 +234,25 @@ struct SettingsView: View {
                 }
 
                 #if os(iOS)
+                ChevronButton(
+                    L10n.SeerrSettings.requests,
+                    content: seerrHostDescription,
+                    systemName: "popcorn.fill"
+                ) {
+                    router.route(to: .seerrSettings)
+                }
+
                 if userSession.user.data.policy?.isAdministrator == true {
-                    ChevronButton(L10n.dashboard) {
+                    ChevronButton(
+                        L10n.CouchfinSettings.serverDashboard,
+                        systemName: "server.rack"
+                    ) {
                         router.route(to: .adminDashboard)
                     }
                 }
                 #endif
             }
         }
-    }
-
-    // MARK: - Requests Section
-
-    @ViewBuilder
-    private var requestsSection: some View {
-        #if os(iOS)
-        Section {
-            ChevronButton(
-                L10n.SeerrSettings.title,
-                content: seerrHostDescription,
-                systemName: "popcorn"
-            ) {
-                router.route(to: .seerrSettings)
-            }
-        } header: {
-            Text(L10n.SeerrSettings.requests)
-        } footer: {
-            Text(L10n.SeerrSettings.requestsFooter)
-        }
-        #endif
     }
 
     #if os(iOS)
@@ -227,48 +265,18 @@ struct SettingsView: View {
     }
     #endif
 
-    // MARK: - Customization Section
+    // MARK: - About Section
 
     @ViewBuilder
-    private var customizeSection: some View {
+    private var aboutSection: some View {
         Section {
-            #if os(iOS)
-            Picker(L10n.appearance, selection: $appearance)
-            #endif
-
-            ColorPicker(L10n.accentColor, selection: $accentColor, supportsOpacity: false)
-
-            ChevronButton(L10n.advanced) {
-                router.route(to: .customizeSettingsView)
+            ChevronButton(
+                L10n.CouchfinSettings.about,
+                content: UIApplication.appVersion ?? .emptyDash,
+                systemName: "info.circle.fill"
+            ) {
+                router.route(to: .aboutApp)
             }
-        } header: {
-            Text(L10n.customize)
-        } footer: {
-            Text(L10n.viewsMayRequireRestart)
-        }
-    }
-
-    // MARK: - Diagnostics Section
-
-    @ViewBuilder
-    private var diagnosticsSection: some View {
-        Section {
-
-            if ExperimentalSettingsView.isEnabled {
-                ChevronButton(L10n.experimental) {
-                    router.route(to: .experimentalSettings)
-                }
-            }
-
-            ChevronButton(L10n.logs) {
-                router.route(to: .log)
-            }
-
-            #if DEBUG
-            ChevronButton("Debug") {
-                router.route(to: .debugSettings)
-            }
-            #endif
         }
     }
 }

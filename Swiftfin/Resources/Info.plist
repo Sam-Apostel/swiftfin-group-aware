@@ -68,8 +68,10 @@
 	<true/>
 	<key>UILaunchScreen</key>
 	<dict>
+		<key>UIColorName</key>
+		<string>LaunchScreenBackground</string>
 		<key>UIImageName</key>
-		<string>jellyfin-blob-blue</string>
+		<string>couchfin-launch</string>
 		<key>UIImageRespectsSafeAreaInsets</key>
 		<true/>
 	</dict>

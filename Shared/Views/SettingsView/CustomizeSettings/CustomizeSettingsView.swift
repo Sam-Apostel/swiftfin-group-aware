@@ -9,6 +9,7 @@
 import Defaults
 import SwiftUI
 
+/// Home & libraries: the home rows, how libraries look and filter, and on tvOS the tab bar.
 struct CustomizeSettingsView: View {
 
     @Default(.Customization.Search.enabledDrawerFilters)
@@ -23,7 +24,7 @@ struct CustomizeSettingsView: View {
     private var router
 
     var body: some View {
-        Form(systemImage: "gear") {
+        Form(systemImage: "house") {
 
             #if os(tvOS)
             Section(L10n.tabBar) {
@@ -31,33 +32,16 @@ struct CustomizeSettingsView: View {
             }
             #endif
 
-            Section {
-                ChevronButton(L10n.search) {
+            HomeSection()
+
+            LibrarySection(isEmbedded: true)
+
+            Section(L10n.search) {
+                ChevronButton(L10n.filters) {
                     router.route(to: .itemFilterDrawerSelector(selection: $searchEnabledDrawerFilters))
                 }
-
-            } header: {
-                Text(L10n.filters)
             }
-
-            ChevronButton(L10n.items) {
-                router.route(to: .itemSettings)
-            }
-
-            ChevronButton(L10n.libraries) {
-                router.route(to: .librarySettings)
-            }
-
-            ChevronButton(L10n.posters) {
-                router.route(to: .posterSettings)
-            }
-
-            ChevronButton(L10n.videoPlayer) {
-                router.route(to: .videoPlayerSettings)
-            }
-
-            HomeSection()
         }
-        .navigationTitle(L10n.advanced)
+        .navigationTitle(L10n.CouchfinSettings.homeAndLibraries)
     }
 }

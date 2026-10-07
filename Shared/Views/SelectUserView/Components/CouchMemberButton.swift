@@ -6,7 +6,6 @@
 // Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
-import Defaults
 import SwiftUI
 
 extension SelectUserView {
@@ -16,9 +15,6 @@ extension SelectUserView {
     /// Copies the `UserButton` look and its accent checkmark, but drives
     /// selection from the couch selection and not from the delete-mode selection.
     struct CouchMemberButton: View {
-
-        @Default(.accentColor)
-        private var accentColor
 
         let user: UserState
         let server: ServerState
@@ -105,6 +101,18 @@ extension SelectUserView {
             )
             .isEditing(isDimmed)
             .isSelected(false)
+            .overlay {
+                // On the couch: the avatar lights up with the fin's rim.
+                if isSelected {
+                    Circle()
+                        .strokeBorder(
+                            AngularGradient(colors: Color.Couchfin.rimColors + [Color.Couchfin.bio], center: .center),
+                            lineWidth: UIDevice.isTV ? 8 : 4
+                        )
+                        .shadow(color: Color.Couchfin.glint.opacity(0.6), radius: UIDevice.isTV ? 18 : 10)
+                        .transition(.opacity)
+                }
+            }
             .hoverEffect(.highlight)
             .overlay(alignment: .bottomTrailing) {
                 if isSelected {
@@ -113,7 +121,7 @@ extension SelectUserView {
                         .aspectRatio(contentMode: .fit)
                         .frame(width: checkmarkSize, height: checkmarkSize)
                         .symbolRenderingMode(.palette)
-                        .foregroundStyle(accentColor.overlayColor, accentColor)
+                        .foregroundStyle(Color.Couchfin.abyss, Color.Couchfin.glint)
                         .shadow(radius: 4)
                         .transition(.scale.combined(with: .opacity))
                         .hoverEffect(.lift)

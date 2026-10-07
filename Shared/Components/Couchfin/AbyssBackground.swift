@@ -45,10 +45,16 @@ extension View {
     /// Puts a screen in Couchfin's dark water: hides the system list/form backgrounds
     /// so the abyss shows through.
     func couchfinBackground() -> some View {
+        #if os(iOS)
         scrollContentBackground(.hidden)
             .background {
                 AbyssBackground()
             }
+        #else
+        background {
+            AbyssBackground()
+        }
+        #endif
     }
 
     /// Couchfin's raised surface for list and form rows.

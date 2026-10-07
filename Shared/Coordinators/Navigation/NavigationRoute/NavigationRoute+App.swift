@@ -30,20 +30,12 @@ extension NavigationRoute {
 
     #endif
 
-    static var appIconSelector: NavigationRoute {
-        NavigationRoute(
-            id: "app-icon-selector"
-        ) {
-            AppIconSelectorView()
-        }
-    }
-
     static var appSettings: NavigationRoute {
         NavigationRoute(
             id: "app-settings",
             style: .sheet
         ) {
-            AppSettingsView()
+            AboutAppView(isPresentedAsSheet: true)
         }
     }
 }

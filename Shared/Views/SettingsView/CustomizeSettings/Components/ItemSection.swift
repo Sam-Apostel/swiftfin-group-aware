@@ -40,42 +40,49 @@ extension CustomizeSettingsView {
         @Router
         private var router
 
+        /// Set when the sections are shown inside another settings screen.
+        var isEmbedded = false
+
         var body: some View {
-            Form(systemImage: "gear") {
-                Section {
-                    PlatformPicker(L10n.style, selection: $itemViewType)
-                } header: {
-                    Text(L10n.itemView.localizedCapitalized)
+            if isEmbedded {
+                content
+            } else {
+                Form(systemImage: "gear") {
+                    content
+                }
+                .navigationTitle(L10n.items)
+            }
+        }
+
+        @ViewBuilder
+        private var content: some View {
+            Section {
+                PlatformPicker(L10n.style, selection: $itemViewType)
+
+                PlatformPicker(L10n.enabledTrailers, selection: $enabledTrailers)
+
+                Toggle(L10n.showRecommendations, isOn: $shouldShowRecommendations)
+
+                Toggle(L10n.showMissingSeasons, isOn: $shouldShowMissingSeasons)
+
+                Toggle(L10n.showMissingEpisodes, isOn: $shouldShowMissingEpisodes)
+            } header: {
+                Text(L10n.itemView.localizedCapitalized)
+            }
+
+            Section(L10n.buttons) {
+                ChevronButton(L10n.barButtons) {
+                    router.route(to: .itemActionBarButtonSelector(
+                        selectedButtonsBinding: $barActionButtons
+                    ))
                 }
 
-                Section {
-                    PlatformPicker(L10n.enabledTrailers, selection: $enabledTrailers)
-
-                    Toggle(L10n.showRecommendations, isOn: $shouldShowRecommendations)
-                }
-
-                Section(L10n.buttons) {
-                    ChevronButton(L10n.barButtons) {
-                        router.route(to: .itemActionBarButtonSelector(
-                            selectedButtonsBinding: $barActionButtons
-                        ))
-                    }
-
-                    ChevronButton(L10n.menuButtons) {
-                        router.route(to: .itemActionMenuButtonSelector(
-                            selectedButtonsBinding: $menuActionButtons
-                        ))
-                    }
-                }
-
-                Section {
-                    Toggle(L10n.showMissingSeasons, isOn: $shouldShowMissingSeasons)
-                    Toggle(L10n.showMissingEpisodes, isOn: $shouldShowMissingEpisodes)
-                } header: {
-                    Text(L10n.missing)
+                ChevronButton(L10n.menuButtons) {
+                    router.route(to: .itemActionMenuButtonSelector(
+                        selectedButtonsBinding: $menuActionButtons
+                    ))
                 }
             }
-            .navigationTitle(L10n.items)
         }
     }
 }

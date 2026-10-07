@@ -68,7 +68,9 @@ private struct PlatformForm<Image: View, Content: View>: PlatformView {
     var iOSView: some View {
         Form {
             content
+                .couchfinRowBackground()
         }
+        .couchfinBackground()
         .toolbarTitleDisplayMode(.inline)
     }
 
