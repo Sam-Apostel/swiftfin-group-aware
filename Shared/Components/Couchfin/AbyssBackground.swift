@@ -8,35 +8,39 @@
 
 import SwiftUI
 
-/// Couchfin's dark water: the abyss, with a little light coming in from the edges.
+/// Couchfin's dark water: the moody, cloudy volume from the app icon, drifting very slowly.
 struct AbyssBackground: View {
 
+    @Environment(\.accessibilityReduceMotion)
+    private var reduceMotion
+
+    @State
+    private var isDrifting = false
+
     var body: some View {
-        ZStack {
-            LinearGradient(
-                colors: [Color.Couchfin.deep, Color.Couchfin.abyss],
-                startPoint: .top,
-                endPoint: UnitPoint(x: 0.5, y: 0.55)
-            )
+        GeometryReader { proxy in
+            let isPortrait = proxy.size.height > proxy.size.width
 
-            // fin blue spilling in from the top trailing corner
-            RadialGradient(
-                colors: [Color.Couchfin.fin.opacity(0.26), .clear],
-                center: .topTrailing,
-                startRadius: 0,
-                endRadius: 520
-            )
-
-            // a hint of bloom from the bottom leading corner
-            RadialGradient(
-                colors: [Color.Couchfin.orchid.opacity(0.10), .clear],
-                center: .bottomLeading,
-                startRadius: 0,
-                endRadius: 420
-            )
+            Image(isPortrait ? .couchfinAbyssPortrait : .couchfinAbyssLandscape)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: proxy.size.width, height: proxy.size.height)
+                // a slow drift, so the water feels alive without drawing attention
+                .scaleEffect(isDrifting ? 1.12 : 1.04)
+                .offset(x: isDrifting ? proxy.size.width * 0.02 : -proxy.size.width * 0.02)
+                .clipped()
         }
+        .background(Color.Couchfin.abyss)
         .ignoresSafeArea()
         .accessibilityHidden(true)
+        .allowsHitTesting(false)
+        .onAppear {
+            guard !reduceMotion else { return }
+
+            withAnimation(.easeInOut(duration: 40).repeatForever(autoreverses: true)) {
+                isDrifting = true
+            }
+        }
     }
 }
 

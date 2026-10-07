@@ -16,10 +16,7 @@ body{background:#0b0d14;font-family:-apple-system,"SF Pro Text","Inter","Helveti
 .status{height:54px;display:flex;justify-content:space-between;align-items:center;padding:14px 34px 0 44px;font:600 17px -apple-system,Inter,sans-serif;position:relative;z-index:5}
 .status .r{font-size:13px;letter-spacing:2px}
 .island{position:absolute;top:11px;left:50%;transform:translateX(-50%);width:124px;height:36px;background:#000;border-radius:20px;z-index:6}
-.abyss-bg{position:absolute;inset:0;background:
- radial-gradient(120% 60% at 100% 0%,rgba(18,56,255,.28),transparent 60%),
- radial-gradient(80% 40% at 0% 100%,rgba(192,38,245,.12),transparent 70%),
- linear-gradient(180deg,#020A2A,#01061A 55%)}
+.abyss-bg{position:absolute;inset:0;background:url(abyss-portrait.jpg) center/cover}
 .scroll{position:absolute;inset:0;overflow:hidden;padding-top:54px}
 .tabbar{position:absolute;left:16px;right:16px;bottom:26px;height:64px;border-radius:32px;background:rgba(10,20,60,.55);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid var(--hair);display:flex;justify-content:space-around;align-items:center;z-index:10;box-shadow:0 10px 30px rgba(0,0,0,.5)}
 .tab{display:flex;flex-direction:column;align-items:center;gap:3px;font:600 10px -apple-system,Inter,sans-serif;color:var(--t2);width:78px;padding:6px 0;border-radius:24px}

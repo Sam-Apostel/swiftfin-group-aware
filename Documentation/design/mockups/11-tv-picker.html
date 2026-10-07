@@ -1,0 +1,21 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="tv.css"></head><body><div class="tv">
+<div class="abyss"></div>
+<img class="fin" src="fin-fish.png" style="width:360px;right:36px;top:800px;transform:rotate(-5deg)">
+<div style="position:absolute;top:110px;left:0;right:0;text-align:center">
+ <div class="kicker">Living room · jellyfin.local</div>
+ <div class="r" style="font:900 76px 'SF Pro Rounded',Nunito,sans-serif;margin-top:14px;letter-spacing:-1px">Who's on the couch?</div>
+ <div style="font:400 28px Inter;color:var(--t2);margin-top:10px">Pick everyone who's watching</div>
+ <div style="display:flex;gap:20px;justify-content:center;margin-top:36px">
+  <span class="btn" style="height:64px;font-size:24px;background:rgba(192,38,245,.35);box-shadow:inset 0 0 0 2px rgba(249,73,250,.6)">🍿 Movie night</span>
+  <span class="btn" style="height:64px;font-size:24px">🧸 Kids</span><span class="btn" style="height:64px;font-size:24px">Sam &amp; Tuur</span></div>
+</div>
+<div style="position:absolute;top:470px;left:0;right:0;display:flex;justify-content:center;gap:70px">
+<script>
+const P=[["Sam","#33c4a4",1],["Lisa","#ff6fae",1,0,1],["Tuur","#ffb347",0,1],["Mona","#7a5cff",0,1],["Oma","#5b8cff",0]];
+document.write(P.map(([n,c,on,kid,foc])=>`<div style="text-align:center;${foc?'transform:scale(1.12)':''}"><div style="width:210px;height:210px;border-radius:50%;position:relative;display:grid;place-items:center;font:800 90px 'SF Pro Rounded',Nunito,sans-serif;background:radial-gradient(circle at 35% 30%,${c},${c}88 70%);${on?'box-shadow:0 0 0 6px #01061A,0 0 0 13px #3fedfd,0 0 50px rgba(63,237,253,.55)':'opacity:.7'};${foc?'filter:brightness(1.15)':''}">${n[0]}${on?'<span style="position:absolute;right:0;bottom:0;width:62px;height:62px;border-radius:50%;background:#3fedfd;display:grid;place-items:center;box-shadow:0 0 0 6px #01061A"><svg viewBox="0 0 24 24" width="34"><path d="m5 12.5 4.5 4.5L19 7.5" stroke="#01061A" stroke-width="3.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>':''}${kid?'<span style="position:absolute;left:4px;top:4px;width:50px;height:50px;border-radius:50%;background:#ffb347;display:grid;place-items:center;font-size:26px;box-shadow:0 0 0 5px #01061A">🧒</span>':''}</div><div style="font:600 30px Inter;margin-top:22px">${n}</div></div>`).join(''))
+</script></div>
+<div style="position:absolute;bottom:80px;left:0;right:0;display:flex;justify-content:center;gap:24px;align-items:center">
+ <span class="btn" style="height:76px">Living room ⌄</span>
+ <span class="btn w" style="padding:0 56px">▶︎ Start watching together · 2</span>
+ <span class="ic">🔖</span><span class="ic">＋</span><span class="ic">⋯</span></div>
+</div></body></html>

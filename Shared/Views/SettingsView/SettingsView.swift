@@ -43,8 +43,8 @@ struct SettingsView: View {
             connectionsSection
             aboutSection
         } image: {
-            FinView()
-                .frame(maxWidth: 520)
+            FinView(variant: .tail)
+                .frame(maxWidth: 560)
         }
         #if os(iOS)
         .navigationTitle(L10n.settings)

@@ -1,0 +1,13 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="tv.css"><style>
+.shelf{position:absolute;left:0;right:0;top:0;height:720px;background-size:cover}
+.shelf:after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 70%,#000 100%)}
+.apps{position:absolute;left:90px;right:0;top:760px;display:flex;gap:44px}
+.app{width:300px;height:180px;border-radius:22px;flex:none;background:#2a2d36}
+.app.f{transform:scale(1.15);transform-origin:center;box-shadow:0 30px 50px rgba(0,0,0,.7)}
+.lbl{position:absolute;top:975px;left:90px;width:300px;text-align:center;font:600 24px Inter;color:#fff}
+.clock{position:absolute;top:40px;right:80px;font:500 30px Inter;color:#fff;z-index:2}
+</style></head><body><div class="tv" style="background:#000">
+<div class="shelf" id="s"></div><div class="clock">20:41</div>
+<div class="apps"><div class="app f" style="background:url(tv-icon.png) center/cover"></div><div class="app" style="background:linear-gradient(135deg,#e50914,#7a0610)"></div><div class="app" style="background:linear-gradient(135deg,#1c1c1e,#3a3a3c)"></div><div class="app" style="background:linear-gradient(135deg,#0b5cff,#0a2a80)"></div><div class="app" style="background:linear-gradient(135deg,#ff2d55,#5c0a1c)"></div></div>
+<div class="lbl">Couchfin</div>
+</div><script>document.getElementById('s').style.backgroundImage=`url(ts-${new URLSearchParams(location.search).get('pos')||'center'}.png)`</script></body></html>

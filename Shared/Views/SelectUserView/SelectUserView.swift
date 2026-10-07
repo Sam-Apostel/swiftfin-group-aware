@@ -471,14 +471,15 @@ struct SelectUserView: View {
                 }
             }
         }
-        .overlay(alignment: .bottomLeading) {
-            // The fin swims in from the leading edge, behind the people.
+        .overlay(alignment: .bottomTrailing) {
+            // The fin keeps the couch company, out of the way of the people.
             if !isEditing {
                 FinView()
-                    .frame(width: UIDevice.isTV ? 1100 : 520)
-                    .rotationEffect(.degrees(8))
-                    .offset(x: UIDevice.isTV ? -420 : -250, y: UIDevice.isTV ? -160 : -150)
-                    .opacity(UIDevice.isTV ? 0.55 : 0.85)
+                    .frame(width: UIDevice.isTV ? 360 : 170)
+                    .rotationEffect(.degrees(-5))
+                    .padding(.trailing, UIDevice.isTV ? 36 : 12)
+                    .padding(.bottom, UIDevice.isTV ? 140 : 150)
+                    .opacity(UIDevice.isTV ? 1 : 0.8)
                     .transition(.opacity)
             }
         }

@@ -8,80 +8,68 @@
 
 import SwiftUI
 
-/// The glowing fin from the app icon, drawn live so it stays sharp at any size.
+/// The Couchfin fin, straight from the brand artwork: textured body, glowing rim.
 ///
-/// Use it the way the brand guide says: swimming off an edge, one per screen,
-/// never on top of artwork or video. Pass `glow: false` for small sizes.
+/// Use it the way the brand guide says: one per screen, entering from an edge,
+/// never on top of artwork or video.
 struct FinView: View {
 
+    enum Variant {
+        /// The whole fish: round head on the leading side, forked tail on the trailing side.
+        case fish
+        /// Only the tail, for swimming off an edge.
+        case tail
+
+        var resource: ImageResource {
+            switch self {
+            case .fish: .couchfinFin
+            case .tail: .couchfinTail
+            }
+        }
+    }
+
     enum Heading {
-        /// Head on the leading side, swimming towards the leading edge.
+        /// Head on the leading side (as drawn).
         case leading
-        /// Head on the trailing side.
+        /// Mirrored: head on the trailing side.
         case trailing
     }
 
+    var variant: Variant = .fish
     var heading: Heading = .leading
-    var glow: Bool = true
 
     var body: some View {
-        GeometryReader { proxy in
-            let rimWidth = max(1, proxy.size.width / 160)
-
-            ZStack {
-                if glow {
-                    FinShape()
-                        .stroke(Color.Couchfin.rim, lineWidth: rimWidth * 5)
-                        .blur(radius: rimWidth * 3)
-                        .opacity(0.85)
-                }
-
-                FinShape()
-                    .fill(Color.Couchfin.body)
-
-                // darker core, so the light stays on the edge
-                FinShape()
-                    .fill(
-                        RadialGradient(
-                            colors: [Color(hex: "#000530").opacity(0.75), .clear],
-                            center: UnitPoint(x: 0.42, y: 0.5),
-                            startRadius: 0,
-                            endRadius: proxy.size.width * 0.42
-                        )
-                    )
-
-                FinShape()
-                    .stroke(Color.Couchfin.rim, lineWidth: rimWidth)
-            }
+        Image(variant.resource)
+            .resizable()
+            .interpolation(.high)
+            .aspectRatio(contentMode: .fit)
             .scaleEffect(x: heading == .trailing ? -1 : 1, y: 1)
-        }
-        .aspectRatio(FinShape.aspectRatio, contentMode: .fit)
-        .accessibilityHidden(true)
-        .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .allowsHitTesting(false)
     }
 }
 
-/// A fin gently swimming in place: Couchfin's loading indicator.
+/// The fin gently swimming in place: Couchfin's loading indicator.
 struct SwimmingFin: View {
 
     @Environment(\.accessibilityReduceMotion)
     private var reduceMotion
 
-    var width: CGFloat = UIDevice.isTV ? 120 : 64
+    var width: CGFloat = UIDevice.isTV ? 160 : 84
 
     var body: some View {
         TimelineView(.animation(paused: reduceMotion)) { context in
             let t = context.date.timeIntervalSinceReferenceDate
             let phase = sin(t * 2.4)
 
-            FinView(glow: width >= 40)
+            FinView()
                 .frame(width: width)
                 // the tail flicks more than the head
-                .rotation3DEffect(.degrees(phase * 18), axis: (x: 0, y: 1, z: 0), anchor: .leading)
-                .rotationEffect(.degrees(phase * 3))
+                .rotation3DEffect(.degrees(phase * 14), axis: (x: 0, y: 1, z: 0), anchor: .leading)
+                .rotationEffect(.degrees(phase * 2.5))
                 .offset(y: CGFloat(sin(t * 1.2)) * width * 0.04)
         }
-        .frame(width: width, height: width / FinShape.aspectRatio * 1.3)
+        .frame(width: width * 1.1, height: width * 0.75)
         .accessibilityElement()
         .accessibilityLabel(Text(L10n.Couchfin.loading))
     }
