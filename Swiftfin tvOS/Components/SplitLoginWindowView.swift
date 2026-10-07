@@ -44,12 +44,6 @@ struct SplitLoginWindowView<Leading: View, Trailing: View>: View {
             .edgePadding(.vertical)
         }
         .toolbar {
-            ToolbarItem(placement: .principal) {
-                Image(uiImage: .jellyfinBlobBlue)
-                    .resizable()
-                    .aspectRatio(contentMode: .fit)
-                    .frame(width: UIDevice.isTV ? 100 : 30)
-            }
             ToolbarItem(placement: .topBarTrailing) {
                 if isLoading {
                     ProgressView()

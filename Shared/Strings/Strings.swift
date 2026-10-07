@@ -6,12 +6,8 @@ import Foundation
 internal enum L10n {
   /// About
   internal static let about = L10n.tr("Localizable", "about", fallback: "About")
-  /// About - when learning more about the app
-  internal static let aboutApp = L10n.tr("Localizable", "aboutApp", fallback: "About")
   /// Absolute
   internal static let absolute = L10n.tr("Localizable", "absolute", fallback: "Absolute")
-  /// Accent color
-  internal static let accentColor = L10n.tr("Localizable", "accentColor", fallback: "Accent color")
   /// Access
   internal static let access = L10n.tr("Localizable", "access", fallback: "Access")
   /// The end time must come after the start time.
@@ -124,10 +120,6 @@ internal enum L10n {
   internal static let apiKeysCapitalized = L10n.tr("Localizable", "apiKeysCapitalized", fallback: "API Keys")
   /// External applications require an API key to communicate with your server.
   internal static let apiKeysDescription = L10n.tr("Localizable", "apiKeysDescription", fallback: "External applications require an API key to communicate with your server.")
-  /// Appearance
-  internal static let appearance = L10n.tr("Localizable", "appearance", fallback: "Appearance")
-  /// App icon
-  internal static let appIcon = L10n.tr("Localizable", "appIcon", fallback: "App icon")
   /// Application name
   internal static let applicationName = L10n.tr("Localizable", "applicationName", fallback: "Application name")
   /// Arranger
@@ -446,16 +438,14 @@ internal enum L10n {
   internal static let customConnectionsDescription = L10n.tr("Localizable", "customConnectionsDescription", fallback: "Manually set the maximum number of connections a user can have to the server.")
   /// Allows advanced customization of device profiles for native playback. Incorrect settings may affect playback.
   internal static let customDescription = L10n.tr("Localizable", "customDescription", fallback: "Allows advanced customization of device profiles for native playback. Incorrect settings may affect playback.")
-  /// The custom device profiles will be added to the default Swiftfin device profiles.
-  internal static let customDeviceProfileAdd = L10n.tr("Localizable", "customDeviceProfileAdd", fallback: "The custom device profiles will be added to the default Swiftfin device profiles.")
-  /// The custom device profiles will replace the default Swiftfin device profiles.
-  internal static let customDeviceProfileReplace = L10n.tr("Localizable", "customDeviceProfileReplace", fallback: "The custom device profiles will replace the default Swiftfin device profiles.")
+  /// The custom device profiles will be added to the default Couchfin device profiles.
+  internal static let customDeviceProfileAdd = L10n.tr("Localizable", "customDeviceProfileAdd", fallback: "The custom device profiles will be added to the default Couchfin device profiles.")
+  /// The custom device profiles will replace the default Couchfin device profiles.
+  internal static let customDeviceProfileReplace = L10n.tr("Localizable", "customDeviceProfileReplace", fallback: "The custom device profiles will replace the default Couchfin device profiles.")
   /// Manually set the number of failed login attempts allowed before locking the user.
   internal static let customFailedLoginDescription = L10n.tr("Localizable", "customFailedLoginDescription", fallback: "Manually set the number of failed login attempts allowed before locking the user.")
   /// Custom failed logins
   internal static let customFailedLogins = L10n.tr("Localizable", "customFailedLogins", fallback: "Custom failed logins")
-  /// Customize
-  internal static let customize = L10n.tr("Localizable", "customize", fallback: "Customize")
   /// Provide a custom jump interval in seconds.
   internal static let customJumpIntervalDescription = L10n.tr("Localizable", "customJumpIntervalDescription", fallback: "Provide a custom jump interval in seconds.")
   /// Custom name
@@ -1200,8 +1190,8 @@ internal enum L10n {
   internal static let password = L10n.tr("Localizable", "password", fallback: "Password")
   /// User password has been changed.
   internal static let passwordChangedMessage = L10n.tr("Localizable", "passwordChangedMessage", fallback: "User password has been changed.")
-  /// Changes the Jellyfin server user password. This does not change any Swiftfin settings.
-  internal static let passwordChangeWarning = L10n.tr("Localizable", "passwordChangeWarning", fallback: "Changes the Jellyfin server user password. This does not change any Swiftfin settings.")
+  /// Changes the Jellyfin server user password. This does not change any Couchfin settings.
+  internal static let passwordChangeWarning = L10n.tr("Localizable", "passwordChangeWarning", fallback: "Changes the Jellyfin server user password. This does not change any Couchfin settings.")
   /// New passwords do not match.
   internal static let passwordsDoNotMatch = L10n.tr("Localizable", "passwordsDoNotMatch", fallback: "New passwords do not match.")
   /// Path
@@ -1222,8 +1212,8 @@ internal enum L10n {
   }
   /// Permissions
   internal static let permissions = L10n.tr("Localizable", "permissions", fallback: "Permissions")
-  /// Manage additional Swiftfin settings in the Settings app.
-  internal static let permissionsSettingsAppFooter = L10n.tr("Localizable", "permissionsSettingsAppFooter", fallback: "Manage additional Swiftfin settings in the Settings app.")
+  /// Manage additional Couchfin settings in the Settings app.
+  internal static let permissionsSettingsAppFooter = L10n.tr("Localizable", "permissionsSettingsAppFooter", fallback: "Manage additional Couchfin settings in the Settings app.")
   /// Person
   internal static let person = L10n.tr("Localizable", "person", fallback: "Person")
   /// Photo
@@ -1496,8 +1486,8 @@ internal enum L10n {
   internal static let resetFilterFooter = L10n.tr("Localizable", "resetFilterFooter", fallback: "Reset the filter values to none.")
   /// Reset settings
   internal static let resetSettings = L10n.tr("Localizable", "resetSettings", fallback: "Reset settings")
-  /// Reset Swiftfin user settings.
-  internal static let resetSettingsDescription = L10n.tr("Localizable", "resetSettingsDescription", fallback: "Reset Swiftfin user settings.")
+  /// Reset Couchfin user settings.
+  internal static let resetSettingsDescription = L10n.tr("Localizable", "resetSettingsDescription", fallback: "Reset Couchfin user settings.")
   /// Are you sure you want to reset all user settings?
   internal static let resetSettingsMessage = L10n.tr("Localizable", "resetSettingsMessage", fallback: "Are you sure you want to reset all user settings?")
   /// Resolution
@@ -1516,8 +1506,6 @@ internal enum L10n {
   internal static let restoring = L10n.tr("Localizable", "restoring", fallback: "Restoring")
   /// The server is restarting to restore from this backup. You may need to log back in when the restore completes.
   internal static let restoringMessage = L10n.tr("Localizable", "restoringMessage", fallback: "The server is restarting to restore from this backup. You may need to log back in when the restore completes.")
-  /// Resume
-  internal static let resume = L10n.tr("Localizable", "resume", fallback: "Resume")
   /// Resume offset
   internal static let resumeOffset = L10n.tr("Localizable", "resumeOffset", fallback: "Resume offset")
   /// Resume content seconds before the recorded resume time.
@@ -1614,9 +1602,9 @@ internal enum L10n {
   internal static let serverLogs = L10n.tr("Localizable", "serverLogs", fallback: "Server logs")
   /// Servers
   internal static let servers = L10n.tr("Localizable", "servers", fallback: "Servers")
-  /// Swiftfin requires Jellyfin version %@ or higher.
+  /// Couchfin requires Jellyfin version %@ or higher.
   internal static func serverVersionWarning(_ p1: Any) -> String {
-    return L10n.tr("Localizable", "serverVersionWarning", String(describing: p1), fallback: "Swiftfin requires Jellyfin version %@ or higher.")
+    return L10n.tr("Localizable", "serverVersionWarning", String(describing: p1), fallback: "Couchfin requires Jellyfin version %@ or higher.")
   }
   /// Session
   internal static let session = L10n.tr("Localizable", "session", fallback: "Session")
@@ -1628,22 +1616,14 @@ internal enum L10n {
   internal static let settings = L10n.tr("Localizable", "settings", fallback: "Settings")
   /// Short
   internal static let short = L10n.tr("Localizable", "short", fallback: "Short")
-  /// Show favorited
-  internal static let showFavorited = L10n.tr("Localizable", "showFavorited", fallback: "Show favorited")
   /// Show missing episodes
   internal static let showMissingEpisodes = L10n.tr("Localizable", "showMissingEpisodes", fallback: "Show missing episodes")
   /// Show missing seasons
   internal static let showMissingSeasons = L10n.tr("Localizable", "showMissingSeasons", fallback: "Show missing seasons")
-  /// Show progress
-  internal static let showProgress = L10n.tr("Localizable", "showProgress", fallback: "Show progress")
   /// Show recommendations
   internal static let showRecommendations = L10n.tr("Localizable", "showRecommendations", fallback: "Show recommendations")
   /// Show title - Controls title visibility on media posters. People and chapter titles, and episode season and episode locators, remain visible.
   internal static let showTitle = L10n.tr("Localizable", "showTitle", fallback: "Show title")
-  /// Show unwatched
-  internal static let showUnwatched = L10n.tr("Localizable", "showUnwatched", fallback: "Show unwatched")
-  /// Show watched
-  internal static let showWatched = L10n.tr("Localizable", "showWatched", fallback: "Show watched")
   /// Shutdown server
   internal static let shutdownServer = L10n.tr("Localizable", "shutdownServer", fallback: "Shutdown server")
   /// Are you sure you want to shutdown the server?
@@ -1658,20 +1638,16 @@ internal enum L10n {
   }
   /// Sign out on background
   internal static let signoutBackground = L10n.tr("Localizable", "signoutBackground", fallback: "Sign out on background")
-  /// Signs out the last user when Swiftfin has been in the background without media playback after some time.
-  internal static let signoutBackgroundFooter = L10n.tr("Localizable", "signoutBackgroundFooter", fallback: "Signs out the last user when Swiftfin has been in the background without media playback after some time.")
+  /// Signs out the last user when Couchfin has been in the background without media playback after some time.
+  internal static let signoutBackgroundFooter = L10n.tr("Localizable", "signoutBackgroundFooter", fallback: "Signs out the last user when Couchfin has been in the background without media playback after some time.")
   /// Sign out on close
   internal static let signoutClose = L10n.tr("Localizable", "signoutClose", fallback: "Sign out on close")
-  /// Signs out the last user when Swiftfin has been force closed.
-  internal static let signoutCloseFooter = L10n.tr("Localizable", "signoutCloseFooter", fallback: "Signs out the last user when Swiftfin has been force closed.")
   /// Simple
   internal static let simple = L10n.tr("Localizable", "simple", fallback: "Simple")
   /// Size
   internal static let size = L10n.tr("Localizable", "size", fallback: "Size")
   /// Skip duplicates
   internal static let skipDuplicates = L10n.tr("Localizable", "skipDuplicates", fallback: "Skip duplicates")
-  /// Slider
-  internal static let slider = L10n.tr("Localizable", "slider", fallback: "Slider")
   /// Slow scrub
   internal static let slowScrub = L10n.tr("Localizable", "slowScrub", fallback: "Slow scrub")
   /// Slow scrubbing
@@ -1694,8 +1670,6 @@ internal enum L10n {
   internal static let sourceCode = L10n.tr("Localizable", "sourceCode", fallback: "Source code")
   /// Special features
   internal static let specialFeatures = L10n.tr("Localizable", "specialFeatures", fallback: "Special features")
-  /// Splashscreen
-  internal static let splashscreen = L10n.tr("Localizable", "splashscreen", fallback: "Splashscreen")
   /// When all servers are selected, use the splashscreen from a single server or a random server.
   internal static let splashscreenFooter = L10n.tr("Localizable", "splashscreenFooter", fallback: "When all servers are selected, use the splashscreen from a single server or a random server.")
   /// Split
@@ -1772,8 +1746,6 @@ internal enum L10n {
   internal static let supportsMediaControl = L10n.tr("Localizable", "supportsMediaControl", fallback: "Media control")
   /// Persistent identifier
   internal static let supportsPersistentIdentifier = L10n.tr("Localizable", "supportsPersistentIdentifier", fallback: "Persistent identifier")
-  /// Switch user
-  internal static let switchUser = L10n.tr("Localizable", "switchUser", fallback: "Switch user")
   /// SyncPlay
   internal static let syncPlay = L10n.tr("Localizable", "syncPlay", fallback: "SyncPlay")
   /// System

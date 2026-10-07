@@ -38,11 +38,10 @@ struct DiscoverView: View {
     // MARK: - Not Configured
 
     private var notConfiguredView: some View {
-        ContentUnavailableView {
-            Label(L10n.SeerrDiscover.notConfiguredTitle, systemImage: "popcorn.fill")
-        } description: {
-            Text(L10n.SeerrDiscover.notConfiguredDescription)
-        } actions: {
+        FinEmptyView(
+            L10n.SeerrDiscover.notConfiguredTitle,
+            description: L10n.SeerrDiscover.notConfiguredDescription
+        ) {
             Button {
                 router.route(to: .seerrSettings)
             } label: {
@@ -52,7 +51,7 @@ struct DiscoverView: View {
             .fontWeight(.semibold)
             .backport
             .buttonStyle(.glassProminent.shadow(false))
-            .tint(accentColor)
+            .tint(Color.Couchfin.fin)
             .controlSize(.large)
             .frame(maxWidth: 300)
         }

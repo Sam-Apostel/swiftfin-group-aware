@@ -17,6 +17,9 @@ struct MainTabView: View {
     #if os(tvOS)
     @Default(.Customization.tabBarPlacement)
     private var tabBarPlacement
+
+    @Environment(\.scenePhase)
+    private var scenePhase
     #endif
 
     @InjectedObject(\.userSessionManager)
@@ -71,6 +74,7 @@ struct MainTabView: View {
         NavigationInjectionView(coordinator: tab.coordinator) {
             tab.item.content
                 #if os(iOS)
+                    .couchfinBackground()
                     .if(tabCoordinator.tabs.first?.item.id == tab.item.id) { view in
                         view.topBarTrailing {
                             FirstTabSettingsBarButton()
@@ -126,6 +130,14 @@ struct MainTabView: View {
         #endif
     }
 
+    #if os(tvOS)
+    private func refreshTopShelf(force: Bool) async {
+        guard let session = userSessionManager.currentSession else { return }
+
+        await TopShelfPublisher.refresh(session: session, force: force)
+    }
+    #endif
+
     var body: some View {
         tabContent()
             .onChange(of: userSessionManager.pendingDeepLink) {
@@ -140,7 +152,22 @@ struct MainTabView: View {
             .audienceWatchlistSaveErrorAlert()
             #if os(tvOS)
             .background(alignment: .top) {
-                FocusedPosterCinematicBackgroundView()
+                ZStack(alignment: .top) {
+                    AbyssBackground()
+
+                    FocusedPosterCinematicBackgroundView()
+                }
+            }
+            // The Top Shelf follows whoever is on the couch
+            .task {
+                await refreshTopShelf(force: true)
+            }
+            .onChange(of: scenePhase) {
+                guard scenePhase == .active else { return }
+
+                Task {
+                    await refreshTopShelf(force: false)
+                }
             }
             #endif
     }

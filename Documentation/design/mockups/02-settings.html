@@ -1,0 +1,95 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="cf.css">
+<style>body{width:1460px}
+.nav{display:flex;align-items:center;justify-content:space-between;padding:8px 16px 4px;font:600 17px Inter}
+.nav .l{color:var(--glint);display:flex;align-items:center;gap:2px}
+.nav h3{font:700 17px Inter}
+.ic.b{background:linear-gradient(135deg,#1238FF,#3a6bff)}.ic.c{background:linear-gradient(135deg,#00B9FB,#3FEDFD);color:#01061a}.ic.m{background:linear-gradient(135deg,#C026F5,#F949FA)}.ic.v{background:linear-gradient(135deg,#5b2bff,#7a5cff)}.ic.g{background:#2a3358}
+.seg{display:flex;margin-left:auto;background:rgba(255,255,255,.08);border-radius:10px;padding:2px;font:600 13px Inter}
+.seg span{padding:6px 10px;border-radius:8px;color:var(--t2)}.seg .on{background:rgba(18,56,255,.55);color:#fff}
+</style></head><body><div class="board">
+
+<div><div class="phone"><div class="abyss-bg"></div><div class="island"></div>
+<div class="status"><span>9:41</span><span class="r">●●● ▮</span></div>
+<div class="scroll" style="padding-top:60px">
+ <div class="nav"><span></span><h3>Settings</h3><span class="l" style="font-weight:700">Done</span></div>
+ <div class="group" style="margin-top:14px;padding:18px;position:relative;overflow:hidden;background:linear-gradient(135deg,rgba(18,56,255,.35),rgba(192,38,245,.18));border-color:rgba(63,237,253,.3)">
+  <div class="fin" data-fin='{"flip":true,"texture":false}' style="width:200px;right:-70px;top:-14px;opacity:.55"></div>
+  <div style="display:flex;align-items:center;gap:12px;position:relative">
+   <span class="stack"><span class="av" style="background:#ff6fae;width:48px;height:48px;font-size:20px">L</span><span class="av" style="background:#33c4a4;width:48px;height:48px;font-size:20px">S</span></span>
+   <div><div class="rounded" style="font:800 20px 'SF Pro Rounded',Nunito">Sam &amp; Lisa</div><div style="font:500 13px Inter;color:var(--t2)">Living room · jellyfin.local</div></div></div>
+  <div style="display:flex;gap:8px;margin-top:14px;position:relative"><span class="btn glow" style="height:38px;font-size:14px;padding:0 16px">Change who's watching</span><span class="btn glass" style="height:38px;font-size:14px;padding:0 16px">Couch</span></div>
+ </div>
+ <div class="ghead">Watching</div>
+ <div class="group">
+  <div class="cell"><span class="ic b" data-i="play"></span>Playback<span class="v">VLC · Auto<span class="chev">›</span></span></div>
+  <div class="cell"><span class="ic v" data-i="cc"></span>Audio &amp; subtitles<span class="v">EN · Smart<span class="chev">›</span></span></div>
+  <div class="cell"><span class="ic m" data-i="couch"></span>Couch &amp; kids<span class="v">Kid-safe<span class="chev">›</span></span></div>
+ </div>
+ <div class="ghead">Look</div>
+ <div class="group">
+  <div class="cell"><span class="ic c" data-i="home"></span>Home &amp; libraries<span class="v"><span class="chev">›</span></span></div>
+  <div class="cell"><span class="ic b" data-i="film"></span>Posters &amp; item pages<span class="v"><span class="chev">›</span></span></div>
+ </div>
+ <div class="ghead">Connections</div>
+ <div class="group">
+  <div class="cell"><span class="ic g" data-i="person"></span>Sam<span class="v">Account &amp; lock<span class="chev">›</span></span></div>
+  <div class="cell"><span class="ic g" data-i="server"></span>Server<span class="v">10.11 · Local<span class="chev">›</span></span></div>
+  <div class="cell"><span class="ic g" data-i="inbox"></span>Requests<span class="v">Seerr ✓<span class="chev">›</span></span></div>
+  <div class="cell"><span class="ic g" data-i="shield"></span>Server dashboard<span class="v"><span class="chev">›</span></span></div>
+ </div>
+ <div class="group"><div class="cell"><span class="ic g" data-i="info"></span>About Couchfin<span class="v">1.4 (2610071200)<span class="chev">›</span></span></div></div>
+</div><div class="home-ind"></div></div>
+<div class="caption"><b>Settings root: 4 groups, 10 rows, no "Advanced".</b> The couch card is the header — who's watching, where, and the two things you do here most. Values show inline so you rarely need to open a row.<small>Accent colour picker, appearance, experimental, logs, debug, app icon → gone from root (see About).</small></div></div>
+
+<div><div class="phone"><div class="abyss-bg"></div><div class="island"></div>
+<div class="status"><span>9:41</span><span class="r">●●● ▮</span></div>
+<div class="scroll" style="padding-top:60px">
+ <div class="nav"><span class="l">‹ Settings</span><h3>Playback</h3><span style="width:70px"></span></div>
+ <div class="ghead" style="margin-top:14px">Player</div>
+ <div class="group">
+  <div class="cell">Player<span class="seg"><span>Native</span><span class="on">VLC</span><span>MPV</span></span></div>
+  <div class="cell">Quality<span class="v">Auto · 4K max<span class="chev">›</span></span></div>
+ </div>
+ <div class="ghead">While watching</div>
+ <div class="group">
+  <div class="cell">Play next episode automatically<span class="toggle on"></span></div>
+  <div class="cell">Skip back<span class="v">10 s<span class="chev">⌄</span></span></div>
+  <div class="cell">Skip forward<span class="v">30 s<span class="chev">⌄</span></span></div>
+  <div class="cell">Rewind on resume<span class="v">5 s<span class="chev">⌄</span></span></div>
+  <div class="cell">Show remaining time<span class="toggle on"></span></div>
+ </div>
+ <div class="ghead">Controls</div>
+ <div class="group">
+  <div class="cell">Buttons &amp; menu<span class="v"><span class="chev">›</span></span></div>
+  <div class="cell">Gestures<span class="v"><span class="chev">›</span></span></div>
+  <div class="cell">Scrubbing preview<span class="v">Trickplay<span class="chev">⌄</span></span></div>
+ </div>
+ <div class="gfoot" style="margin-top:0">Device profiles, HDR transcoding and bitrate tests live in Quality → Advanced.</div>
+</div><div class="home-ind"></div></div>
+<div class="caption"><b>Playback = one screen (was 4 levels deep).</b> Player is a segmented control. The things people actually change — autoplay, skip lengths — sit on top. Chapter slider, supplements, transition merged into "Buttons &amp; menu".<small>Device profile editor (6 levels deep today) folds under Quality → Advanced.</small></div></div>
+
+<div><div class="phone"><div class="abyss-bg"></div><div class="island"></div>
+<div class="status"><span>9:41</span><span class="r">●●● ▮</span></div>
+<div class="scroll" style="padding-top:60px">
+ <div class="nav"><span class="l">‹ Settings</span><h3>Audio &amp; subtitles</h3><span style="width:70px"></span></div>
+ <div style="margin:14px 16px 18px;height:120px;border-radius:22px;position:relative;overflow:hidden" data-poster="Small Hours" data-notitle="1">
+  <div style="position:absolute;left:0;right:0;bottom:16px;text-align:center;font:600 17px Inter;text-shadow:0 0 4px #000,0 0 2px #000">Where were you last night?</div></div>
+ <div class="ghead">Language</div>
+ <div class="group">
+  <div class="cell">Audio<span class="v">English<span class="chev">⌄</span></span></div>
+  <div class="cell">Subtitles<span class="v">English<span class="chev">⌄</span></span></div>
+  <div class="cell">When to show subtitles<span class="v">Smart<span class="chev">⌄</span></span></div>
+  <div class="cell">Remember my choices<span class="toggle on"></span></div>
+ </div>
+ <div class="gfoot">One switch remembers both audio and subtitle picks per series.</div>
+ <div class="ghead">Subtitle look</div>
+ <div class="group">
+  <div class="cell">Font<span class="v">SF Pro<span class="chev">›</span></span></div>
+  <div class="cell">Size<span class="v" style="gap:14px;font-size:20px;color:#fff">−<b style="font:600 15px Inter;color:var(--t2)">9</b>+</span></div>
+  <div class="cell">Colour<span class="v"><span style="width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 0 0 2px rgba(255,255,255,.25)"></span></span></div>
+ </div>
+ <div class="group"><div class="cell">Burn in subtitles<span class="toggle"></span></div></div>
+</div><div class="home-ind"></div></div>
+<div class="caption"><b>Audio &amp; subtitles, with a live preview.</b> Was split between two sections of "Video player" with duplicate labels ("Preferred language" ×2, "Remember track selection" ×2).<small>Default-track toggle folds into "When to show subtitles" logic + Remember.</small></div></div>
+
+</div><script src="fin.js"></script><script src="posters.js"></script><script src="icons.js"></script></body></html>

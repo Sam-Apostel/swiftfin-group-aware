@@ -58,7 +58,7 @@ extension SelectUserView {
             .pickerStyle(.menu)
 
             Section {
-                Button(L10n.advanced, systemImage: "gearshape.fill") {
+                Button(L10n.CouchfinSettings.about, systemImage: "info.circle") {
                     router.route(to: .appSettings)
                 }
             }

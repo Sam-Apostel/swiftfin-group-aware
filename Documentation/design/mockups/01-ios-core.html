@@ -1,0 +1,79 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="cf.css">
+<style>body{width:1460px}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:6px 20px 0}
+.avbtn{display:flex;align-items:center;gap:0;padding:3px;border-radius:22px;background:rgba(255,255,255,.08);border:1px solid var(--hair)}
+.hero{margin:10px 20px 0;height:212px;border-radius:24px;position:relative;overflow:hidden}
+.hero .grad{position:absolute;inset:0;background:linear-gradient(180deg,transparent 35%,rgba(1,6,26,.92))}
+.hero .meta{position:absolute;left:18px;right:18px;bottom:16px}
+.kicker{font:700 11px Inter,-apple-system,sans-serif;letter-spacing:1.4px;text-transform:uppercase;color:var(--glint)}
+.pick .poster{width:128px;height:192px}
+</style></head><body><div class="board">
+
+<!-- 1 COUCH HOME -->
+<div><div class="phone"><div class="abyss-bg"></div><div class="island"></div>
+
+<div class="status"><span>9:41</span><span class="r">●●● ▮</span></div>
+<div class="scroll" style="padding-top:54px">
+ <div class="topbar"><div><div class="kicker">On the couch</div><h1 class="lt" style="margin-top:2px">Sam &amp; Lisa</h1></div>
+  <div class="avbtn"><span class="stack"><span class="av" style="background:#ff6fae;width:34px;height:34px">L</span><span class="av" style="background:#33c4a4;width:34px;height:34px">S</span></span></div></div>
+ <div class="hero" data-poster="Harbor Lights" data-notitle="1"><div class="grad"></div>
+  <div class="meta"><div class="kicker">Continue together · S2 E4</div>
+   <div class="rounded" style="font:800 26px/1.05 'SF Pro Rounded',Nunito,sans-serif;margin:4px 0 10px">Harbor Lights</div>
+   <div style="display:flex;align-items:center;gap:10px"><span class="btn play" style="height:40px;padding:0 18px;font-size:15px"><span data-i="play" style="width:15px;height:15px;display:inline-block"></span>Resume</span>
+   <div style="flex:1;height:4px;border-radius:2px;background:rgba(255,255,255,.2)"><div style="width:62%;height:100%;border-radius:2px;background:var(--rim);box-shadow:0 0 8px #3fedfd"></div></div><span style="font:600 12px Inter;color:var(--t2)">18m left</span></div></div></div>
+ <div class="sec"><h2>Picked for Sam &amp; Lisa</h2><span>See all</span></div>
+ <div class="row pick"><div><div class="poster" data-poster="Paper Moons"></div></div><div><div class="poster" data-poster="Glasshouse"></div></div><div><div class="poster" data-poster="Small Hours"></div></div></div>
+ <div class="sec"><h2>Next up together</h2><span>See all</span></div>
+ <div class="row"><div><div class="poster land" data-poster="Saltwater Kids" data-notitle="1" data-progress="0"></div><div class="under">Saltwater Kids<small>S1 · E7 · The Reef</small></div></div><div><div class="poster land" data-poster="Northbound" data-notitle="1"></div></div></div>
+</div>
+<div class="tabbar"><div class="tab on"><span data-i="home"></span>Home</div><div class="tab"><span data-i="lib"></span>Library</div><div class="tab"><span data-i="inbox"></span>Discover</div><div class="tab"><span data-i="search"></span>Search</div></div>
+<div class="home-ind"></div></div>
+<div class="caption"><b>Home, on the couch.</b> The couch is the title — no extra header row. One big "continue together" card, then the couch rows. Rim progress over the cloudy deep; no fin competing with posters. Tap the avatars → couch &amp; settings.<small>Tabs: Home · Library · Discover · Search (Library = today's "Media").</small></div></div>
+
+<!-- 2 COUCH PICKER -->
+<div><div class="phone"><div class="abyss-bg"></div><div class="island"></div>
+<div class="fin" data-fin='{}' style="width:180px;right:18px;bottom:170px;transform:rotate(-5deg);z-index:3"></div>
+<div class="status"><span>9:41</span><span class="r">●●● ▮</span></div>
+<div class="scroll" style="padding:70px 24px 0">
+ <div class="kicker" style="text-align:center">Jellyfin · Living room</div>
+ <h1 class="lt" style="text-align:center;margin-top:8px">Who's on the couch?</h1>
+ <div style="text-align:center;font:400 16px Inter;color:var(--t2);margin-top:6px">Tap everyone who's watching</div>
+ <div style="display:flex;gap:8px;justify-content:center;margin-top:20px;flex-wrap:wrap"><span class="chip on">🍿 Movie night</span><span class="chip">🧸 Kids</span><span class="chip">Sam &amp; Tuur</span></div>
+ <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:22px 14px;margin-top:30px;position:relative;z-index:2">
+  <script>
+  const P=[["Sam","#33c4a4",1],["Lisa","#ff6fae",1],["Tuur","#ffb347",0,1],["Mona","#7a5cff",0,1],["Oma","#5b8cff",0],["Guest","#3a4470",0]];
+  document.write(P.map(([n,c,on,kid])=>`<div style="text-align:center"><div style="width:92px;height:92px;margin:0 auto;border-radius:50%;position:relative;display:grid;place-items:center;font:800 36px 'SF Pro Rounded',Nunito,sans-serif;background:radial-gradient(circle at 35% 30%,${c},${c}88 70%);${on?'box-shadow:0 0 0 3px #01061A,0 0 0 6px #3fedfd,0 0 26px rgba(63,237,253,.55)':'opacity:.72'}">${n[0]}${on?'<span style="position:absolute;right:-2px;bottom:-2px;width:28px;height:28px;border-radius:50%;background:linear-gradient(135deg,#3fedfd,#7a5cff);display:grid;place-items:center;box-shadow:0 0 0 3px #01061A"><svg viewBox="0 0 24 24" width="16"><path d="m5 12.5 4.5 4.5L19 7.5" stroke="#01061A" stroke-width="3.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>':''}</div><div style="font:600 15px Inter;margin-top:10px">${n}</div>${kid?'<div style="font:600 11px Inter;color:#ffb347;margin-top:2px">KID</div>':''}</div>`).join(''))
+  </script>
+ </div>
+</div>
+<div style="position:absolute;left:24px;right:24px;bottom:44px;z-index:5">
+ <div class="btn glow" style="width:100%;justify-content:center;height:56px;border-radius:28px;font-size:17px"><span data-i="couch" style="width:22px;height:22px;display:inline-block"></span>Start watching together · 2</div>
+ <div style="text-align:center;font:600 14px Inter;color:var(--t2);margin-top:14px">Save this couch…</div></div>
+<div class="home-ind"></div></div>
+<div class="caption"><b>Who's on the couch?</b> The whole fin keeps the couch company, out of the way of the people. Selected people get the rim glow + check. Saved couches as chips up top (tap = select, tap again = start).<small>Replaces the user picker as the first screen after launch.</small></div></div>
+
+<!-- 3 ITEM -->
+<div><div class="phone"><div class="island"></div>
+<div style="position:absolute;left:0;right:0;top:0;height:470px" data-poster="Tidewater" data-notitle="1"></div>
+<div style="position:absolute;left:0;right:0;top:0;height:472px;background:linear-gradient(180deg,rgba(1,6,26,.35),transparent 25%,transparent 45%,#01061A 98%)"></div>
+<div style="position:absolute;inset:470px 0 0;background:#01061A"></div>
+<div class="status"><span>9:41</span><span class="r">●●● ▮</span></div>
+<div style="position:absolute;top:58px;left:16px;right:16px;display:flex;justify-content:space-between;z-index:4"><span class="circle" style="width:40px;height:40px;backdrop-filter:blur(20px)"><span data-i="back" style="width:20px;height:20px"></span></span><span class="circle" style="width:40px;height:40px"><span data-i="more" style="width:20px;height:20px"></span></span></div>
+<div class="scroll" style="padding-top:290px;z-index:3">
+ <div style="padding:0 20px">
+  <div class="rounded" style="font:900 42px/0.95 'SF Pro Rounded',Nunito,sans-serif;letter-spacing:-1px;text-shadow:0 4px 30px rgba(0,0,0,.6)">TIDEWATER</div>
+  <div style="font:500 14px Inter;color:var(--t2);margin-top:10px">2025 · Drama · 2h 11m · 12 &nbsp;<span style="color:#ffd166">★ 7.8</span></div>
+  <div style="display:flex;gap:10px;margin-top:16px;align-items:center">
+   <span class="btn play" style="flex:1;justify-content:center"><span data-i="play" style="width:18px;height:18px;display:inline-block"></span>Play</span>
+   <span class="circle"><span data-i="check"></span></span><span class="circle"><span data-i="heart"></span></span>
+   <span class="circle" style="background:rgba(18,56,255,.35);border-color:rgba(63,237,253,.45)"><span data-i="couch"></span></span>
+  </div>
+  <div style="margin-top:12px;display:flex;align-items:center;gap:8px;font:500 13px Inter;color:var(--t2)"><span class="stack"><span class="av" style="background:#ff6fae;width:22px;height:22px;font-size:10px">L</span><span class="av" style="background:#33c4a4;width:22px;height:22px;font-size:10px">S</span></span>On Sam &amp; Lisa's watchlist · neither has seen it</div>
+  <p style="font:400 15px/1.5 Inter;color:#cdd6f2;margin-top:14px">A lighthouse keeper's daughter finds a radio that only plays tomorrow's weather — and one forecast she can't ignore. <span style="color:var(--glint);font-weight:600">More</span></p>
+  <div style="display:flex;gap:20px;margin-top:20px;border-bottom:1px solid var(--hair);font:700 15px Inter"><span style="padding-bottom:10px;border-bottom:2px solid;border-image:var(--rim) 1">Overview</span><span style="color:var(--t3)">Cast</span><span style="color:var(--t3)">More like this</span><span style="color:var(--t3)">Details</span></div>
+ </div>
+</div>
+<div class="home-ind"></div></div>
+<div class="caption"><b>Item.</b> Artwork fills the top half, title is the logo (or rounded type), one white Play. Watched/Favourite/<b>For…</b> become three round buttons — For… is the only tinted one. Couch context line replaces a buried indicator. Sections become tabs instead of a long scroll.<small>Seerr request, trailers, versions, download → "…" menu.</small></div></div>
+
+</div><script src="fin.js"></script><script src="posters.js"></script><script src="icons.js"></script></body></html>

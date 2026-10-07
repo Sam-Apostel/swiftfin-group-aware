@@ -1,0 +1,23 @@
+:root{--abyss:#01061A;--glint:#3FEDFD;--bloom:#F949FA;--orchid:#C026F5;--fin:#1238FF;--t2:#9FB0D9;--t3:#5C6A99;--hair:rgba(120,160,255,.16);
+--rim:linear-gradient(90deg,#00B9FB,#3FEDFD 45%,#7A5CFF 75%,#F949FA)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{width:1920px;height:1080px;overflow:hidden;background:#01061A;color:#F2F5FF;font-family:-apple-system,"SF Pro Text",Inter,sans-serif;-webkit-font-smoothing:antialiased}
+.r{font-family:"SF Pro Rounded",Nunito,"Varela Round",-apple-system,sans-serif}
+.tv{position:relative;width:1920px;height:1080px;overflow:hidden}
+.abyss{position:absolute;inset:0;background:url(abyss-landscape.jpg) center/cover}
+.fin{position:absolute;pointer-events:none}
+.tabs{position:absolute;top:44px;left:50%;transform:translateX(-50%);display:flex;gap:6px;padding:8px;border-radius:40px;background:rgba(10,20,60,.4);backdrop-filter:blur(30px);border:1px solid var(--hair);font:600 26px Inter,sans-serif;z-index:5}
+.tabs span{white-space:nowrap;display:inline-flex;align-items:center;padding:12px 30px;border-radius:30px;color:var(--t2)}.tabs .on{background:rgba(255,255,255,.14);color:#fff}
+.tabs .foc{background:#fff;color:#01061A}
+.kicker{font:700 20px Inter,sans-serif;letter-spacing:2px;text-transform:uppercase;color:var(--glint)}
+.card{flex:none;border-radius:22px;position:relative;overflow:hidden}
+.card.f{transform:scale(1.1);box-shadow:0 30px 60px rgba(0,0,0,.6),0 0 40px rgba(63,237,253,.3)}
+.card.f:after{content:"";position:absolute;inset:0;border-radius:22px;padding:4px;background:linear-gradient(135deg,#3fedfd,#7a5cff 60%,#f949fa);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
+.row{display:flex;gap:40px;align-items:center}
+.h{font:700 32px "SF Pro Rounded",Nunito,sans-serif}
+.btn{display:inline-flex;align-items:center;gap:14px;height:76px;padding:0 40px;border-radius:38px;font:700 28px Inter,sans-serif;background:rgba(255,255,255,.12);color:#fff}
+.btn.w{background:#fff;color:#01061A}
+.btn.foc{transform:scale(1.08);box-shadow:0 18px 40px rgba(0,0,0,.5)}
+.ic{width:76px;height:76px;border-radius:50%;display:grid;place-items:center;background:rgba(255,255,255,.12);font-size:30px}
+.av{border-radius:50%;display:grid;place-items:center;font:800 "SF Pro Rounded",Nunito,sans-serif;color:#fff}
+.bar{height:8px;border-radius:4px;background:rgba(255,255,255,.2);overflow:hidden}.bar i{display:block;height:100%;background:var(--rim);box-shadow:0 0 14px #3fedfd}

@@ -18,7 +18,7 @@ struct RootView: View {
         ZStack {
             switch rootCoordinator.state {
             case .initial:
-                ProgressView()
+                SwimmingFin()
             case .error:
                 ErrorView(error: rootCoordinator.error ?? ErrorMessage(L10n.unknownError))
             case .ready:

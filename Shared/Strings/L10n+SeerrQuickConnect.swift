@@ -27,7 +27,7 @@ extension L10n {
         static let footer =
             "Each person gets their own Seerr session through their Jellyfin account, so no admin API key is needed on this device. Needs Seerr 3.4 or newer and Quick Connect turned on in Jellyfin."
         static let description =
-            "Swiftfin asks Seerr for a Quick Connect code and approves it with each person's Jellyfin sign-in. Seerr then remembers that person for 30 days; Swiftfin signs them in again by itself when the session runs out. Sessions are stored in this device's keychain."
+            "Couchfin asks Seerr for a Quick Connect code and approves it with each person's Jellyfin sign-in. Seerr then remembers that person for 30 days; Couchfin signs them in again by itself when the session runs out. Sessions are stored in this device's keychain."
 
         static func unsupportedVersion(_ version: String) -> String {
             "Seerr \(version) doesn't support Quick Connect. Update to Seerr 3.4 or newer, or use an API key."

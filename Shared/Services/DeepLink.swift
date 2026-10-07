@@ -20,14 +20,21 @@ struct DeepLink: Equatable {
     let serverID: String
     let userID: String
     let destination: Destination
+    /// Who should be on the couch, in pick order, when the link names a couch
+    /// (`?couch=id1,id2`, used by the Top Shelf). `nil` keeps the current couch
+    /// when `userID` is already on it.
+    let couchMemberIDs: [String]?
 
     init?(_ url: URL) {
         guard let match = url.absoluteString.wholeMatch(
-            of: /^(?:swiftfin|jellyfin):\/\/(?<serverID>[A-Za-z0-9-]+)\/(?<userID>[A-Za-z0-9-]+)\/(?<destinationType>item|library)\/(?<destinationID>[A-Za-z0-9-]+)\/?$/
+            of: /^(?:swiftfin|jellyfin):\/\/(?<serverID>[A-Za-z0-9-]+)\/(?<userID>[A-Za-z0-9-]+)\/(?<destinationType>item|library)\/(?<destinationID>[A-Za-z0-9-]+)\/?(?:\?couch=(?<couch>[A-Za-z0-9,-]+))?$/
         ) else { return nil }
 
         self.serverID = String(match.output.serverID)
         self.userID = String(match.output.userID)
+        self.couchMemberIDs = match.output.couch.map { couch in
+            couch.split(separator: ",").map(String.init)
+        }
 
         self.destination = .item(id: String(match.output.destinationID))
     }

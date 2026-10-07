@@ -1,0 +1,29 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="cf.css">
+<style>body{width:1920px;height:1080px;overflow:hidden;background:var(--abyss)}
+.tv{position:relative;width:1920px;height:1080px;overflow:hidden}
+.bd{position:absolute;inset:0}
+.shade{position:absolute;inset:0;background:linear-gradient(90deg,rgba(1,6,26,.95) 0%,rgba(1,6,26,.55) 45%,transparent 70%),linear-gradient(180deg,transparent 40%,rgba(1,6,26,.85) 72%,#01061A 92%)}
+.tabs{position:absolute;top:44px;left:50%;transform:translateX(-50%);display:flex;gap:6px;padding:8px;border-radius:40px;background:rgba(10,20,60,.45);backdrop-filter:blur(30px);border:1px solid var(--hair);font:600 26px Inter}
+.tabs span{padding:12px 30px;border-radius:30px;color:var(--t2)}.tabs .on{background:#fff;color:#01061A}
+.card{flex:none;width:400px;height:225px;border-radius:22px;position:relative;overflow:hidden}
+.card.f{transform:scale(1.1);box-shadow:0 30px 60px rgba(0,0,0,.6),0 0 40px rgba(63,237,253,.35)}
+.card.f:after{content:"";position:absolute;inset:0;border-radius:22px;padding:4px;background:linear-gradient(135deg,#3fedfd,#7a5cff 60%,#f949fa);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude}
+</style></head><body><div class="tv">
+<div class="bd" data-poster="Harbor Lights" data-notitle="1"></div><div class="shade"></div>
+<div class="fin" data-fin='{"flip":true,"opacity":0.16,"texture":false}' style="width:760px;right:-330px;top:470px"></div>
+<div class="tabs"><span class="on">Sam &amp; Lisa</span><span>Shows</span><span>Movies</span><span>Discover</span><span>Search</span><span style="padding:12px 18px">⚙︎</span></div>
+<div style="position:absolute;left:96px;top:260px;width:900px">
+ <div class="kicker" style="font-size:20px;display:flex;align-items:center;gap:14px"><span class="stack"><span class="av" style="background:#ff6fae;width:40px;height:40px;font-size:18px">L</span><span class="av" style="background:#33c4a4;width:40px;height:40px;font-size:18px">S</span></span>Continue together · S2 E4</div>
+ <div class="rounded" style="font:900 110px/0.95 'SF Pro Rounded',Nunito,sans-serif;letter-spacing:-3px;margin-top:22px;text-shadow:0 8px 40px rgba(0,0,0,.6)">Harbor Lights</div>
+ <div style="font:500 26px Inter;color:var(--t2);margin-top:20px">"The Night Ferry" · 48m · 18m left</div>
+ <div style="width:520px;height:8px;border-radius:4px;background:rgba(255,255,255,.2);margin-top:22px"><div style="width:62%;height:100%;border-radius:4px;background:var(--rim);box-shadow:0 0 14px #3fedfd"></div></div>
+</div>
+<div style="position:absolute;left:96px;top:690px;font:700 30px 'SF Pro Rounded',Nunito,sans-serif">Continue together</div>
+<div style="position:absolute;left:96px;top:750px;display:flex;gap:40px;align-items:center">
+ <div class="card f" data-poster="Harbor Lights" data-notitle="1" style="margin:0 20px"></div>
+ <div class="card" data-poster="Saltwater Kids" data-notitle="1"></div>
+ <div class="card" data-poster="Northbound" data-notitle="1"></div>
+ <div class="card" data-poster="Quiet Planet" data-notitle="1"></div>
+</div>
+<div style="position:absolute;left:96px;top:1030px;font:700 30px 'SF Pro Rounded',Nunito,sans-serif;opacity:.6">Picked for Sam &amp; Lisa</div>
+</div><script src="fin.js"></script><script src="posters.js"></script></body></html>

@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "abyss-portrait.jpg",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

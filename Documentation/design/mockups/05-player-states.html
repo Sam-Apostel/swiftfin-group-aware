@@ -1,0 +1,56 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="cf.css">
+<style>body{width:1460px}
+.land{width:852px;height:393px;border-radius:54px;position:relative;overflow:hidden;box-shadow:0 0 0 10px #1a1c24,0 0 0 11px #333,0 30px 80px rgba(0,0,0,.6)}
+.ctl{position:absolute;display:flex;align-items:center;justify-content:center}
+.pbtn{width:64px;height:64px;border-radius:50%;background:rgba(255,255,255,.14);backdrop-filter:blur(20px);display:grid;place-items:center}
+.small{width:48px;height:48px}
+</style></head><body><div class="board" style="flex-direction:column">
+
+<div style="display:flex;gap:48px">
+<div><div class="land"><div style="position:absolute;inset:0" data-poster="Harbor Lights" data-notitle="1"></div>
+ <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,.6),transparent 30%,transparent 60%,rgba(0,0,0,.75))"></div>
+ <div style="position:absolute;top:26px;left:60px;right:60px;display:flex;align-items:center;gap:14px">
+  <span class="circle" style="width:40px;height:40px">✕</span>
+  <div style="flex:1"><div style="font:600 12px Inter;color:var(--t2)">S2 · E4</div><div class="rounded" style="font:800 18px 'SF Pro Rounded',Nunito,sans-serif">The Night Ferry</div></div>
+  <span class="chip" style="height:32px"><span class="stack"><span class="av" style="background:#ff6fae;width:20px;height:20px;font-size:9px">L</span><span class="av" style="background:#33c4a4;width:20px;height:20px;font-size:9px">S</span></span>Together</span>
+  <span class="circle" style="width:40px;height:40px"><span data-i="cc" style="width:20px;height:20px"></span></span>
+  <span class="circle" style="width:40px;height:40px"><span data-i="more" style="width:20px;height:20px"></span></span>
+ </div>
+ <div class="ctl" style="inset:0;gap:56px">
+  <span class="pbtn small">↺10</span><span class="pbtn" style="width:76px;height:76px"><span data-i="play" style="width:30px;height:30px"></span></span><span class="pbtn small">30↻</span>
+ </div>
+ <div style="position:absolute;left:60px;right:60px;bottom:30px">
+  <div style="height:8px;border-radius:4px;background:rgba(255,255,255,.2);position:relative"><div style="width:62%;height:100%;border-radius:4px;background:var(--rim);box-shadow:0 0 12px #3fedfd"></div>
+   <div style="position:absolute;left:35%;top:-2px;width:3px;height:12px;background:rgba(0,0,0,.6)"></div><div style="position:absolute;left:78%;top:-2px;width:3px;height:12px;background:rgba(0,0,0,.6)"></div></div>
+  <div style="display:flex;justify-content:space-between;font:600 13px Inter;color:var(--t2);margin-top:8px"><span>29:41</span><span>Skip intro ›</span><span>−18:12</span></div>
+ </div>
+</div>
+<div class="caption" style="max-width:852px"><b>Player.</b> Unchanged structure — the content owns the screen. Only two brand touches: the rim scrubber (with chapter ticks) and a "Together" chip that shows who's progress this updates. No fin, ever. Bar buttons default to Subtitles + "…" (Audio, Speed, PiP, Quality inside).</div></div>
+</div>
+
+<div style="display:flex;gap:48px">
+<div><div class="phone"><div class="abyss-bg"></div><div class="island"></div>
+<div class="status"><span>9:41</span><span class="r">●●● ▮</span></div>
+<div class="fin" data-fin='{}' style="width:430px;left:-170px;top:250px;transform:rotate(-6deg)"></div>
+<div style="position:absolute;left:30px;right:30px;top:520px;text-align:center">
+ <div class="rounded" style="font:800 26px 'SF Pro Rounded',Nunito,sans-serif">Nothing picked yet</div>
+ <div style="font:400 16px/1.45 Inter;color:var(--t2);margin-top:8px">Tap <b style="color:#F949FA">For…</b> on any movie or show and it lands here for Sam &amp; Lisa.</div>
+ <div class="btn glass" style="margin-top:20px">Browse Discover</div></div>
+<div class="tabbar"><div class="tab"><span data-i="home"></span>Home</div><div class="tab"><span data-i="lib"></span>Library</div><div class="tab on"><span data-i="inbox"></span>Discover</div><div class="tab"><span data-i="search"></span>Search</div></div>
+<div class="home-ind"></div></div>
+<div class="caption"><b>Empty state.</b> The fin at full strength, swimming in from the edge, one sentence, one action.</div></div>
+
+<div><div class="phone"><div class="abyss-bg"></div><div class="island"></div>
+<div class="status"><span>9:41</span><span class="r">●●● ▮</span></div>
+<div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:80px" class="fin" data-fin='{}'></div>
+<div class="caption" style="position:absolute;bottom:70px;left:0;right:0;text-align:center;color:var(--t3);max-width:none">(swims in place — tail flicks, body bobs)</div>
+<div class="home-ind"></div></div>
+<div class="caption"><b>Loading.</b> Replaces every full-screen spinner. Respects Reduce Motion (holds still).</div></div>
+
+<div><div class="phone" style="background:#01061A"><div class="island"></div>
+<img src="fin-fish.png" style="position:absolute;width:200px;left:50%;top:50%;transform:translate(-50%,-50%)">
+<div class="home-ind"></div></div>
+<div class="caption"><b>Launch screen.</b> Abyss + your fin artwork. (This one is the real asset.)</div></div>
+</div>
+
+</div><script src="fin.js"></script><script src="posters.js"></script><script src="icons.js"></script></body></html>

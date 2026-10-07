@@ -1,0 +1,80 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="cf.css">
+<style>
+body{background:var(--abyss);width:1600px}
+.wrap{padding:64px;position:relative;overflow:hidden}
+.k{font:700 12px Inter,-apple-system,sans-serif;letter-spacing:2px;text-transform:uppercase;color:var(--glint);opacity:.8;margin-bottom:14px}
+.big{font:800 64px/1 "SF Pro Rounded",Nunito,sans-serif;letter-spacing:-1.5px}
+.lede{font:400 22px/1.45 -apple-system,Inter,sans-serif;color:var(--t2);max-width:760px;margin-top:18px}
+.grid{display:grid;grid-template-columns:repeat(12,1fr);gap:28px;margin-top:56px}
+.card{background:rgba(18,40,120,.16);border:1px solid var(--hair);border-radius:28px;padding:28px;position:relative;overflow:hidden}
+.sw{display:flex;gap:12px;flex-wrap:wrap}
+.s{width:132px}.s div{height:96px;border-radius:18px;border:1px solid rgba(255,255,255,.08)}
+.s b{display:block;font:700 14px Inter,sans-serif;margin-top:10px}.s span{font:500 12px ui-monospace,Menlo,monospace;color:var(--t2)}
+.s em{display:block;font:400 12px/1.3 Inter,sans-serif;color:var(--t3);font-style:normal;margin-top:3px}
+.rule{display:flex;gap:14px;align-items:flex-start;font:400 15px/1.45 Inter,sans-serif;color:var(--t2);margin-top:14px}
+.rule b{color:var(--t1)}
+.dot{width:22px;height:22px;border-radius:50%;flex:none;display:grid;place-items:center;font:800 12px Inter;color:#020A2A;background:var(--glint)}
+.dot.no{background:#ff5d7a}
+</style></head><body><div class="wrap">
+<div class="fin" data-fin='{"flip":true}' style="width:760px;right:-300px;top:-90px;transform:rotate(-4deg)"></div>
+<div class="k">Couchfin · visual identity v1</div>
+<div class="big rounded">The deep end of<br>your library.</div>
+<div class="lede">The UI is dark water; your posters are the light. A single glowing fin is our guide — it swims in from the edges, lights up what's in focus, and gets out of the way the moment something is playing.</div>
+
+<div class="grid">
+ <div class="card" style="grid-column:span 4;display:flex;gap:24px;align-items:center;justify-content:center">
+  <img src="app-icon.png" style="width:150px;height:150px;border-radius:34px;box-shadow:0 0 0 1px rgba(255,255,255,.1),0 20px 50px rgba(18,56,255,.35)">
+  <img src="tv-icon.png" style="width:200px;height:120px;border-radius:14px;box-shadow:0 0 0 1px rgba(255,255,255,.1),0 20px 50px rgba(18,56,255,.35)">
+ </div>
+ <div class="card" style="grid-column:span 8">
+  <div class="k">Palette — light comes from the edge</div>
+  <div class="sw">
+   <div class="s"><div style="background:#01061A"></div><b>Abyss</b><span>#01061A</span><em>Every background</em></div>
+   <div class="s"><div style="background:#071552"></div><b>Trench</b><span>#071552</span><em>Cards, sheets, groups</em></div>
+   <div class="s"><div style="background:#1238FF"></div><b>Fin</b><span>#1238FF</span><em>Accent / primary tint</em></div>
+   <div class="s"><div style="background:#3FEDFD"></div><b>Glint</b><span>#3FEDFD</span><em>Focus, live, now</em></div>
+   <div class="s"><div style="background:#F949FA"></div><b>Bloom</b><span>#F949FA</span><em>Couch / together</em></div>
+   <div class="s"><div style="background:#9FB0D9"></div><b>Mist</b><span>#9FB0D9</span><em>Secondary text</em></div>
+  </div>
+ </div>
+
+ <div class="card" style="grid-column:span 5">
+  <div class="k">The Rim — our one signature</div>
+  <div style="height:14px;border-radius:7px;background:var(--rim);box-shadow:0 0 22px rgba(63,237,253,.55)"></div>
+  <div class="rule"><b>Progress</b>&nbsp;bars, the scrubber, download rings.</div>
+  <div style="display:flex;gap:18px;margin-top:18px;align-items:center">
+   <div style="width:118px;height:176px;border-radius:16px;position:relative" data-poster="Low Tide" data-notitle="1"><div style="position:absolute;inset:-4px;border-radius:20px;padding:3px;background:var(--rimv);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask-composite:exclude;filter:drop-shadow(0 0 10px rgba(63,237,253,.6))"></div></div>
+   <div style="font:400 15px/1.5 Inter,sans-serif;color:var(--t2)"><b style="color:#fff">Focus</b> (tvOS) and <b style="color:#fff">selection</b> trace the poster with the rim — the same light the fin carries on its edge.<br><br><b style="color:#fff">Couch</b> members picked for a session glow the same way.</div>
+  </div>
+ </div>
+
+ <div class="card" style="grid-column:span 7">
+  <div class="k">Type — rounded for voice, plain for reading</div>
+  <div class="rounded" style="font:800 46px/1.05 'SF Pro Rounded',Nunito,sans-serif;letter-spacing:-1px">Who's on the couch?</div>
+  <div style="font:400 13px Inter;color:var(--t3);margin:6px 0 18px">SF Pro Rounded · Heavy/Bold · large titles, section headers, poster titles, couch</div>
+  <div style="font:400 19px/1.5 -apple-system,Inter,sans-serif;color:var(--t1)">A lighthouse keeper's daughter finds a radio that only plays tomorrow's weather.</div>
+  <div style="font:400 13px Inter;color:var(--t3);margin-top:6px">SF Pro · Regular/Semibold · everything else, Dynamic Type everywhere</div>
+  <div style="display:flex;gap:12px;margin-top:22px;flex-wrap:wrap">
+   <span class="btn play"><span data-i="play" style="width:18px;height:18px;display:inline-block"></span>Play</span>
+   <span class="btn glow"><span data-i="couch" style="width:20px;height:20px;display:inline-block"></span>Watch together</span>
+   <span class="btn glass"><span data-i="plus" style="width:18px;height:18px;display:inline-block"></span>For…</span>
+   <span class="chip on"><span class="stack"><span class="av" style="background:#ff6fae">L</span><span class="av" style="background:#33c4a4">S</span></span>Movie night</span>
+   <span class="chip">🍿 Kids</span>
+  </div>
+ </div>
+
+ <div class="card" style="grid-column:span 12;height:300px">
+  <div class="k">The fin — how it moves through the app</div>
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:24px;margin-top:6px;position:relative;z-index:2">
+   <div class="rule"><span class="dot">1</span><span><b>Swims off the edge.</b> Always cropped by a screen or container edge, heading somewhere. Never centred like a logo inside the app.</span></div>
+   <div class="rule"><span class="dot">2</span><span><b>One per screen.</b> Ambient at 10–20% behind chrome; full strength only when it is the content (welcome, couch picker, empty states).</span></div>
+   <div class="rule"><span class="dot">3</span><span><b>It's alive.</b> Loading = a fin gently swimming in place. Pull to refresh = a flick of the tail.</span></div>
+   <div class="rule"><span class="dot no">×</span><span><b>Never on top of posters,</b> artwork or video. When something plays, the fin is gone.</span></div>
+  </div>
+  <div class="fin" data-fin='{}' style="width:420px;left:-90px;bottom:-120px;opacity:.9"></div>
+  <div class="fin" data-fin='{"opacity":0.35}' style="width:240px;left:46%;bottom:-40px;transform:rotate(-6deg)"></div>
+  <div class="fin" data-fin='{"flip":true,"opacity":0.18}' style="width:300px;right:-120px;bottom:-30px"></div>
+ </div>
+</div>
+</div>
+<script src="fin.js"></script><script src="posters.js"></script><script src="icons.js"></script></body></html>

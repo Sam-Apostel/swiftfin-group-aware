@@ -45,6 +45,7 @@ struct NavigationInjectionView: View {
             content
                 .navigationDestination(for: NavigationRoute.self) { route in
                     route.destination
+                        .couchfinDestinationBackground()
                         .environment(
                             \.router,
                             .init(
@@ -90,8 +91,9 @@ struct NavigationInjectionView: View {
             coordinator.presentedSheet = nil
         } content: { presentedRoute in
             NavigationInjectionView(coordinator: presentedRoute.coordinator) {
-                presentedRoute.route.destination
+                presentedRoute.route.destination.couchfinBackground()
             }
+            .presentationBackground(Color.Couchfin.abyss)
         }
         .presentation(
             $coordinator.presentedFullScreen,

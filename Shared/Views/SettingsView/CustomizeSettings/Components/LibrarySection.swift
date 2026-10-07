@@ -38,48 +38,53 @@ extension CustomizeSettingsView {
         @Router
         private var router
 
+        /// Set when the sections are shown inside another settings screen.
+        var isEmbedded = false
+
         var body: some View {
-            Form(systemImage: "gear") {
-
-                Section {
-                    Toggle(L10n.favorites, isOn: $showFavorites)
-
-                    Toggle(L10n.randomImage, isOn: $libraryRandomImage)
+            if isEmbedded {
+                content
+            } else {
+                Form(systemImage: "gear") {
+                    content
                 }
-
-                Section(L10n.filters) {
-                    ChevronButton(L10n.filters) {
-                        router.route(
-                            to: .itemFilterDrawerSelector(selection: $libraryEnabledDrawerFilters)
-                        )
-                    }
-                }
-
-                Section {
-                    Toggle(L10n.rememberSorting, isOn: $rememberLibrarySort)
-                }
-
-                Section(L10n.layout) {
-                    PlatformPicker(L10n.layout, selection: $libraryStyle.displayType)
-
-                    PlatformPicker(L10n.posters, selection: $libraryStyle.posterDisplayType)
-
-                    if libraryStyle.displayType == .list, !UIDevice.isPhone {
-                        Stepper(L10n.columns, value: $libraryStyle.listColumnCount, in: 1 ... 4, step: 1) {
-                            LabeledContent(L10n.columns, value: libraryStyle.listColumnCount.description)
-                        }
-                    }
-                }
-
-                Section {
-                    Toggle(L10n.rememberLayout, isOn: $rememberLibraryLayout)
-                }
-
-                Section(L10n.letterPicker) {
-                    PlatformPicker(L10n.letterPicker, selection: $letterPickerOrientation)
-                }
+                .navigationTitle(L10n.libraries)
             }
-            .navigationTitle(L10n.libraries)
+        }
+
+        @ViewBuilder
+        private var content: some View {
+            Section(L10n.libraries) {
+                Toggle(L10n.favorites, isOn: $showFavorites)
+
+                Toggle(L10n.randomImage, isOn: $libraryRandomImage)
+
+                PlatformPicker(L10n.letterPicker, selection: $letterPickerOrientation)
+            }
+
+            Section(L10n.layout) {
+                PlatformPicker(L10n.layout, selection: $libraryStyle.displayType)
+
+                PlatformPicker(L10n.posters, selection: $libraryStyle.posterDisplayType)
+
+                if libraryStyle.displayType == .list, !UIDevice.isPhone {
+                    Stepper(L10n.columns, value: $libraryStyle.listColumnCount, in: 1 ... 4, step: 1) {
+                        LabeledContent(L10n.columns, value: libraryStyle.listColumnCount.description)
+                    }
+                }
+
+                Toggle(L10n.rememberLayout, isOn: $rememberLibraryLayout)
+            }
+
+            Section(L10n.filters) {
+                ChevronButton(L10n.filters) {
+                    router.route(
+                        to: .itemFilterDrawerSelector(selection: $libraryEnabledDrawerFilters)
+                    )
+                }
+
+                Toggle(L10n.rememberSorting, isOn: $rememberLibrarySort)
+            }
         }
     }
 }

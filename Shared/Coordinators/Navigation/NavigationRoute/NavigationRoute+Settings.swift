@@ -194,35 +194,11 @@ extension NavigationRoute {
     }
     #endif
 
-    static var itemSettings: NavigationRoute {
-        NavigationRoute(
-            id: "itemSettings"
-        ) {
-            CustomizeSettingsView.ItemSection()
-        }
-    }
-
-    static var librarySettings: NavigationRoute {
-        NavigationRoute(
-            id: "librarySettings"
-        ) {
-            CustomizeSettingsView.LibrarySection()
-        }
-    }
-
     static var posterSettings: NavigationRoute {
         NavigationRoute(
             id: "posterSettings"
         ) {
             CustomizeSettingsView.PosterSection()
-        }
-    }
-
-    static var indicatorSettings: NavigationRoute {
-        NavigationRoute(
-            id: "indicatorSettings"
-        ) {
-            IndicatorSettingsView()
         }
     }
 
@@ -292,11 +268,19 @@ extension NavigationRoute {
         }
     }
 
-    static var videoPlayerSettings: NavigationRoute {
+    static var playbackSettings: NavigationRoute {
         NavigationRoute(
-            id: "videoPlayerSettings"
+            id: "playbackSettings"
         ) {
-            VideoPlayerSettingsView()
+            VideoPlayerSettingsView(page: .playback)
+        }
+    }
+
+    static var audioSubtitleSettings: NavigationRoute {
+        NavigationRoute(
+            id: "audioSubtitleSettings"
+        ) {
+            VideoPlayerSettingsView(page: .audioAndSubtitles)
         }
     }
 }

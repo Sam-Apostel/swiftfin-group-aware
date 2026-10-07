@@ -44,7 +44,7 @@ extension L10n {
         static let together = "Together"
 
         static let kidSafeBrowsingFooter =
-            "When a kid or someone with parental controls is on the couch, Swiftfin browses as the most restricted person, so their Jellyfin parental controls apply. Takes effect the next time you start a couch."
+            "When a kid or someone with parental controls is on the couch, Couchfin browses as the most restricted person, so their Jellyfin parental controls apply. Takes effect the next time you start a couch."
 
         static let hideWatchedByAnyMember = "Hide what anyone already watched"
         static let hideWatchedByAnyMemberFooter =

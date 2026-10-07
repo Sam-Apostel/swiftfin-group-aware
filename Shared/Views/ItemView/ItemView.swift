@@ -133,7 +133,7 @@ struct ItemView: View {
             case .error:
                 viewModel.error.map(ErrorView.init)
             case .initial, .refreshing:
-                ProgressView()
+                SwimmingFin()
             }
         }
         .trackingSize($contentSize)
