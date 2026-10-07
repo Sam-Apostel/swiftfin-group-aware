@@ -145,15 +145,6 @@ enum StoredValues {
             switch key.storage {
             case .defaults:
                 Defaults[key._defaultKey] = newValue
-
-                #if os(tvOS)
-                // servers, people and their lock settings are shared by every Apple TV profile
-                if HouseholdStore.isShared(field: key.field ?? key.name) {
-                    Task { @MainActor in
-                        HouseholdStore.scheduleSave()
-                    }
-                }
-                #endif
             case .sql:
                 try? AnyStoredData.store(
                     value: newValue,
