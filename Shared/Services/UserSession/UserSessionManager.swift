@@ -45,7 +45,7 @@ final class UserSessionManager: ObservableObject {
     }
 
     @Injected(\.keychainService)
-    private var keychain: KeychainSwift
+    private var keychain: CouchfinKeychain
 
     @Published
     private(set) var state: State = .initial
@@ -80,6 +80,13 @@ final class UserSessionManager: ObservableObject {
         guard state == .initial else { return }
 
         do {
+            #if os(tvOS)
+            // servers and people are shared by every Apple TV profile;
+            // a profile switch puts that profile's default person on the couch
+            HouseholdStore.restore()
+            AppleTVProfile.prepareLaunch()
+            #endif
+
             if Defaults[.signOutOnClose] {
                 Defaults[.lastSignedInUserID] = .signedOut
                 Defaults[.Couch.memberIDs] = []
@@ -130,6 +137,10 @@ final class UserSessionManager: ObservableObject {
 
         if let primary = couchPrimary(of: members) {
             let otherMemberIDs = members.map(\.id).filter { $0 != primary.id }
+
+            #if os(tvOS)
+            AppleTVProfile.didStartCouch(memberIDs: members.map(\.id))
+            #endif
 
             Defaults[.Couch.memberIDs] = [primary.id] + otherMemberIDs
             Defaults[.Couch.lastMemberIDs] = members.map(\.id)

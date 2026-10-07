@@ -17,6 +17,11 @@ struct CouchSettingsView: View {
     @Default(.Couch.hideWatchedByAnyMember)
     private var hideWatchedByAnyMember
 
+    #if os(tvOS)
+    @Default(.appleTVDefaultPersonID)
+    private var appleTVDefaultPersonID
+    #endif
+
     @InjectedObject(\.userSessionManager)
     private var userSessionManager: UserSessionManager
 
@@ -34,6 +39,12 @@ struct CouchSettingsView: View {
 
     var body: some View {
         Form(systemImage: "sofa.fill") {
+            #if os(tvOS)
+            if AppleTVProfile.isAvailable {
+                appleTVProfileSection
+            }
+            #endif
+
             browsingSection
 
             kidsSection
@@ -43,6 +54,34 @@ struct CouchSettingsView: View {
             loadUsers()
         }
     }
+
+    // MARK: - Apple TV Profile Section
+
+    #if os(tvOS)
+    @ViewBuilder
+    private var appleTVProfileSection: some View {
+        Section {
+            ListRowMenu(
+                L10n.CouchfinSettings.opensAs,
+                subtitle: users.first(where: { $0.id == appleTVDefaultPersonID })?.username ?? L10n.CouchfinSettings.askEveryTime
+            ) {
+                Picker(L10n.CouchfinSettings.opensAs, selection: $appleTVDefaultPersonID) {
+                    Text(L10n.CouchfinSettings.askEveryTime)
+                        .tag(String?.none)
+
+                    ForEach(users, id: \.id) { user in
+                        Text(user.username)
+                            .tag(String?.some(user.id))
+                    }
+                }
+            }
+        } header: {
+            Text(L10n.CouchfinSettings.appleTVProfile)
+        } footer: {
+            Text(L10n.CouchfinSettings.opensAsFooter)
+        }
+    }
+    #endif
 
     // MARK: - Browsing Section
 
