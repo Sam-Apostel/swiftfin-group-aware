@@ -105,6 +105,7 @@ struct VideoPlayerSettingsView: View {
                 whileWatchingSettings
 
                 controlSettings
+
             case .audioAndSubtitles:
                 audioSettings
 

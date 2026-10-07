@@ -84,7 +84,9 @@ struct ContentGroupView<Provider: ContentGroupProvider>: View {
             switch viewModel.state {
             case .content:
                 if viewModel.groups.isEmpty {
-                    FinEmptyView(L10n.noResults.localizedCapitalized)
+                    FinEmptyView(
+                        L10n.noResults.localizedCapitalized
+                    )
                     .focusable()
                     #if os(tvOS)
                     .coordinatedFocus(.fallback)

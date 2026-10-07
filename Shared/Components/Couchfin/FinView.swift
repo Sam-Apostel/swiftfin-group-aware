@@ -22,8 +22,10 @@ struct FinView: View {
 
         var resource: ImageResource {
             switch self {
-            case .fish: .couchfinFin
-            case .tail: .couchfinTail
+            case .fish:
+                .couchfinFin
+            case .tail:
+                .couchfinTail
             }
         }
     }
