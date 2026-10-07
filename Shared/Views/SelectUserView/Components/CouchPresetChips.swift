@@ -6,7 +6,6 @@
 // Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
-import Defaults
 import SwiftUI
 
 extension SelectUserView {
@@ -16,9 +15,6 @@ extension SelectUserView {
     /// Tapping a chip puts its people on the couch; tapping the selected chip again starts watching.
     /// Long-press a saved couch to edit or delete it, or a last couch to save or forget it.
     struct CouchPresetChips: View {
-
-        @Default(.accentColor)
-        private var accentColor
 
         let chips: [CouchChip]
         let selectedMemberIDs: Set<String>
@@ -64,7 +60,7 @@ extension SelectUserView {
                 .scrollIndicators(.hidden)
                 .scrollClipDisabled()
             }
-            .buttonStyle(.capsule(selectionTint: accentColor, focusTint: UIDevice.isTV ? .white : nil))
+            .buttonStyle(.capsule(selectionTint: Color.Couchfin.orchid, focusTint: UIDevice.isTV ? .white : nil))
             .controlSize(UIDevice.isTV ? .large : .regular)
             .focusSection()
             .accessibilityElement(children: .contain)

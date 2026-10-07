@@ -6,7 +6,6 @@
 // Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
-import Defaults
 import FactoryKit
 import JellyfinAPI
 import SwiftUI
@@ -18,9 +17,6 @@ import SwiftUI
 ///
 /// The view dismisses itself after `onSave` / `onRemove`; do the async work in those closures.
 struct AudiencePickerView: View {
-
-    @Default(.accentColor)
-    private var accentColor
 
     @Router
     private var router
@@ -147,7 +143,7 @@ struct AudiencePickerView: View {
             }
         }
         .labelStyle(.leadingIcon)
-        .buttonStyle(.capsule(selectionTint: accentColor, focusTint: UIDevice.isTV ? .white : nil))
+        .buttonStyle(.capsule(selectionTint: Color.Couchfin.orchid, focusTint: UIDevice.isTV ? .white : nil))
         .controlSize(UIDevice.isTV ? .large : .regular)
         .focusSection()
     }
@@ -249,7 +245,7 @@ struct AudiencePickerView: View {
         .fontWeight(.semibold)
         .backport
         .buttonStyle(.glassProminent.shadow(false))
-        .tint(accentColor)
+        .tint(Color.Couchfin.orchid)
         #if os(iOS)
         .controlSize(.large)
         #endif
@@ -391,9 +387,6 @@ extension AudiencePickerView {
     /// Mirrors `UserButton`, without its delete semantics.
     struct MemberButton: View {
 
-        @Default(.accentColor)
-        private var accentColor
-
         let user: UserState
         let client: JellyfinClient?
         let isKid: Bool
@@ -434,7 +427,7 @@ extension AudiencePickerView {
                             .aspectRatio(contentMode: .fit)
                             .frame(width: badgeSize, height: badgeSize)
                             .symbolRenderingMode(.palette)
-                            .foregroundStyle(accentColor.overlayColor, accentColor)
+                            .foregroundStyle(Color.Couchfin.abyss, Color.Couchfin.bloom)
                             .shadow(radius: 4)
                             .transition(.scale.combined(with: .opacity))
                     }

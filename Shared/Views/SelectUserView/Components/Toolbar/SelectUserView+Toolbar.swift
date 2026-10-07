@@ -6,7 +6,6 @@
 // Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
-import Defaults
 import OrderedCollections
 import SwiftUI
 
@@ -18,9 +17,6 @@ extension SelectUserView {
             case center
             case start
         }
-
-        @Default(.accentColor)
-        private var accentColor
 
         @Environment(\.horizontalSizeClass)
         private var horizontalSizeClass
@@ -195,7 +191,7 @@ extension SelectUserView {
             .fontWeight(.semibold)
             .backport
             .buttonStyle(.glassProminent.shadow(false))
-            .tint(accentColor)
+            .tint(Color.Couchfin.fin)
             #if os(iOS)
             .controlSize(.large)
             #endif
