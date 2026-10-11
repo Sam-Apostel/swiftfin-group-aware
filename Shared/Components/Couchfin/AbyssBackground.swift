@@ -47,10 +47,12 @@ struct AbyssBackground: View {
 extension View {
 
     /// Puts a screen in Couchfin's dark water: hides the system list/form backgrounds
-    /// so the abyss shows through.
+    /// so the abyss shows through. Fills the available space, so a screen whose content is
+    /// small (like a loading fin) is still entirely underwater instead of showing black around it.
     func couchfinBackground() -> some View {
         #if os(iOS)
         scrollContentBackground(.hidden)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background {
                 AbyssBackground()
             }
