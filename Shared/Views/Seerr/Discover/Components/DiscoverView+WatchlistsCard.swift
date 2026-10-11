@@ -56,7 +56,7 @@ extension DiscoverView {
             Image(systemName: "sofa.fill")
                 .font(.title3)
                 .foregroundStyle(accentColor.overlayColor)
-                .frame(width: 44, height: 44)
+                .frame(width: UIDevice.isTV ? 70 : 44, height: UIDevice.isTV ? 70 : 44)
                 .background(accentColor, in: .circle)
         }
 
@@ -74,7 +74,7 @@ extension DiscoverView {
             Button {
                 router.route(to: .seerrWatchlists)
             } label: {
-                HStack(spacing: 12) {
+                HStack(spacing: UIDevice.isTV ? 24 : 12) {
                     icon
 
                     VStack(alignment: .leading, spacing: 2) {
@@ -96,14 +96,22 @@ extension DiscoverView {
                         .font(.body.weight(.semibold))
                         .foregroundStyle(.secondary)
                 }
-                .padding(12)
-                .background {
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(Color.secondarySystemBackground)
-                }
-                .contentShape(.rect(cornerRadius: 16))
+                #if os(tvOS)
+                .padding(24)
+                #else
+                    .padding(12)
+                    .background {
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color.secondarySystemBackground)
+                    }
+                    .contentShape(.rect(cornerRadius: 16))
+                #endif
             }
-            .buttonStyle(.plain)
+            #if os(tvOS)
+            .buttonStyle(.card)
+            #else
+                .buttonStyle(.plain)
+            #endif
             .accessibilityElement(children: .combine)
         }
     }

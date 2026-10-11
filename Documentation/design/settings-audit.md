@@ -23,7 +23,7 @@ Settings (sheet from the couch avatars on iOS · Settings tab on tvOS)
 ├─ Connections
 │  ├─ <you> .............. account, password, Quick Connect, lock (PIN / Face ID)
 │  ├─ Server ............. name, version, connections
-│  ├─ Requests ........... Seerr (iOS)
+│  ├─ Requests ........... Seerr
 │  └─ Server dashboard ... admins only (iOS)
 └─ About Couchfin ........ version, permissions, splash screen, sign-out on close /
                            background, logs, experimental, debug, source & license

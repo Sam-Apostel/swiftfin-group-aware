@@ -62,7 +62,7 @@ extension SeerrSettingsView {
                     source: imageSource,
                     pipeline: .Swiftfin.local
                 )
-                .frame(width: 32, height: 32)
+                .frame(width: UIDevice.isTV ? 60 : 32, height: UIDevice.isTV ? 60 : 32)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(person.user.username)

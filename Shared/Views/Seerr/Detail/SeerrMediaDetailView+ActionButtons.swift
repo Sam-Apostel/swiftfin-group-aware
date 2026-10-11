@@ -161,13 +161,13 @@ extension SeerrMediaDetailView {
             .buttonBorderShape(.capsule)
             .buttonStyle(BasicHoverButtonStyle())
             .foregroundStyle(.primary, .secondary)
-            .frame(height: 44)
+            .frame(height: UIDevice.isTV ? 75 : 44)
         }
 
         // MARK: - Body
 
         var body: some View {
-            VStack(spacing: 8) {
+            VStack(spacing: UIDevice.isTV ? 24 : 8) {
                 primaryButton
 
                 if showsRequestMore {

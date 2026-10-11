@@ -24,7 +24,15 @@ extension SeerrMediaDetailView {
                 ScrollView(.horizontal) {
                     LazyHStack(alignment: .top, spacing: EdgeInsets.itemSpacing) {
                         ForEach(members, id: \.offset) { member in
+                            #if os(tvOS)
+                            // Focusable, so the remote can scroll through the cast
+                            Button {} label: {
+                                CastMemberView(member: member.element)
+                            }
+                            .buttonStyle(.borderless)
+                            #else
                             CastMemberView(member: member.element)
+                            #endif
                         }
                     }
                     .edgePadding(.horizontal)
@@ -46,7 +54,7 @@ extension SeerrMediaDetailView {
 
         let member: SeerrCastMember
 
-        private let imageSize: CGFloat = 80
+        private let imageSize: CGFloat = UIDevice.isTV ? 160 : 80
 
         var body: some View {
             VStack(spacing: 6) {
