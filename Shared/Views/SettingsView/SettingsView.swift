@@ -28,10 +28,8 @@ struct SettingsView: View {
     @Router
     private var router
 
-    #if os(iOS)
     @InjectedObject(\.seerrService)
     private var seerrService: SeerrService
-    #endif
 
     // MARK: - Body
 
@@ -235,7 +233,6 @@ struct SettingsView: View {
                     .labelStyle(.sectionFooterWithImage(imageStyle: .orange))
                 }
 
-                #if os(iOS)
                 ChevronButton(
                     L10n.SeerrSettings.requests,
                     content: seerrHostDescription,
@@ -244,6 +241,7 @@ struct SettingsView: View {
                     router.route(to: .seerrSettings)
                 }
 
+                #if os(iOS)
                 if userSession.user.data.policy?.isAdministrator == true {
                     ChevronButton(
                         L10n.CouchfinSettings.serverDashboard,
@@ -257,7 +255,6 @@ struct SettingsView: View {
         }
     }
 
-    #if os(iOS)
     private var seerrHostDescription: String {
         guard seerrService.isConfigured, let serverURL = seerrService.serverURL else {
             return L10n.SeerrSettings.notConnected
@@ -265,7 +262,6 @@ struct SettingsView: View {
 
         return serverURL.host() ?? serverURL.absoluteString
     }
-    #endif
 
     // MARK: - About Section
 

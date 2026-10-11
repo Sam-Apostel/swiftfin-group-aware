@@ -38,7 +38,7 @@ extension WatchlistsView {
                 HStack(alignment: .center, spacing: EdgeInsets.edgePadding) {
                     PosterThumbnail(entry: entry, libraryItem: libraryItem)
                         .subtleShadow()
-                        .frame(width: 60)
+                        .frame(width: UIDevice.isTV ? 100 : 60)
 
                     details
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -47,6 +47,7 @@ extension WatchlistsView {
                 .contentShape(Rectangle())
             }
             .foregroundStyle(.primary, .secondary)
+            #if os(iOS)
             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                 Button(
                     L10n.Watchlists.remove,
@@ -62,6 +63,8 @@ extension WatchlistsView {
                 )
                 .tint(accentColor)
             }
+            #endif
+            // On tvOS: press and hold
             .contextMenu {
                 Button(
                     L10n.Watchlists.changeWho,

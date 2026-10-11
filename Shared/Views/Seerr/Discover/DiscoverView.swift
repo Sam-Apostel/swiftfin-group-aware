@@ -18,6 +18,11 @@ struct DiscoverView: View {
     @InjectedObject(\.seerrService)
     private var seerrService
 
+    #if os(tvOS)
+    @Environment(\.tabSafeAreaInsets)
+    private var tabSafeAreaInsets
+    #endif
+
     @Router
     private var router
 
@@ -53,7 +58,7 @@ struct DiscoverView: View {
             .buttonStyle(.glassProminent.shadow(false))
             .tint(Color.Couchfin.fin)
             .controlSize(.large)
-            .frame(maxWidth: 300)
+            .frame(maxWidth: UIDevice.isTV ? 500 : 300)
         }
     }
 
@@ -62,22 +67,41 @@ struct DiscoverView: View {
     private var rowsView: some View {
         ScrollViewReader { proxy in
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
+                VStack(alignment: .leading, spacing: UIDevice.isTV ? 50 : 20) {
                     Color.clear
                         .frame(height: 0)
                         .id("top")
 
+                    #if os(tvOS)
+                    // No search field on tvOS: the keyboard would push the rows off screen,
+                    // so search gets its own screen.
+                    HStack(spacing: 40) {
+                        WatchlistsCard()
+
+                        SearchButton()
+                    }
+                    .edgePadding(.horizontal)
+                    .focusSection()
+                    #else
                     WatchlistsCard()
                         .edgePadding(.horizontal)
+                    #endif
 
                     ForEach(viewModel.rows) { row in
                         RowSection(row: row)
                     }
                 }
                 .padding(.vertical, EdgeInsets.edgePadding)
+                #if os(tvOS)
+                .padding(.top, tabSafeAreaInsets.top)
+                #endif
             }
             .scrollIndicators(.hidden)
+            #if os(tvOS)
+            .ignoresSafeArea(.container, edges: [.horizontal, .top])
+            #else
             .ignoresSafeArea(edges: .horizontal)
+            #endif
             .refreshable {
                 await viewModel.background.refresh()
             }
@@ -95,8 +119,14 @@ struct DiscoverView: View {
     private var discoverContent: some View {
         switch viewModel.state {
         case .initial, .refreshing:
+            #if os(tvOS)
+            SwimmingFin()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .ignoresSafeArea(edges: .all)
+            #else
             ProgressView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+            #endif
 
         case .error:
             viewModel.error.map(ErrorView.init)
@@ -108,6 +138,16 @@ struct DiscoverView: View {
 
     // MARK: - Configured
 
+    #if os(tvOS)
+    @ViewBuilder
+    private var configuredContent: some View {
+        discoverContent
+            .animation(.linear(duration: 0.2), value: viewModel.state)
+            .refreshable {
+                await viewModel.refresh()
+            }
+    }
+    #else
     @ViewBuilder
     private var configuredContent: some View {
         ZStack {
@@ -130,6 +170,7 @@ struct DiscoverView: View {
             await viewModel.refresh()
         }
     }
+    #endif
 
     var body: some View {
         ZStack {
@@ -140,7 +181,11 @@ struct DiscoverView: View {
             }
         }
         .navigationTitle(L10n.SeerrDiscover.title)
+        #if os(tvOS)
+        .toolbar(router.isRootOfPath ? .hidden : .automatic, for: .navigationBar)
+        #else
         .toolbarTitleDisplayMode(router.isRootOfPath ? .inlineLarge : .inline)
+        #endif
         .onFirstAppear {
             if seerrService.isConfigured {
                 viewModel.refresh()

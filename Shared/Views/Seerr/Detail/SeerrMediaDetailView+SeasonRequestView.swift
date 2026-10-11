@@ -99,12 +99,16 @@ extension SeerrMediaDetailView {
             }
             .listRowInsets(.zero)
             .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
             .fontWeight(.semibold)
             .backport
             .buttonStyle(.glassProminent.shadow(false))
             .tint(accentColor)
+            #if os(iOS)
             .controlSize(.large)
+            .listRowSeparator(.hidden)
+            #else
+            .frame(maxHeight: 75)
+            #endif
             .disabled(selection.isEmpty)
         }
 

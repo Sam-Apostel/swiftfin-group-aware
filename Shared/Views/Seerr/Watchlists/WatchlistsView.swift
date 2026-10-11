@@ -43,6 +43,7 @@ struct WatchlistsView: View {
         .onFirstAppear {
             viewModel.onFirstAppear()
         }
+        #if os(iOS)
         .topBarTrailing {
             if viewModel.isRefreshing, viewModel.entries.isNotEmpty {
                 ProgressView()
@@ -50,6 +51,7 @@ struct WatchlistsView: View {
 
             filterMenu
         }
+        #endif
         .errorMessage($viewModel.error)
     }
 
@@ -69,6 +71,20 @@ struct WatchlistsView: View {
 
     @ViewBuilder
     private var noMatchesView: some View {
+        #if os(tvOS)
+        // The filter has no toolbar on tvOS: keep it reachable to undo it
+        VStack(spacing: 40) {
+            filterRow
+                .frame(maxWidth: 800)
+
+            FinEmptyView(
+                L10n.Watchlists.noMatchesTitle,
+                description: L10n.Watchlists.noMatchesDescription
+            )
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .padding(.top, 80)
+        #else
         ScrollView {
             FinEmptyView(
                 L10n.Watchlists.noMatchesTitle,
@@ -77,6 +93,7 @@ struct WatchlistsView: View {
             .frame(maxWidth: .infinity)
             .padding(.top, 80)
         }
+        #endif
     }
 
     // MARK: - List
@@ -84,6 +101,12 @@ struct WatchlistsView: View {
     @ViewBuilder
     private var listView: some View {
         List {
+            #if os(tvOS)
+            Section {
+                filterRow
+            }
+            #endif
+
             ForEach(viewModel.sections) { section in
                 Section {
                     ForEach(section.entries) { entry in
@@ -94,7 +117,9 @@ struct WatchlistsView: View {
                 }
             }
         }
+        #if os(iOS)
         .listStyle(.insetGrouped)
+        #endif
     }
 
     @ViewBuilder
@@ -136,6 +161,12 @@ struct WatchlistsView: View {
 
     // MARK: - Filter
 
+    #if os(tvOS)
+    @ViewBuilder
+    private var filterRow: some View {
+        ListRowMenu(L10n.Watchlists.filter, selection: $viewModel.filter)
+    }
+    #else
     @ViewBuilder
     private var filterMenu: some View {
         let systemImage = if #available(iOS 26, *) {
@@ -164,6 +195,7 @@ struct WatchlistsView: View {
             .pickerStyle(.inline)
         }
     }
+    #endif
 
     // MARK: - Audience picker
 

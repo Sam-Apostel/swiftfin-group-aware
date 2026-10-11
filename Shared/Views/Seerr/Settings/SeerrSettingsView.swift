@@ -148,7 +148,9 @@ struct SeerrSettingsView: View {
             .textInputAutocapitalization(.never)
             .keyboardType(.URL)
             .textContentType(.URL)
+            #if os(iOS)
             .submitLabel(.next)
+            #endif
             .focused($focusedField, equals: .url)
             .onSubmit {
                 focusedField = .apiKey
@@ -207,12 +209,14 @@ struct SeerrSettingsView: View {
             }
             .listRowInsets(.zero)
             .listRowBackground(Color.clear)
-            .listRowSeparator(.hidden)
             .fontWeight(.semibold)
             .backport
             .buttonStyle(.glassProminent.shadow(false))
             .tint(accentColor)
+            #if os(iOS)
             .controlSize(.large)
+            .listRowSeparator(.hidden)
+            #endif
             .frame(maxHeight: 75)
             .disabled(isConnectDisabled)
         }

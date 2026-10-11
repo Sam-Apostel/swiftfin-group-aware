@@ -123,7 +123,7 @@ struct SeerrMediaDetailView: View {
                 .buttonStyle(.glassProminent.shadow(false))
                 .tint(accentColor)
                 .controlSize(.large)
-                .frame(maxWidth: 300)
+                .frame(maxWidth: UIDevice.isTV ? 500 : 300)
             }
         }
     }
@@ -137,7 +137,9 @@ struct SeerrMediaDetailView: View {
             ) { seasons in
                 viewModel.requestMedia(seasons: seasons)
             }
+            #if os(iOS)
             .presentationDetents([.medium, .large])
+            #endif
         }
     }
 
@@ -164,7 +166,11 @@ struct SeerrMediaDetailView: View {
         }
         .animation(.linear(duration: 0.2), value: viewModel.state)
         .navigationTitle(viewModel.details?.title ?? .empty)
+        #if os(tvOS)
+        .toolbarVisibility(.hidden, for: .navigationBar)
+        #else
         .toolbarTitleDisplayMode(.inline)
+        #endif
         .refreshable {
             // A background refresh never leaves `.error`, so Retry on the error view
             // needs a foreground refresh.

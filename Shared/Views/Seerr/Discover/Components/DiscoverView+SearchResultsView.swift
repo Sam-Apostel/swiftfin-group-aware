@@ -20,7 +20,13 @@ extension DiscoverView {
         var viewModel: DiscoverViewModel
 
         private var columns: [GridItem] {
-            if UIDevice.isPhone {
+            if UIDevice.isTV {
+                // Matches the tvOS library grid
+                Array(
+                    repeating: GridItem(.flexible(), spacing: EdgeInsets.itemSpacing, alignment: .top),
+                    count: 7
+                )
+            } else if UIDevice.isPhone {
                 Array(
                     repeating: GridItem(.flexible(), spacing: EdgeInsets.itemSpacing, alignment: .top),
                     count: 3
@@ -54,7 +60,9 @@ extension DiscoverView {
                 .edgePadding()
             }
             .scrollIndicators(.hidden)
+            #if os(iOS)
             .scrollDismissesKeyboard(.immediately)
+            #endif
         }
 
         @ViewBuilder

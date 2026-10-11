@@ -102,7 +102,6 @@ extension TabItem {
         }
     }
 
-    #if os(iOS)
     static var discover: TabItem {
         TabItem(
             id: "discover",
@@ -112,7 +111,6 @@ extension TabItem {
             DiscoverView()
         }
     }
-    #endif
 
     static var media: TabItem {
         TabItem(

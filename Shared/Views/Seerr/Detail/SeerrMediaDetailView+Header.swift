@@ -6,6 +6,7 @@
 // Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
+#if os(iOS)
 import JellyfinAPI
 import SwiftUI
 
@@ -110,69 +111,6 @@ extension SeerrMediaDetailView {
                 .accessibilityAddTraits(.isHeader)
         }
 
-        private var ratingText: String? {
-            guard let voteAverage = details.voteAverage, voteAverage > 0 else { return nil }
-
-            return voteAverage.formatted(.number.precision(.fractionLength(1)))
-        }
-
-        @ViewBuilder
-        private var metadata: some View {
-            DotHStack {
-                if let year = viewModel.year {
-                    Text(String(year))
-                }
-
-                if details.mediaType == .movie, let runtimeMinutes = details.runtimeMinutes, runtimeMinutes > 0 {
-                    Text(Duration.seconds(runtimeMinutes * 60), format: .hourMinuteAbbreviated)
-                }
-
-                if details.mediaType == .tv, let numberOfSeasons = details.numberOfSeasons, numberOfSeasons > 0 {
-                    Text(L10n.SeerrDetail.seasonCount(numberOfSeasons))
-                }
-
-                if let ratingText {
-                    Label {
-                        Text(ratingText)
-                    } icon: {
-                        Image(systemName: "star.fill")
-                    }
-                    .labelStyle(.attributeBadgeOutline)
-                }
-
-                if let certification = details.certification, certification.isNotEmpty {
-                    EmptyLabel(certification)
-                        .labelStyle(.attributeBadgeOutline)
-                }
-            }
-            .font(.caption)
-            .fontWeight(.semibold)
-            .foregroundStyle(.secondary)
-        }
-
-        @ViewBuilder
-        private var genres: some View {
-            if details.genres.isNotEmpty {
-                Text(details.genres.prefix(3).map(\.name).joined(separator: ", "))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-            }
-        }
-
-        @ViewBuilder
-        private var statusPill: some View {
-            let status = viewModel.status
-
-            Label(status.displayTitle, systemImage: status.systemImage)
-                .font(.caption)
-                .fontWeight(.semibold)
-                .foregroundStyle(status.color)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-                .background(status.color.opacity(0.2), in: .capsule)
-        }
-
         // MARK: - Overview
 
         @ViewBuilder
@@ -223,11 +161,11 @@ extension SeerrMediaDetailView {
                 VStack(alignment: .center, spacing: 10) {
                     title
 
-                    metadata
+                    MetadataHStack(details: details, year: viewModel.year)
 
-                    genres
+                    GenresText(details: details)
 
-                    statusPill
+                    StatusPill(status: viewModel.status)
 
                     ActionButtons(
                         viewModel: viewModel,
@@ -276,3 +214,4 @@ extension SeerrMediaDetailView {
         }
     }
 }
+#endif
