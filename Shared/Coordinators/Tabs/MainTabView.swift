@@ -37,6 +37,7 @@ struct MainTabView: View {
         TabCoordinator {
             TabItem.contentGroup(provider: DefaultContentGroupProvider())
             TabItem.discover
+            TabItem.downloads
             TabItem.search
             TabItem.media
         }

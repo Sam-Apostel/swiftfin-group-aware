@@ -172,7 +172,7 @@ struct ItemView: View {
         #else
         .navigationBarMenuButton(
             isLoading: viewModel.background.is(.refreshing),
-            isHidden: overflow.isEmpty && menu.isEmpty
+            isHidden: overflow.isEmpty && menu.isEmpty && !ItemActionButtons.Download.isAvailable(for: provider)
         ) {
             ItemActionButtons.MenuContent(
                 provider: provider,

@@ -246,6 +246,16 @@ extension ItemActionButtons {
 
         var body: some View {
             Group {
+                #if os(iOS)
+                if ItemActionButtons.Download.isAvailable(for: provider) {
+                    ItemActionButtons.Download()
+
+                    if buttons.isNotEmpty || menuButtons.isNotEmpty {
+                        Divider()
+                    }
+                }
+                #endif
+
                 ForEach(
                     buttons,
                     content: ItemActionButtons.view(for:)

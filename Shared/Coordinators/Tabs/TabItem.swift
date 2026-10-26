@@ -102,6 +102,18 @@ extension TabItem {
         }
     }
 
+    #if os(iOS)
+    static var downloads: TabItem {
+        TabItem(
+            id: "downloads",
+            title: L10n.Downloads.title,
+            systemImage: "arrow.down.circle.fill"
+        ) {
+            DownloadsView()
+        }
+    }
+    #endif
+
     static var discover: TabItem {
         TabItem(
             id: "discover",

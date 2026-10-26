@@ -10,8 +10,7 @@ import JellyfinAPI
 import SwiftUI
 
 // TODO: compatibility picker
-// TODO: don't present for offline/live items
-//       - value on media player item
+// TODO: don't present for live items
 
 extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
 
@@ -36,7 +35,7 @@ extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
         }
 
         var body: some View {
-            if let playbackItem = manager.playbackItem {
+            if let playbackItem = manager.playbackItem, !playbackItem.isOffline {
                 let bitrates = playbackItem.mediaSource.supportedBitrates
                 let versions = playbackItem.baseItem.mediaSources ?? []
                 let hasVersionSection = versions.count > 1
