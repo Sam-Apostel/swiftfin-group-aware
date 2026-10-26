@@ -110,7 +110,11 @@ final class OfflineProgressObserver: MediaPlayerObserver {
                 guard let self else { return }
 
                 switch action {
-                case .stop, .ended:
+                case .ended:
+                    // Some players report the end early, playback may continue
+                    self.save()
+
+                case .stop:
                     self.save()
                     self.cancellables = []
 

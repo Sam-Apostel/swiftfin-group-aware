@@ -29,19 +29,19 @@ struct DownloadsView: View {
     private var isPresentingDeleteAll = false
 
     private var inProgress: [DownloadRecord] {
-        downloadManager.records.values
+        downloadManager.currentRecords
             .filter { $0.status != .completed }
             .sorted { $0.dateAdded < $1.dateAdded }
     }
 
     private var movies: [DownloadRecord] {
-        downloadManager.records.values
+        downloadManager.currentRecords
             .filter { $0.status == .completed && $0.item.type != .episode }
             .sorted { $0.displayTitle.localizedStandardCompare($1.displayTitle) == .orderedAscending }
     }
 
     private var series: [SeriesGroup] {
-        let episodes = downloadManager.records.values
+        let episodes = downloadManager.currentRecords
             .filter { $0.status == .completed && $0.item.type == .episode }
 
         return Dictionary(grouping: episodes) { $0.item.seriesID ?? $0.item.seriesName ?? "" }
@@ -72,7 +72,7 @@ struct DownloadsView: View {
 
     var body: some View {
         Group {
-            if downloadManager.records.isEmpty {
+            if downloadManager.currentRecords.isEmpty {
                 ContentUnavailableView(
                     L10n.Downloads.emptyTitle,
                     systemImage: "arrow.down.circle",
@@ -84,7 +84,7 @@ struct DownloadsView: View {
         }
         .navigationTitle(L10n.Downloads.title)
         .toolbar {
-            if downloadManager.records.isNotEmpty {
+            if downloadManager.currentRecords.isNotEmpty {
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu(L10n.menu, systemImage: "ellipsis") {
                         Button(L10n.Downloads.deleteAll, systemImage: "trash", role: .destructive) {
@@ -177,6 +177,9 @@ private struct DownloadRow: View {
     let record: DownloadRecord
     let imageURL: URL?
 
+    @State
+    private var image: UIImage?
+
     private var subtitle: String? {
         if record.item.type == .episode {
             return [record.item.seasonEpisodeLabel, record.item.seriesName]
@@ -185,12 +188,6 @@ private struct DownloadRow: View {
         }
 
         return record.item.productionYear.map { String($0) }
-    }
-
-    private var image: UIImage? {
-        guard let imageURL else { return nil }
-
-        return UIImage(contentsOfFile: imageURL.path(percentEncoded: false))
     }
 
     var body: some View {
@@ -210,6 +207,9 @@ private struct DownloadRow: View {
             }
             .frame(width: record.item.type == .episode ? 96 : 54, height: record.item.type == .episode ? 54 : 81)
             .clipShape(RoundedRectangle(cornerRadius: 6))
+            .task(id: imageURL) {
+                image = imageURL.flatMap { UIImage(contentsOfFile: $0.path(percentEncoded: false)) }
+            }
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(record.displayTitle)

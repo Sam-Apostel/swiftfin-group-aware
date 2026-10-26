@@ -53,6 +53,8 @@ final class DownloadManager: NSObject, ObservableObject {
     /// Item IDs that are being prepared, before a record exists.
     private var preparingIDs: Set<String> = []
     private var lastProgressUpdate: [String: Date] = [:]
+    /// The current task of each download, so callbacks from a cancelled task are ignored.
+    private var tasks: [String: URLSessionTask] = [:]
     private var cancellables: Set<AnyCancellable> = []
 
     private lazy var session: URLSession = {
@@ -91,9 +93,20 @@ final class DownloadManager: NSObject, ObservableObject {
     // MARK: - Queries
 
     func record(for itemID: String?) -> DownloadRecord? {
-        guard let itemID else { return nil }
+        guard let itemID, let record = records[itemID], isVisible(record) else { return nil }
 
-        return records[itemID]
+        return record
+    }
+
+    /// The downloads of the signed-in user on the current server.
+    var currentRecords: [DownloadRecord] {
+        records.values.filter { isVisible($0) }
+    }
+
+    private func isVisible(_ record: DownloadRecord) -> Bool {
+        guard let userSession = Container.shared.currentUserSession() else { return false }
+
+        return record.userID == userSession.user.id && record.serverID == userSession.server.id
     }
 
     func isPreparing(_ itemID: String?) -> Bool {
@@ -103,6 +116,8 @@ final class DownloadManager: NSObject, ObservableObject {
     }
 
     static func canDownload(_ item: BaseItemDto) -> Bool {
+        guard Container.shared.currentUserSession()?.user.data.policy?.enableContentDownloading == true else { return false }
+
         switch item.type {
         case .movie, .episode, .video, .musicVideo, .season, .series:
             !item.isLiveStream
@@ -125,9 +140,9 @@ final class DownloadManager: NSObject, ObservableObject {
         return directory(for: record.id).appending(path: imageFileName)
     }
 
-    /// Bytes used by all downloads on disk.
+    /// Bytes used by the current user's downloads on disk.
     var totalBytesUsed: Int64 {
-        records.values.reduce(0) { $0 + ($1.status == .completed ? $1.bytesWritten : 0) }
+        currentRecords.reduce(0) { $0 + ($1.status == .completed ? $1.bytesWritten : 0) }
     }
 
     // MARK: - Starting downloads
@@ -236,6 +251,7 @@ final class DownloadManager: NSObject, ObservableObject {
 
         let task = session.downloadTask(with: request)
         task.taskDescription = itemID
+        tasks[itemID] = task
         task.resume()
 
         logger.info("Started download", metadata: ["itemID": .string(itemID), "quality": .string(quality.rawValue)])
@@ -258,6 +274,7 @@ final class DownloadManager: NSObject, ObservableObject {
 
             let task = session.downloadTask(withResumeData: resumeData)
             task.taskDescription = record.id
+            tasks[record.id] = task
             task.resume()
             return
         }
@@ -266,7 +283,11 @@ final class DownloadManager: NSObject, ObservableObject {
     }
 
     func delete(_ record: DownloadRecord) {
-        cancelTask(for: record.id)
+        if let task = tasks.removeValue(forKey: record.id) {
+            task.cancel()
+        } else {
+            cancelUntrackedTasks(for: record.id)
+        }
 
         try? FileManager.default.removeItem(at: directory(for: record.id))
         records[record.id] = nil
@@ -274,7 +295,7 @@ final class DownloadManager: NSObject, ObservableObject {
     }
 
     func deleteAll() {
-        for record in records.values {
+        for record in currentRecords {
             delete(record)
         }
     }
@@ -284,11 +305,13 @@ final class DownloadManager: NSObject, ObservableObject {
     func savePlaybackProgress(itemID: String, position: Duration, runtime: Duration?) {
         guard var record = records[itemID] else { return }
 
-        // Treat the last 5% as watched, like the server does by default
-        if let runtime, runtime > .zero, position.seconds / runtime.seconds >= 0.95 {
+        // Treat the last 10% as watched, like the server does by default
+        if let runtime, runtime > .zero, position.seconds / runtime.seconds >= 0.9 {
             record.isPlayed = true
             record.playbackPositionTicks = 0
         } else {
+            // Leave the played state as it is on the server
+            record.isPlayed = nil
             record.playbackPositionTicks = position.ticks
         }
 
@@ -521,8 +544,15 @@ final class DownloadManager: NSObject, ObservableObject {
             guard let data = try? Data(contentsOf: recordURL),
                   let record = try? decoder.decode(DownloadRecord.self, from: data)
             else {
-                // Leftovers from a download that never got a record
-                try? FileManager.default.removeItem(at: folder)
+                let files = (try? FileManager.default.contentsOfDirectory(atPath: folder.path(percentEncoded: false))) ?? []
+
+                if files.contains(where: { $0.hasPrefix("media.") }) {
+                    // Never delete media just because its record can't be read
+                    logger.error("Unable to read download record in \(folder.lastPathComponent)")
+                } else {
+                    // Leftovers from a download that never got a record
+                    try? FileManager.default.removeItem(at: folder)
+                }
                 continue
             }
 
@@ -557,6 +587,11 @@ final class DownloadManager: NSObject, ObservableObject {
 
                 let runningIDs = Set(tasks.compactMap(\.taskDescription))
 
+                for task in tasks {
+                    guard let itemID = task.taskDescription, self.tasks[itemID] == nil else { continue }
+                    self.tasks[itemID] = task
+                }
+
                 for record in self.records.values where record.status == .queued || record.status == .downloading {
                     // Only downloads from a previous launch can have lost their task
                     guard record.dateAdded < self.launchDate, !runningIDs.contains(record.id) else { continue }
@@ -570,12 +605,22 @@ final class DownloadManager: NSObject, ObservableObject {
         }
     }
 
-    private func cancelTask(for itemID: String) {
-        session.getAllTasks { tasks in
-            for task in tasks where task.taskDescription == itemID {
-                task.cancel()
+    /// Cancels tasks of a previous launch that haven't been matched to a record yet.
+    private func cancelUntrackedTasks(for itemID: String) {
+        session.getAllTasks { [weak self] tasks in
+            Task { @MainActor in
+                for task in tasks where task.taskDescription == itemID && self?.tasks[itemID] !== task {
+                    task.cancel()
+                }
             }
         }
+    }
+
+    /// Whether a callback comes from the current task of a download, and not one that was replaced.
+    private func isCurrent(_ task: URLSessionTask, for itemID: String) -> Bool {
+        guard let current = tasks[itemID] else { return true }
+
+        return current === task
     }
 
     private func fail(_ itemID: String, message: String) {
@@ -589,7 +634,7 @@ final class DownloadManager: NSObject, ObservableObject {
     }
 
     private func didFinishDownloading(task: URLSessionDownloadTask, to location: URL) {
-        guard let itemID = task.taskDescription, var record = records[itemID] else {
+        guard let itemID = task.taskDescription, isCurrent(task, for: itemID), var record = records[itemID] else {
             return
         }
 
@@ -621,7 +666,7 @@ final class DownloadManager: NSObject, ObservableObject {
     }
 
     private func didWriteData(task: URLSessionDownloadTask, totalBytesWritten: Int64, totalBytesExpected: Int64) {
-        guard let itemID = task.taskDescription, var record = records[itemID] else { return }
+        guard let itemID = task.taskDescription, isCurrent(task, for: itemID), var record = records[itemID] else { return }
 
         let isFirstUpdate = record.status != .downloading
 
@@ -646,8 +691,9 @@ final class DownloadManager: NSObject, ObservableObject {
     }
 
     private func didComplete(task: URLSessionTask, error: Error?) {
-        guard let itemID = task.taskDescription else { return }
+        guard let itemID = task.taskDescription, isCurrent(task, for: itemID) else { return }
 
+        tasks[itemID] = nil
         lastProgressUpdate[itemID] = nil
 
         guard let error else { return }

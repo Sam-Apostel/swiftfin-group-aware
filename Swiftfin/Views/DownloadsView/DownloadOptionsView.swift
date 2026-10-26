@@ -6,6 +6,7 @@
 // Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
+import Defaults
 import FactoryKit
 import JellyfinAPI
 import SwiftUI
@@ -38,6 +39,17 @@ struct DownloadOptionsView: View {
 
     private var isCollection: Bool {
         item.type == .series || item.type == .season
+    }
+
+    /// The native player can't open containers like MKV, so only offer
+    /// the original file when it is known to play.
+    private var availableQualities: [DownloadQuality] {
+        guard Defaults[.VideoPlayer.videoPlayerType] == .avPlayer else { return DownloadQuality.allCases }
+
+        let container = item.mediaSources?.first?.container ?? ""
+        let isNativeContainer = !isCollection && ["mp4", "m4v", "mov"].contains { container.contains($0) }
+
+        return isNativeContainer ? DownloadQuality.allCases : DownloadQuality.allCases.filter(\.isTranscoded)
     }
 
     private func estimatedSize(for quality: DownloadQuality) -> String? {
@@ -117,6 +129,11 @@ struct DownloadOptionsView: View {
         }
         .interactiveDismissDisabled(startingID != nil)
         .disabled(startingID != nil)
+        .onFirstAppear {
+            if !availableQualities.contains(quality) {
+                quality = .p1080
+            }
+        }
         .task {
             await loadSeasons()
         }
@@ -129,7 +146,7 @@ struct DownloadOptionsView: View {
     private var qualitySection: some View {
         Section {
             Picker(L10n.Downloads.quality, selection: $quality) {
-                ForEach(DownloadQuality.allCases) { quality in
+                ForEach(availableQualities) { quality in
                     VStack(alignment: .leading, spacing: 2) {
                         Text(quality.displayTitle)
 
