@@ -118,7 +118,7 @@ final class DownloadManager: NSObject, ObservableObject {
     static func canDownload(_ item: BaseItemDto) -> Bool {
         guard Container.shared.currentUserSession()?.user.data.policy?.enableContentDownloading == true else { return false }
 
-        switch item.type {
+        return switch item.type {
         case .movie, .episode, .video, .musicVideo, .season, .series:
             !item.isLiveStream
         default:
@@ -454,7 +454,7 @@ final class DownloadManager: NSObject, ObservableObject {
             let video = streams.first(where: { $0.type == .video })
             let audio = streams.first(where: { $0.type == .audio && $0.index == audioIndex })
 
-            mediaSource.mediaStreams = [video, audio].compactMap { $0 }
+            mediaSource.mediaStreams = [video, audio].compactMap(\.self)
             mediaSource.container = "mp4"
             mediaSource.defaultAudioStreamIndex = audio?.index
             mediaSource.defaultSubtitleStreamIndex = -1
@@ -589,6 +589,7 @@ final class DownloadManager: NSObject, ObservableObject {
 
                 for task in tasks {
                     guard let itemID = task.taskDescription, self.tasks[itemID] == nil else { continue }
+
                     self.tasks[itemID] = task
                 }
 
