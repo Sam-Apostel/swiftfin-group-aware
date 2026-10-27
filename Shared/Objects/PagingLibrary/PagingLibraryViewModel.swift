@@ -112,7 +112,7 @@ class PagingLibraryViewModel<Library: PagingLibrary>: ViewModel, @MainActor Iden
         searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private var searchableLibrary: (any SearchablePagingLibrary<Element, Environment>)? {
+    private var searchableLibrary: any SearchablePagingLibrary<Element, Environment>? {
         library as? any SearchablePagingLibrary<Element, Environment>
     }
 

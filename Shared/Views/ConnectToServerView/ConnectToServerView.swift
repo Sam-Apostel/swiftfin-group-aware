@@ -101,7 +101,6 @@ struct ConnectToServerView: View {
 
     // MARK: - Local Servers Section
 
-    @ViewBuilder
     private var localServersSection: some View {
         Section(L10n.localServers) {
             if viewModel.localServers.isEmpty {
@@ -120,7 +119,6 @@ struct ConnectToServerView: View {
         }
     }
 
-    @ViewBuilder
     private var contentView: some View {
         #if os(iOS)
         List {

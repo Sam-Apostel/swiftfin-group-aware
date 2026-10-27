@@ -134,7 +134,6 @@ extension SelectUserView {
             }
         }
 
-        @ViewBuilder
         private var regularView: some View {
             HStack(alignment: .top, spacing: UIDevice.isTV ? 32 : nil) {
                 if isEditing {
@@ -166,7 +165,6 @@ extension SelectUserView {
             }
         }
 
-        @ViewBuilder
         private var startButton: some View {
             Button(action: onStart) {
                 HStack(spacing: UIDevice.isTV ? 24 : 12) {

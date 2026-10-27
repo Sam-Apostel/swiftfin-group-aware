@@ -65,7 +65,6 @@ extension View {
 
     /// The background of a pushed screen. On tvOS the tab view already draws the deep
     /// (under the focused poster's backdrop), so pushed screens stay transparent there.
-    @ViewBuilder
     func couchfinDestinationBackground() -> some View {
         #if os(iOS)
         couchfinBackground()

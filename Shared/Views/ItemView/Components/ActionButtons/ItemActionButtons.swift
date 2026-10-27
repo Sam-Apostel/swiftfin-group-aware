@@ -142,7 +142,6 @@ struct ItemActionButtons: View {
         )
     }
 
-    @ViewBuilder
     static func view(for button: ItemActionButton) -> some View {
         Group {
             switch button {

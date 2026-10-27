@@ -49,7 +49,6 @@ extension MediaInfoSupplement {
             self._recordingViewModel = StateObject(wrappedValue: RecordingTimerViewModel(item: item))
         }
 
-        @ViewBuilder
         private var accessoryView: some View {
             VStack(alignment: .leading) {
                 DotHStack {
@@ -75,7 +74,6 @@ extension MediaInfoSupplement {
             }
         }
 
-        @ViewBuilder
         private var recordButtons: some View {
             VStack {
                 Button(role: recordingViewModel.recordingTimer != nil ? .destructive : nil) {
@@ -128,7 +126,6 @@ extension MediaInfoSupplement {
             .errorMessage($recordingViewModel.error)
         }
 
-        @ViewBuilder
         private var fromBeginningButton: some View {
             Button {
                 manager.proxy?.setSeconds(.zero)
@@ -161,7 +158,6 @@ extension MediaInfoSupplement {
             }
         }
 
-        @ViewBuilder
         private var iOSCompactView: some View {
             VStack(alignment: .leading) {
                 Text(item.displayTitle)
@@ -202,7 +198,6 @@ extension MediaInfoSupplement {
             .edgePadding()
         }
 
-        @ViewBuilder
         private var regularContent: some View {
             HStack(alignment: .bottom, spacing: EdgeInsets.edgePadding) {
                 // TODO: determine what to do with non-portrait (channel, home video) images

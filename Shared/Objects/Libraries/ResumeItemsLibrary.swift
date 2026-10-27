@@ -72,8 +72,7 @@ struct ResumeItemsLibrary: BaseItemKindLibrary {
         }
 
         let isAlreadyLoaded = viewModel.elements.contains { $0.id == itemID }
-        guard !isAlreadyLoaded else { return }
-        guard (userData.playbackPositionTicks ?? 0) > 0 else { return }
+        guard !isAlreadyLoaded, (userData.playbackPositionTicks ?? 0) > 0 else { return }
 
         viewModel.scheduleRefreshForItemUserData(minimumInterval: 30)
     }

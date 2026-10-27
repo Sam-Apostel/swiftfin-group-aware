@@ -54,7 +54,7 @@ class MediaPlayerItem: ViewModel, MediaPlayerObserver {
     let deviceProfile: DeviceProfile
     let mediaSource: MediaSourceInfo
     let playSessionID: String
-    let previewImageProvider: (any PreviewImageProvider)?
+    let previewImageProvider: any PreviewImageProvider?
     let thumbnailProvider: ThumbnailProvider?
     let url: URL
 
@@ -78,7 +78,7 @@ class MediaPlayerItem: ViewModel, MediaPlayerObserver {
         deviceProfile: DeviceProfile,
         initialAudioStreamIndex: Int? = nil,
         initialSubtitleStreamIndex: Int? = nil,
-        previewImageProvider: (any PreviewImageProvider)? = nil,
+        previewImageProvider: any PreviewImageProvider? = nil,
         thumbnailProvider: ThumbnailProvider? = nil,
         isOffline: Bool = false
     ) {

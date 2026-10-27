@@ -52,7 +52,6 @@ extension SeerrMediaDetailView {
         let onRequest: () -> Void
         let onWhoIsItFor: () -> Void
 
-        @ViewBuilder
         private var topBlur: some View {
             Rectangle()
                 .fill(Material.ultraThin)

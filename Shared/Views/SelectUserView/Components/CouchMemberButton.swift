@@ -89,7 +89,6 @@ extension SelectUserView {
             #endif
         }
 
-        @ViewBuilder
         private var imageView: some View {
             // `UserProfileImage` dims itself when editing and not selected
             UserProfileImage(

@@ -59,7 +59,6 @@ extension LibraryElement {
 
     func libraryDidSelectElement(router: Router.Wrapper, in namespace: Namespace.ID) {}
 
-    @ViewBuilder
     func makeBody(libraryStyle: LibraryStyle) -> Body {
         makeBody(libraryStyle: libraryStyle, action: nil)
     }

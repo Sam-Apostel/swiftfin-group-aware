@@ -59,7 +59,6 @@ extension SelectUserView {
             !isEditing && couchSelectionIDs.isNotEmpty && !isOnCouch(user)
         }
 
-        @ViewBuilder
         private func rowLabel(for item: UserItem) -> some View {
             HStack(spacing: EdgeInsets.edgePadding) {
                 // `UserProfileImage` dims itself when editing and not selected
@@ -101,7 +100,6 @@ extension SelectUserView {
             }
         }
 
-        @ViewBuilder
         private func row(for item: UserItem) -> some View {
             ChevronButton {
                 if isEditing {

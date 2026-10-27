@@ -96,7 +96,6 @@ struct SettingsView: View {
         }
     }
 
-    @ViewBuilder
     private func couchMembersRow(couch: CouchGroup, server: ServerState) -> some View {
         #if os(tvOS)
         // A button, so the row is focusable with the Siri Remote
@@ -110,7 +109,6 @@ struct SettingsView: View {
         #endif
     }
 
-    @ViewBuilder
     private func couchMembersLabel(couch: CouchGroup, server: ServerState) -> some View {
         HStack(spacing: UIDevice.isTV ? 30 : 12) {
             CouchAvatarStack(
@@ -152,7 +150,6 @@ struct SettingsView: View {
 
     // MARK: - Watching Section
 
-    @ViewBuilder
     private var watchingSection: some View {
         Section(L10n.CouchfinSettings.watching) {
             ChevronButton(
@@ -184,7 +181,6 @@ struct SettingsView: View {
 
     // MARK: - Look Section
 
-    @ViewBuilder
     private var lookSection: some View {
         Section {
             ChevronButton(
@@ -265,7 +261,6 @@ struct SettingsView: View {
 
     // MARK: - About Section
 
-    @ViewBuilder
     private var aboutSection: some View {
         Section {
             ChevronButton(

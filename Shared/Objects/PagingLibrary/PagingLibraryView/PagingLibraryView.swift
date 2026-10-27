@@ -108,7 +108,6 @@ struct PagingLibraryView<Library: PagingLibrary>: View where Library.Element: Li
         #endif
     }
 
-    @ViewBuilder
     private var elementsView: some View {
         AlternateLayoutView {
             Color.clear

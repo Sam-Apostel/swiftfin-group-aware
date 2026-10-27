@@ -53,9 +53,9 @@ extension ItemActionButtons {
         /// without a completion, a failed save is shown by the app-wide alert instead.
         private var completion: ((Result<AudienceWatchlistActions.Outcome, Error>) -> Void)? {
             #if os(tvOS)
-            return nil
+            nil
             #else
-            return { result in
+            { result in
                 if case let .failure(failure) = result {
                     error = failure
                 }

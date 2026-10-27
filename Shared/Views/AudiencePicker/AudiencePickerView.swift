@@ -126,7 +126,6 @@ struct AudiencePickerView: View {
 
     // MARK: - Chips
 
-    @ViewBuilder
     private func chips(_ presets: [AudiencePreset]) -> some View {
         FlowLayout(
             alignment: UIDevice.isTV ? .center : .leading,
@@ -148,7 +147,6 @@ struct AudiencePickerView: View {
         .focusSection()
     }
 
-    @ViewBuilder
     private func sectionHeader(_ text: String) -> some View {
         Text(text)
             .font(UIDevice.isTV ? .headline : .subheadline)
@@ -176,7 +174,6 @@ struct AudiencePickerView: View {
 
     // MARK: - Members
 
-    @ViewBuilder
     private func memberButton(_ user: UserState) -> some View {
         MemberButton(
             user: user,
@@ -220,7 +217,6 @@ struct AudiencePickerView: View {
         }
     }
 
-    @ViewBuilder
     private var tvOSMemberRow: some View {
         HStack(spacing: EdgeInsets.itemSpacing) {
             ForEach(users) { user in
@@ -234,7 +230,6 @@ struct AudiencePickerView: View {
 
     // MARK: - Buttons
 
-    @ViewBuilder
     private var saveButton: some View {
         Button {
             save()
@@ -275,7 +270,6 @@ struct AudiencePickerView: View {
         }
     }
 
-    @ViewBuilder
     private var sentenceView: some View {
         Text(sentence)
             .font(UIDevice.isTV ? .title3 : .headline)
@@ -291,7 +285,6 @@ struct AudiencePickerView: View {
     // MARK: - Layout
 
     #if os(iOS)
-    @ViewBuilder
     private var iOSContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 24) {
@@ -324,7 +317,6 @@ struct AudiencePickerView: View {
     #endif
 
     #if os(tvOS)
-    @ViewBuilder
     private var tvOSContent: some View {
         ScrollView(.vertical) {
             VStack(spacing: 50) {
@@ -414,7 +406,6 @@ extension AudiencePickerView {
             }
         }
 
-        @ViewBuilder
         private var imageView: some View {
             avatar
                 .isEditing(true)
@@ -448,7 +439,6 @@ extension AudiencePickerView {
                 }
         }
 
-        @ViewBuilder
         private var titleView: some View {
             Text(user.username)
                 .font(UIDevice.isTV ? .headline : .footnote)

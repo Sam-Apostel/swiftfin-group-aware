@@ -46,7 +46,6 @@ extension ItemView {
                 UIDevice.isTV ? 100 : 70
             }
 
-            @ViewBuilder
             private var logo: some View {
                 ImageView(
                     provider.item.imageSource(
@@ -77,7 +76,6 @@ extension ItemView {
                 .accessibilityRemoveTraits(.isImage)
             }
 
-            @ViewBuilder
             private var overlay: some View {
                 HStack(alignment: .bottom, spacing: EdgeInsets.edgePadding) {
                     VStack(alignment: .center, spacing: UIDevice.isTV ? 30 : 5) {

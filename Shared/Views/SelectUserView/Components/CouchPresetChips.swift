@@ -67,7 +67,6 @@ extension SelectUserView {
             .accessibilityLabel(L10n.CouchPresets.savedCouches)
         }
 
-        @ViewBuilder
         private var row: some View {
             HStack(spacing: spacing) {
                 ForEach(chips) { chip in
@@ -119,7 +118,6 @@ extension SelectUserView {
             }
         }
 
-        @ViewBuilder
         private func chipLabel(_ chip: CouchChip, isSelected: Bool) -> some View {
             HStack(spacing: UIDevice.isTV ? 12 : 6) {
                 leadingView(chip)
