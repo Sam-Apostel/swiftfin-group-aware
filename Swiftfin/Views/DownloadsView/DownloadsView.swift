@@ -148,7 +148,12 @@ struct DownloadsView: View {
         Button {
             select(record)
         } label: {
-            DownloadRow(record: record, imageURL: downloadManager.imageURL(for: record))
+            DownloadRow(
+                record: record,
+                imageURL: downloadManager.imageURL(for: record),
+                speed: downloadManager.speeds[record.id],
+                timeRemaining: downloadManager.timeRemaining(for: record)
+            )
         }
         .foregroundStyle(.primary)
         .swipeActions(edge: .trailing, allowsFullSwipe: true) {
@@ -176,9 +181,28 @@ private struct DownloadRow: View {
 
     let record: DownloadRecord
     let imageURL: URL?
+    /// Bytes per second.
+    let speed: Double?
+    let timeRemaining: Duration?
 
     @State
     private var image: UIImage?
+
+    /// "55 MB of 300 MB · 1.2 MB/s · 4 min left"
+    private func progressDetails(progress: String) -> String {
+        var details = [progress]
+
+        if let speed, speed > 0 {
+            details.append(L10n.Downloads.speed(Int64(speed).formatted(.byteCount(style: .file))))
+        }
+
+        if let timeRemaining {
+            let time = timeRemaining.formatted(.units(allowed: [.hours, .minutes, .seconds], width: .abbreviated, maximumUnitCount: 2))
+            details.append(L10n.Downloads.timeRemaining(time))
+        }
+
+        return details.joined(separator: " · ")
+    }
 
     private var subtitle: String? {
         if record.item.type == .episode {
@@ -265,7 +289,7 @@ private struct DownloadRow: View {
                     let written = record.bytesWritten.formatted(.byteCount(style: .file))
                     let total = expected.formatted(.byteCount(style: .file))
 
-                    Text(L10n.Downloads.progress(written, total))
+                    Text(progressDetails(progress: L10n.Downloads.progress(written, total)))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .monospacedDigit()

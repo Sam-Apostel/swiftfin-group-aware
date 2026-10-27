@@ -71,6 +71,14 @@ extension L10n {
             "\(downloaded) of \(total)"
         }
 
+        static func speed(_ size: String) -> String {
+            "\(size)/s"
+        }
+
+        static func timeRemaining(_ time: String) -> String {
+            "\(time) left"
+        }
+
         // MARK: - Errors
 
         static let noMedia = "This item has no media to download."
