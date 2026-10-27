@@ -64,6 +64,9 @@ class MediaPlayerItem: ViewModel, MediaPlayerObserver {
 
     let requestedBitrate: PlaybackBitrate
 
+    /// Whether this item plays a downloaded file, which can't be rebuilt by the server.
+    let isOffline: Bool
+
     // MARK: init
 
     init(
@@ -76,7 +79,8 @@ class MediaPlayerItem: ViewModel, MediaPlayerObserver {
         initialAudioStreamIndex: Int? = nil,
         initialSubtitleStreamIndex: Int? = nil,
         previewImageProvider: (any PreviewImageProvider)? = nil,
-        thumbnailProvider: ThumbnailProvider? = nil
+        thumbnailProvider: ThumbnailProvider? = nil,
+        isOffline: Bool = false
     ) {
         self.baseItem = baseItem
         self.mediaSource = mediaSource
@@ -86,6 +90,7 @@ class MediaPlayerItem: ViewModel, MediaPlayerObserver {
         self.previewImageProvider = previewImageProvider
         self.thumbnailProvider = thumbnailProvider
         self.url = url
+        self.isOffline = isOffline
 
         let mediaStreams = mediaSource.mediaStreams
         let isTranscoding = mediaSource.transcodingURL != nil
@@ -119,11 +124,17 @@ class MediaPlayerItem: ViewModel, MediaPlayerObserver {
             ?? mediaSource.defaultSubtitleStreamIndex
             ?? -1
 
-        observers.append(MediaProgressObserver(item: self))
+        // Downloads save their progress on the device and sync it later
+        if !isOffline {
+            observers.append(MediaProgressObserver(item: self))
+        }
     }
 
     /// Decides whether a track change can be performed by the player in place, or whether the server must produce a new stream.
     func isRebuildRequired(type: MediaStreamType, from oldIndex: Int?, to newIndex: Int?) -> Bool {
+        // Downloaded files only contain what's in them, the player switches tracks itself.
+        guard !isOffline else { return false }
+
         let isTranscoding = mediaSource.transcodingURL != nil
 
         // Disabling a track is ALWAYS a local-only operation.

@@ -331,7 +331,7 @@ final class MediaPlayerManager: ViewModel {
 
     @Function(\Action.Cases.setBitrate)
     private func _setBitrate(_ requestedBitrate: PlaybackBitrate) async throws {
-        guard let currentItem = playbackItem else { return }
+        guard let currentItem = playbackItem, !currentItem.isOffline else { return }
 
         try await updateMediaPlayerItem(
             currentItem: currentItem,
