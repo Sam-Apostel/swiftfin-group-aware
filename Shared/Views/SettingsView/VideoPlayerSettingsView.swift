@@ -87,8 +87,7 @@ struct VideoPlayerSettingsView: View {
     }
 
     private func updateConfiguration(_ modify: (inout UserConfiguration) -> Void) {
-        guard viewModel.user.id != nil else { return }
-        guard var configuration = viewModel.user.configuration else { return }
+        guard viewModel.user.id != nil, var configuration = viewModel.user.configuration else { return }
 
         modify(&configuration)
         viewModel.updateConfiguration(configuration)
@@ -128,7 +127,6 @@ struct VideoPlayerSettingsView: View {
 
     // MARK: - Engine Settings
 
-    @ViewBuilder
     private var videoPlayerPicker: some View {
         Picker(L10n.player, selection: $videoPlayerType) {
             ForEach(VideoPlayerType.supportedCases, id: \.self) { player in
@@ -137,7 +135,6 @@ struct VideoPlayerSettingsView: View {
         }
     }
 
-    @ViewBuilder
     private var engineSettings: some View {
         Section(L10n.player) {
             #if os(iOS)
@@ -165,7 +162,6 @@ struct VideoPlayerSettingsView: View {
 
     // MARK: - Button Settings
 
-    @ViewBuilder
     private func jumpIntervalPicker(title: String, selection: Binding<MediaJumpInterval>) -> some View {
         CustomAlertPicker(
             title: title,
@@ -189,7 +185,6 @@ struct VideoPlayerSettingsView: View {
 
     // MARK: - While Watching Settings
 
-    @ViewBuilder
     private var whileWatchingSettings: some View {
         Section {
             Toggle(L10n.autoPlay, isOn: Binding(
@@ -226,7 +221,6 @@ struct VideoPlayerSettingsView: View {
 
     // MARK: - Control Settings
 
-    @ViewBuilder
     private var controlSettings: some View {
         Section(L10n.CouchfinSettings.controls) {
             ChevronButton(L10n.barButtons) {
@@ -269,7 +263,6 @@ struct VideoPlayerSettingsView: View {
 
     // MARK: - Audio Settings
 
-    @ViewBuilder
     private var audioSettings: some View {
         Section(L10n.audio) {
             CulturePicker(L10n.preferredLanguage, threeLetterISOLanguageName: Binding(

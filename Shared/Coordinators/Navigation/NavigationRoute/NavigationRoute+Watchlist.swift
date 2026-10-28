@@ -9,13 +9,13 @@
 import JellyfinAPI
 import SwiftUI
 
+@MainActor
 extension NavigationRoute {
 
     // MARK: - Audience Picker
 
     /// "Who's it for?" for anything (e.g. a Seerr title). The caller saves in `onSave` / `onRemove`.
     /// A sheet on iOS, a full-screen cover on tvOS.
-    @MainActor
     static func audiencePicker(
         title: String,
         initialAudience: Set<String>,
@@ -39,7 +39,6 @@ extension NavigationRoute {
 
     /// "Who's it for?" for a Jellyfin library item (movie or series): pre-filled with the
     /// existing entry or the current couch, saves to the audience watchlist store itself.
-    @MainActor
     static func audiencePicker(
         item: BaseItemDto,
         completion: ((Result<AudienceWatchlistActions.Outcome, Error>) -> Void)? = nil

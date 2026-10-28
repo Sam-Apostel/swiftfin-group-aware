@@ -27,7 +27,6 @@ extension SeriesEpisodeContentGroup {
             seasons.first { $0.id == selection }
         }
 
-        @ViewBuilder
         private func title(_ value: String) -> some View {
             Text(value)
                 .font(.title2)

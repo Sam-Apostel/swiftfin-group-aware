@@ -136,7 +136,6 @@ struct SeerrSettingsView: View {
 
     // MARK: - Server Section
 
-    @ViewBuilder
     private var serverSection: some View {
         Section(L10n.server) {
             TextField(
@@ -192,7 +191,6 @@ struct SeerrSettingsView: View {
 
     // MARK: - Connect Section
 
-    @ViewBuilder
     private var connectSection: some View {
         Section {
             Button {
@@ -224,7 +222,6 @@ struct SeerrSettingsView: View {
 
     // MARK: - Status Section
 
-    @ViewBuilder
     private var statusSection: some View {
         Section(L10n.status) {
             if seerrService.isConfigured {
@@ -260,7 +257,6 @@ struct SeerrSettingsView: View {
 
     // MARK: - Quick Connect Section
 
-    @ViewBuilder
     private var quickConnectSection: some View {
         Section {
             if viewModel.peopleToSignIn.isEmpty, viewModel.people.isNotEmpty {
@@ -300,7 +296,6 @@ struct SeerrSettingsView: View {
 
     // MARK: - People Section
 
-    @ViewBuilder
     private var peopleSection: some View {
         Section {
             if viewModel.people.isEmpty {
@@ -340,7 +335,6 @@ struct SeerrSettingsView: View {
 
     // MARK: - Disconnect Section
 
-    @ViewBuilder
     private var disconnectSection: some View {
         Section {
             // Only once someone is signed in: removing the key would otherwise leave Seerr unusable

@@ -73,7 +73,6 @@ struct FilterTrack: View {
         viewModel.reset(filterType: nil)
     }
 
-    @ViewBuilder
     private func buttonIcon(for target: FocusTarget) -> some View {
         Image(systemName: target.systemImage)
             #if os(tvOS)
@@ -105,7 +104,6 @@ struct FilterTrack: View {
         .frame(width: showsTitle ? nil : 32, alignment: iconEdge == .leading ? .leading : .trailing)
     }
 
-    @ViewBuilder
     private var resetButton: some View {
         #if os(iOS)
         Menu(FocusTarget.reset.title, systemImage: FocusTarget.reset.systemImage) {
@@ -119,7 +117,6 @@ struct FilterTrack: View {
         #endif
     }
 
-    @ViewBuilder
     private func button(for target: FocusTarget) -> some View {
         Group {
             switch target {

@@ -57,7 +57,6 @@ struct WatchlistsView: View {
 
     // MARK: - States
 
-    @ViewBuilder
     private var emptyView: some View {
         ScrollView {
             FinEmptyView(
@@ -69,7 +68,6 @@ struct WatchlistsView: View {
         }
     }
 
-    @ViewBuilder
     private var noMatchesView: some View {
         #if os(tvOS)
         // The filter has no toolbar on tvOS: keep it reachable to undo it
@@ -98,7 +96,6 @@ struct WatchlistsView: View {
 
     // MARK: - List
 
-    @ViewBuilder
     private var listView: some View {
         List {
             #if os(tvOS)
@@ -122,7 +119,6 @@ struct WatchlistsView: View {
         #endif
     }
 
-    @ViewBuilder
     private func sectionHeader(for section: WatchlistsSection) -> some View {
         HStack(alignment: .center) {
             Image(systemName: viewModel.systemImage(for: section.audience))
@@ -142,7 +138,6 @@ struct WatchlistsView: View {
         .accessibilityAddTraits(.isHeader)
     }
 
-    @ViewBuilder
     private func row(for entry: AudienceWatchlistEntry) -> some View {
         EntryRow(
             entry: entry,
@@ -162,7 +157,6 @@ struct WatchlistsView: View {
     // MARK: - Filter
 
     #if os(tvOS)
-    @ViewBuilder
     private var filterRow: some View {
         ListRowMenu(L10n.Watchlists.filter, selection: $viewModel.filter)
     }

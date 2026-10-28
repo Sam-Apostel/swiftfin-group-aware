@@ -71,7 +71,6 @@ struct MainTabView: View {
         }
     }
 
-    @ViewBuilder
     private func tabRoot(_ tab: TabCoordinator.TabData) -> some View {
         NavigationInjectionView(coordinator: tab.coordinator) {
             tab.item.content
@@ -88,7 +87,6 @@ struct MainTabView: View {
         .environment(\.tabItemSelected, tab.publisher)
     }
 
-    @ViewBuilder
     private func tabView() -> some View {
         TabView(selection: $tabCoordinator.selectedTabID) {
             ForEach(tabCoordinator.tabs, id: \.item.id) { tab in

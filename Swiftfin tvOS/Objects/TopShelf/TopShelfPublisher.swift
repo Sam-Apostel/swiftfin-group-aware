@@ -30,8 +30,7 @@ enum TopShelfPublisher {
 
     /// Rebuilds the rows for `session`, at most once a minute unless `force`d.
     static func refresh(session: UserSession, force: Bool = false) async {
-        guard !isRefreshing else { return }
-        guard force || Date.now.timeIntervalSince(lastRefresh) > 60 else { return }
+        guard !isRefreshing, force || Date.now.timeIntervalSince(lastRefresh) > 60 else { return }
 
         isRefreshing = true
         defer { isRefreshing = false }

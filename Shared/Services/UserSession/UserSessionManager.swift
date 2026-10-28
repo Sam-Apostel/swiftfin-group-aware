@@ -255,9 +255,7 @@ final class UserSessionManager: ObservableObject {
             await refreshServerInformationIfNeeded(reason: .stale)
         }
 
-        guard currentSession != nil else { return }
-        guard Defaults[.signOutOnBackground] else { return }
-        guard !hasActivePlayback else { return }
+        guard currentSession != nil, Defaults[.signOutOnBackground], !hasActivePlayback else { return }
 
         let backgroundedInterval = Date.now.timeIntervalSince(Defaults[.backgroundTimeStamp])
         if backgroundedInterval > Defaults[.backgroundSignOutInterval] {
@@ -402,12 +400,9 @@ final class UserSessionManager: ObservableObject {
 
         let storedUsers = StoredValues[.User.users]
 
-        guard let user = storedUsers.first(where: { $0.id == userId }) else {
-            Defaults[.lastSignedInUserID] = .signedOut
-            Defaults[.Couch.memberIDs] = []
-            throw UserSessionError.invalidStoredSession(userID: userId)
-        }
-        guard let server = StoredValues[.Server.servers].first(where: { $0.id == user.serverID }) else {
+        guard let user = storedUsers.first(where: { $0.id == userId }),
+              let server = StoredValues[.Server.servers].first(where: { $0.id == user.serverID })
+        else {
             Defaults[.lastSignedInUserID] = .signedOut
             Defaults[.Couch.memberIDs] = []
             throw UserSessionError.invalidStoredSession(userID: userId)
@@ -457,8 +452,7 @@ extension UserSessionManager {
     /// is restricted: then the most restricted member.
     private func couchPrimary(of members: [UserState]) -> UserState? {
         guard let firstMember = members.first else { return nil }
-        guard members.count > 1, Defaults[.Couch.kidSafeBrowsing] else { return firstMember }
-        guard members.contains(where: \.isRestricted) else { return firstMember }
+        guard members.count > 1, Defaults[.Couch.kidSafeBrowsing], members.contains(where: \.isRestricted) else { return firstMember }
 
         return members.min { $0.restrictionScore < $1.restrictionScore } ?? firstMember
     }

@@ -58,7 +58,6 @@ struct CouchSettingsView: View {
     // MARK: - Apple TV Profile Section
 
     #if os(tvOS)
-    @ViewBuilder
     private var appleTVProfileSection: some View {
         Section {
             ListRowMenu(
@@ -102,7 +101,6 @@ struct CouchSettingsView: View {
 
     // MARK: - Kids Section
 
-    @ViewBuilder
     private var kidsSection: some View {
         Section {
             if users.isEmpty {
@@ -122,7 +120,6 @@ struct CouchSettingsView: View {
         }
     }
 
-    @ViewBuilder
     private func kidRowLabel(user: UserState) -> some View {
         HStack(spacing: UIDevice.isTV ? 20 : 12) {
             if let server = userSessionManager.currentSession?.server {

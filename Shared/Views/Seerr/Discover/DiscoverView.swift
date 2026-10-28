@@ -139,7 +139,6 @@ struct DiscoverView: View {
     // MARK: - Configured
 
     #if os(tvOS)
-    @ViewBuilder
     private var configuredContent: some View {
         discoverContent
             .animation(.linear(duration: 0.2), value: viewModel.state)
@@ -148,7 +147,6 @@ struct DiscoverView: View {
             }
     }
     #else
-    @ViewBuilder
     private var configuredContent: some View {
         ZStack {
             if viewModel.isSearchActive {
