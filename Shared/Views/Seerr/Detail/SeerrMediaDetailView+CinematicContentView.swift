@@ -40,7 +40,6 @@ extension SeerrMediaDetailView {
         // MARK: - Background
 
         /// Like `ItemView.ContentGroupScrollView`: clear behind the header, frosted behind the cast.
-        @ViewBuilder
         private var background: some View {
             AlternateLayoutView {
                 Color.clear
@@ -70,7 +69,6 @@ extension SeerrMediaDetailView {
 
         // MARK: - Header
 
-        @ViewBuilder
         private var title: some View {
             Text(details.title)
                 .fixedSize(horizontal: false, vertical: true)
@@ -82,7 +80,6 @@ extension SeerrMediaDetailView {
                 .accessibilityAddTraits(.isHeader)
         }
 
-        @ViewBuilder
         private var overview: some View {
             VStack(alignment: .leading, spacing: 5) {
                 if let tagline = details.tagline?.nilIfBlank {
@@ -102,7 +99,6 @@ extension SeerrMediaDetailView {
             .frame(maxWidth: .infinity, alignment: .leading)
         }
 
-        @ViewBuilder
         private var header: some View {
             HStack(alignment: .bottom, spacing: EdgeInsets.edgePadding) {
                 VStack(alignment: .leading, spacing: 30) {

@@ -78,7 +78,6 @@ struct AboutAppView: View {
     // MARK: - Header
 
     #if os(iOS)
-    @ViewBuilder
     private var header: some View {
         Section {
             VStack(spacing: 14) {
@@ -101,7 +100,6 @@ struct AboutAppView: View {
 
     // MARK: - Version
 
-    @ViewBuilder
     private var versionSection: some View {
         Section {
             #if DEBUG
@@ -197,7 +195,6 @@ struct AboutAppView: View {
 
     // MARK: - Diagnostics
 
-    @ViewBuilder
     private var diagnosticsSection: some View {
         Section(L10n.CouchfinSettings.diagnostics) {
             ChevronButton(L10n.logs) {

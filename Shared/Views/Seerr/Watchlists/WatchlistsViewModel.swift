@@ -418,8 +418,7 @@ final class WatchlistsViewModel: ViewModel {
 
     /// Best effort: keep each member's own Seerr watchlist in line with the audience.
     private func syncSeerrWatchlists(for entry: AudienceWatchlistEntry, adding: Set<String>, removing: Set<String>) {
-        guard let tmdbID = entry.tmdbID, seerrService.isConfigured else { return }
-        guard adding.isNotEmpty || removing.isNotEmpty else { return }
+        guard let tmdbID = entry.tmdbID, seerrService.isConfigured, adding.isNotEmpty || removing.isNotEmpty else { return }
 
         let mediaType: SeerrMediaType = entry.kind == .movie ? .movie : .tv
         let title = entry.title

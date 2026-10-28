@@ -240,7 +240,6 @@ struct UserSignInView: View {
 
     // MARK: - Public Users Section
 
-    @ViewBuilder
     private var publicUsersSection: some View {
         Section(L10n.publicUsers) {
             if viewModel.publicUsers.isEmpty {
@@ -298,7 +297,6 @@ struct UserSignInView: View {
         .disabled(viewModel.state == .signingIn)
     }
 
-    @ViewBuilder
     private var contentView: some View {
         #if os(iOS)
         List {

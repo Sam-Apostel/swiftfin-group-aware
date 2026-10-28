@@ -9,9 +9,9 @@
 import JellyfinAPI
 import SwiftUI
 
+@MainActor
 extension NavigationRoute {
 
-    @MainActor
     static func downloadOptions(item: BaseItemDto) -> NavigationRoute {
         NavigationRoute(
             id: "downloadOptions",
@@ -21,7 +21,6 @@ extension NavigationRoute {
         }
     }
 
-    @MainActor
     static var downloads: NavigationRoute {
         NavigationRoute(id: "downloads") {
             DownloadsView()

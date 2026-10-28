@@ -39,7 +39,6 @@ struct ContentGroupView<Provider: ContentGroupProvider>: View {
         _viewModel = StateObject(wrappedValue: ContentGroupViewModel(provider: provider))
     }
 
-    @ViewBuilder
     private var contentView: some View {
         ScrollViewReader { proxy in
             ScrollView {

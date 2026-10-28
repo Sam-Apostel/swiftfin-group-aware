@@ -110,7 +110,6 @@ struct DownloadsView: View {
         }
     }
 
-    @ViewBuilder
     private var list: some View {
         List {
             if inProgress.isNotEmpty {
@@ -143,7 +142,6 @@ struct DownloadsView: View {
         }
     }
 
-    @ViewBuilder
     private func row(for record: DownloadRecord) -> some View {
         Button {
             select(record)
@@ -207,7 +205,7 @@ private struct DownloadRow: View {
     private var subtitle: String? {
         if record.item.type == .episode {
             return [record.item.seasonEpisodeLabel, record.item.seriesName]
-                .compactMap { $0 }
+                .compactMap(\.self)
                 .joined(separator: " · ")
         }
 

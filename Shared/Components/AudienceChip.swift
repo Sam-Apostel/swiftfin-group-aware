@@ -36,7 +36,6 @@ struct AudienceLabel: View {
         UIDevice.isTV ? 40 : 22
     }
 
-    @ViewBuilder
     private func avatarStack(client: JellyfinClient) -> some View {
         HStack(spacing: -avatarSize * 0.3) {
             ForEach(Array(members.prefix(4))) { user in

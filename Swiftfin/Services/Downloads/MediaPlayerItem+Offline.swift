@@ -58,10 +58,10 @@ extension MediaPlayerItem {
     }
 }
 
+@MainActor
 extension MediaPlayerItemProvider {
 
     /// A provider that plays a downloaded item.
-    @MainActor
     static func offline(_ record: DownloadRecord) -> MediaPlayerItemProvider {
         MediaPlayerItemProvider(
             item: record.playbackItem,

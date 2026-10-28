@@ -217,8 +217,7 @@ extension CouchPresetStore {
         var accounts: [Account] = []
 
         for user in users where user.serverID == server.id {
-            guard seenUserIDs.insert(user.id).inserted else { continue }
-            guard let token = user.storedAccessToken else { continue }
+            guard seenUserIDs.insert(user.id).inserted, let token = user.storedAccessToken else { continue }
 
             let cacheKey = "\(server.id)|\(server.effectiveServerURL.absoluteString)|\(user.id)|\(token)"
             let client: JellyfinClient

@@ -33,7 +33,6 @@ extension SeerrMediaDetailView {
 
         // MARK: - Backdrop
 
-        @ViewBuilder
         private var backdrop: some View {
             MirrorExtensionView(edges: .top) {
                 AlternateLayoutView {
@@ -67,7 +66,6 @@ extension SeerrMediaDetailView {
 
         // MARK: - Poster
 
-        @ViewBuilder
         private var poster: some View {
             ZStack {
                 Rectangle()
@@ -99,7 +97,6 @@ extension SeerrMediaDetailView {
 
         // MARK: - Title & Metadata
 
-        @ViewBuilder
         private var title: some View {
             Text(details.title)
                 .fixedSize(horizontal: false, vertical: true)
@@ -147,7 +144,6 @@ extension SeerrMediaDetailView {
 
         // MARK: - Body
 
-        @ViewBuilder
         private var overlay: some View {
             VStack(alignment: .center, spacing: 10) {
                 AlternateLayoutView(alignment: .bottom) {

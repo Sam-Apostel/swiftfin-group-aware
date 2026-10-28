@@ -64,7 +64,6 @@ struct PosterGroup<Library: PagingLibrary>: ContentGroup where Library.Element: 
         )
     }
 
-    @ViewBuilder
     func body(with viewModel: PagingLibraryViewModel<Library>) -> some View {
         PosterHStackLibrarySection(
             viewModel: viewModel,

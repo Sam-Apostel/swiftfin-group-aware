@@ -81,7 +81,6 @@ extension WatchlistsView {
             }
         }
 
-        @ViewBuilder
         private var details: some View {
             VStack(alignment: .leading, spacing: 5) {
                 Text(entry.title)

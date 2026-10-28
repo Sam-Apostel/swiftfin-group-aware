@@ -142,7 +142,6 @@ struct DownloadOptionsView: View {
 
     // MARK: - Sections
 
-    @ViewBuilder
     private var qualitySection: some View {
         Section {
             Picker(L10n.Downloads.quality, selection: $quality) {
@@ -224,7 +223,6 @@ struct DownloadOptionsView: View {
         }
     }
 
-    @ViewBuilder
     private func downloadButton(title: String, id: String?, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack {

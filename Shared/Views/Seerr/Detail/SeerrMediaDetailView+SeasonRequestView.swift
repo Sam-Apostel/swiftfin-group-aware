@@ -76,7 +76,6 @@ extension SeerrMediaDetailView {
 
         // MARK: - Views
 
-        @ViewBuilder
         private func seasonRow(_ season: SeerrSeason) -> some View {
             Toggle(isOn: binding(for: season.seasonNumber)) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -91,7 +90,6 @@ extension SeerrMediaDetailView {
             }
         }
 
-        @ViewBuilder
         private var requestButton: some View {
             Button(action: request) {
                 Text(requestTitle)

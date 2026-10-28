@@ -26,7 +26,6 @@ extension VideoPlayer.UIContainerViewController {
         private var focusedElement: String?
 
         #if os(iOS)
-        @ViewBuilder
         private func closeButton(size: CGFloat) -> some View {
             Button {
                 viewState.selectedSupplementID = nil
@@ -55,7 +54,6 @@ extension VideoPlayer.UIContainerViewController {
                 }?.id
         }
 
-        @ViewBuilder
         private func supplementContainer(for supplement: some MediaPlayerSupplement) -> some View {
             AlternateLayoutView(alignment: .topLeading) {
                 Color.clear
@@ -74,7 +72,6 @@ extension VideoPlayer.UIContainerViewController {
             #endif
         }
 
-        @ViewBuilder
         private var tabButtons: some View {
             AlternateLayoutView {
                 // swiftlint:disable:next hard_coded_display_string
