@@ -52,18 +52,25 @@ final class DownloadManager: NSObject, ObservableObject {
 
     /// Item IDs that are being prepared, before a record exists.
     private var preparingIDs: Set<String> = []
-    private var lastProgressUpdate: [String: Date] = [:]
+    private var lastProgressUpdate: [String: (date: Date, bytes: Int64)] = [:]
+    /// Smoothed download speed of each running download, in bytes per second.
+    private(set) var speeds: [String: Double] = [:]
     /// The current task of each download, so callbacks from a cancelled task are ignored.
     private var tasks: [String: URLSessionTask] = [:]
     private var cancellables: Set<AnyCancellable> = []
+    /// Whether running tasks of a previous launch have been matched to records.
+    private var hasReconnectedTasks = false
+
+    /// Downloads run one at a time, in the order they were added, so episodes finish in order.
+    private static let maximumActiveDownloads = 1
 
     private lazy var session: URLSession = {
         let configuration = URLSessionConfiguration.background(withIdentifier: Self.sessionIdentifier)
         configuration.isDiscretionary = false
         configuration.sessionSendsLaunchEvents = true
         configuration.allowsCellularAccess = true
-        // Transcoded downloads each start a transcode on the server
-        configuration.httpMaximumConnectionsPerHost = 2
+        // Keeps tasks released for the background in order
+        configuration.httpMaximumConnectionsPerHost = 1
 
         return URLSession(
             configuration: configuration,
@@ -87,6 +94,13 @@ final class DownloadManager: NSObject, ObservableObject {
             .sink { [weak self] _ in
                 Task { await self?.syncPlaybackProgress() }
             }
+            .store(in: &cancellables)
+
+        // Tasks created while the app is in the background may be delayed by the system,
+        // so hand every queued download to the session before the app leaves the foreground.
+        Notifications[.applicationWillResignActive]
+            .publisher
+            .sink { [weak self] _ in self?.startQueuedDownloads(limit: nil) }
             .store(in: &cancellables)
     }
 
@@ -140,9 +154,19 @@ final class DownloadManager: NSObject, ObservableObject {
         return directory(for: record.id).appending(path: imageFileName)
     }
 
-    /// Bytes used by the current user's downloads on disk.
+    /// Bytes used by the current user's downloads on disk, including downloads in progress.
     var totalBytesUsed: Int64 {
-        currentRecords.reduce(0) { $0 + ($1.status == .completed ? $1.bytesWritten : 0) }
+        currentRecords.reduce(0) { $0 + $1.bytesWritten }
+    }
+
+    /// Estimated time until a running download finishes.
+    func timeRemaining(for record: DownloadRecord) -> Duration? {
+        guard record.status == .downloading,
+              let speed = speeds[record.id], speed > 0,
+              let expected = record.bytesExpected, expected > record.bytesWritten
+        else { return nil }
+
+        return .seconds(Double(expected - record.bytesWritten) / speed)
     }
 
     // MARK: - Starting downloads
@@ -245,16 +269,11 @@ final class DownloadManager: NSObject, ObservableObject {
             dateAdded: .now
         )
 
+        record.downloadURL = request.url
         record.mediaFileName = "media.\(Self.fileExtension(for: sourceMediaSource, quality: quality))"
 
         update(record)
-
-        let task = session.downloadTask(with: request)
-        task.taskDescription = itemID
-        tasks[itemID] = task
-        task.resume()
-
-        logger.info("Started download", metadata: ["itemID": .string(itemID), "quality": .string(quality.rawValue)])
+        startQueuedDownloads()
 
         await downloadImage(for: fullItem, client: userSession.client)
     }
@@ -264,18 +283,14 @@ final class DownloadManager: NSObject, ObservableObject {
     func retry(_ record: DownloadRecord) async throws {
         let resumeDataURL = directory(for: record.id).appending(path: Self.resumeDataFileName)
 
-        if !record.quality.isTranscoded, let resumeData = try? Data(contentsOf: resumeDataURL) {
-            try? FileManager.default.removeItem(at: resumeDataURL)
+        let canResume = !record.quality.isTranscoded && FileManager.default.fileExists(atPath: resumeDataURL.path(percentEncoded: false))
 
+        if canResume || record.downloadURL != nil {
             var record = record
             record.status = .queued
             record.errorMessage = nil
             update(record)
-
-            let task = session.downloadTask(withResumeData: resumeData)
-            task.taskDescription = record.id
-            tasks[record.id] = task
-            task.resume()
+            startQueuedDownloads()
             return
         }
 
@@ -292,6 +307,9 @@ final class DownloadManager: NSObject, ObservableObject {
         try? FileManager.default.removeItem(at: directory(for: record.id))
         records[record.id] = nil
         lastProgressUpdate[record.id] = nil
+        speeds[record.id] = nil
+
+        startQueuedDownloads()
     }
 
     func deleteAll() {
@@ -597,13 +615,63 @@ final class DownloadManager: NSObject, ObservableObject {
                     // Only downloads from a previous launch can have lost their task
                     guard record.dateAdded < self.launchDate, !runningIDs.contains(record.id) else { continue }
 
+                    // Queued downloads that never started just wait their turn
+                    if record.status == .queued, record.downloadURL != nil {
+                        continue
+                    }
+
                     var record = record
                     record.status = .failed
                     record.errorMessage = L10n.Downloads.interrupted
                     self.update(record)
                 }
+
+                self.hasReconnectedTasks = true
+                self.startQueuedDownloads()
             }
         }
+    }
+
+    /// Starts queued downloads in the order they were added, up to `limit` running at once.
+    ///
+    /// - Parameter limit: The maximum number of running downloads, or `nil` to start all of them.
+    private func startQueuedDownloads(limit: Int? = DownloadManager.maximumActiveDownloads) {
+        // Until then, running tasks of a previous launch aren't known
+        guard hasReconnectedTasks else { return }
+
+        let waiting = records.values
+            .filter { $0.status == .queued && tasks[$0.id] == nil }
+            .sorted { $0.dateAdded < $1.dateAdded }
+
+        let available = limit.map { max(0, $0 - tasks.count) } ?? waiting.count
+
+        for record in waiting.prefix(available) {
+            start(record)
+        }
+    }
+
+    private func start(_ record: DownloadRecord) {
+        let resumeDataURL = directory(for: record.id).appending(path: Self.resumeDataFileName)
+
+        let task: URLSessionDownloadTask
+
+        if !record.quality.isTranscoded, let resumeData = try? Data(contentsOf: resumeDataURL) {
+            try? FileManager.default.removeItem(at: resumeDataURL)
+            task = session.downloadTask(withResumeData: resumeData)
+        } else if let downloadURL = record.downloadURL {
+            var request = URLRequest(url: downloadURL)
+            request.timeoutInterval = 120
+            task = session.downloadTask(with: request)
+        } else {
+            fail(record.id, message: L10n.Downloads.interrupted)
+            return
+        }
+
+        task.taskDescription = record.id
+        tasks[record.id] = task
+        task.resume()
+
+        logger.info("Started download", metadata: ["itemID": .string(record.id), "quality": .string(record.quality.rawValue)])
     }
 
     /// Cancels tasks of a previous launch that haven't been matched to a record yet.
@@ -671,12 +739,22 @@ final class DownloadManager: NSObject, ObservableObject {
 
         let isFirstUpdate = record.status != .downloading
 
+        let now = Date.now
+
         // Throttle UI updates
-        if !isFirstUpdate, let last = lastProgressUpdate[itemID], Date.now.timeIntervalSince(last) < 0.5 {
+        if !isFirstUpdate, let last = lastProgressUpdate[itemID], now.timeIntervalSince(last.date) < 0.5 {
             return
         }
 
-        lastProgressUpdate[itemID] = .now
+        if let last = lastProgressUpdate[itemID] {
+            let elapsed = now.timeIntervalSince(last.date)
+            let rate = Double(totalBytesWritten - last.bytes) / max(elapsed, 0.001)
+
+            // Smooth out bursts so the time left doesn't jump around
+            speeds[itemID] = speeds[itemID].map { $0 * 0.8 + rate * 0.2 } ?? rate
+        }
+
+        lastProgressUpdate[itemID] = (now, totalBytesWritten)
 
         record.status = .downloading
         record.bytesWritten = totalBytesWritten
@@ -696,6 +774,9 @@ final class DownloadManager: NSObject, ObservableObject {
 
         tasks[itemID] = nil
         lastProgressUpdate[itemID] = nil
+        speeds[itemID] = nil
+
+        defer { startQueuedDownloads() }
 
         guard let error else { return }
 

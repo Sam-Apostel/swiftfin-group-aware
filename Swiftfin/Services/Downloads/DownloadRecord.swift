@@ -33,6 +33,8 @@ struct DownloadRecord: Codable, Hashable, Identifiable {
     let quality: DownloadQuality
     var status: Status
 
+    /// Where the media is downloaded from, kept so queued downloads can start later.
+    var downloadURL: URL?
     /// File name of the media inside the record's folder.
     var mediaFileName: String?
     /// File name of the poster image inside the record's folder.
