@@ -70,6 +70,7 @@ extension SubtitlePreference {
         switch flavour {
         case .regular:
             return languageName
+
         case .forced:
             let flavourName = L10n.RememberedSubtitles.forced
             return L10n.RememberedSubtitles.languageWithFlavour(languageName, flavourName)
