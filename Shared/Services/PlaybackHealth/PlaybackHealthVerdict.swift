@@ -266,7 +266,9 @@ enum PlaybackHealthClassifier {
             if reencodesVideo {
                 let isLarge = (video?.height ?? 0) > heavyHeightLimit
                 let isToneMapping = reasons.contains(.hdrConversion) || reasons.contains { reason in
-                    if case .dolbyVision = reason { return true }
+                    if case .dolbyVision = reason {
+                        return true
+                    }
                     return false
                 }
 
@@ -334,11 +336,15 @@ enum PlaybackHealthClassifier {
             isHEVC: device.supportsHEVC,
             isHDR: sourceIsHDR && device.supportsHDR && !reasons.contains(.hdrConversion),
             convertsAudio: reasons.contains { reason in
-                if case .audioFormat = reason { return true }
+                if case .audioFormat = reason {
+                    return true
+                }
                 return false
             },
             usesTextSubtitles: reasons.contains { reason in
-                if case .imageSubtitles = reason { return true }
+                if case .imageSubtitles = reason {
+                    return true
+                }
                 return false
             },
             maxMbps: bitrateLimit ?? (keeps4K ? nil : (maxBitrate.map(megabits)))
