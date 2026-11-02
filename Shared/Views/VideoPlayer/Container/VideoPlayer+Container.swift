@@ -83,11 +83,16 @@ extension VideoPlayer {
                 viewState.visibleElements.contains(.dimming)
             }
 
+            /// The sync studio needs to see the paused frame clearly.
+            private var shouldPresentFlatDimOverlay: Bool {
+                shouldPresentDimOverlay && viewState.selectedSupplementID != SyncStudioSupplement.supplementID
+            }
+
             var body: some View {
                 VideoViewport(videoSize: videoSize) { videoLayout in
                     player(videoLayout)
                         #if os(iOS)
-                            .overlay(Color.black.opacity(shouldPresentDimOverlay ? 0.5 : 0.0))
+                            .overlay(Color.black.opacity(shouldPresentFlatDimOverlay ? 0.5 : 0.0))
                         #endif
                         .overlay {
                             Group {
@@ -980,6 +985,12 @@ extension VideoPlayer {
         }
 
         private func handlePlayPauseEnded() {
+            // Play/pause checks the sync in the sync studio
+            if let syncStudio = viewState.syncStudio, viewState.isPresentingSupplement {
+                syncStudio.togglePreview()
+                return
+            }
+
             if viewState.isScrubbing {
                 viewState.cancelScrub()
                 return
@@ -1005,6 +1016,11 @@ extension VideoPlayer {
         private func handleSelectEnded(_ press: UIPress, event: UIPressesEvent?) {
             if viewState.isOverlayActionFocused {
                 forwardPressesEnded([press], event: event)
+                return
+            }
+
+            // Select on the sync studio's waveform saves
+            if let syncStudio = viewState.syncStudio, viewState.isPresentingSupplement, syncStudio.handleSelect() {
                 return
             }
 

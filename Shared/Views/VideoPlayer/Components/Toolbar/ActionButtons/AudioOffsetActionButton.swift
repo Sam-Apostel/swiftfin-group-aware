@@ -22,14 +22,16 @@ extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
 
         var body: some View {
             Button {
-                viewState.presentGuestSupplement(PlaybackAdjustmentSupplement.audioOffset)
+                // Opening the studio pauses playback and remembers where
+                let model = SyncStudioModel(manager: manager, viewState: viewState)
+                viewState.presentGuestSupplement(SyncStudioSupplement(model: model))
             } label: {
                 Label(
-                    L10n.audioOffset,
+                    L10n.AVSync.fixAudioSync,
                     systemImage: VideoPlayerActionButton.audioOffset.systemImage
                 )
 
-                if isInMenu {
+                if isInMenu, manager.audioOffset != .zero {
                     Text(manager.audioOffset, format: .playbackOffset)
                 }
             }
