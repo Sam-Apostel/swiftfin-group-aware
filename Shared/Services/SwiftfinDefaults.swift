@@ -131,6 +131,11 @@ extension Defaults.Keys {
         /// `CalendarEntry.id` → `eventIdentifier`, for calendars that don't keep an event's URL.
         static let eventIdentifiers: Key<[String: String]> = AppKey("releaseCalendarEventIdentifiers", default: [:])
     }
+
+    // MARK: Subtitles
+
+    /// The subtitle choice each user last made in the player, keyed by user ID.
+    static let subtitlePreferences: Key<[String: SubtitlePreference]> = AppKey("subtitlePreferences", default: [:])
 }
 
 // MARK: User

@@ -44,6 +44,10 @@ extension MediaPlayerItem {
             playSessionID: UUID().uuidString,
             url: fileURL,
             deviceProfile: deviceProfile,
+            initialSubtitleStreamIndex: SubtitlePreferenceStore.preferredSubtitleIndex(
+                in: record.mediaSource.mediaStreams,
+                userSession: Container.shared.currentUserSession()
+            ),
             thumbnailProvider: {
                 guard let imageURL else { return nil }
 

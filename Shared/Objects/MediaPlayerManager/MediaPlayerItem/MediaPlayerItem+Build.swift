@@ -62,6 +62,16 @@ extension MediaPlayerItem {
             throw ErrorMessage(L10n.unknownError)
         }
 
+        // Without an explicit pick, follow the user's remembered subtitle choice.
+        // Resolved before the PlaybackInfo request so the server builds the stream for it.
+        let fullMediaSource = item.mediaSources?.first(where: { $0.id == initialMediaSource.id })
+        let initialMediaStreams = initialMediaSource.mediaStreams ?? fullMediaSource?.mediaStreams
+
+        let subtitleStreamIndex = subtitleStreamIndex ?? SubtitlePreferenceStore.preferredSubtitleIndex(
+            in: initialMediaStreams,
+            userSession: userSession
+        )
+
         let maxBitrate = try await MediaPlayerManager.getMaxBitrate(for: requestedBitrate)
 
         let deviceProfile = DeviceProfile.build(
