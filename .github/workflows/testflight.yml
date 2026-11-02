@@ -7,10 +7,12 @@ name: "TestFlight ✈️"
 # Accounts) with automatic signing (-allowProvisioningUpdates), so no secrets are needed (same as
 # slide-station). If the optional APP_STORE_* secrets exist, the App Store Connect API key is used instead.
 #
-# Triggers:
-#   - manually (Actions ▸ TestFlight ✈️ ▸ Run workflow)
-#   - on every push to main, ONLY when the repository variable TESTFLIGHT_ON_PUSH is "true".
-#     Bursts of pushes collapse into a single build of the newest commit.
+# Triggers (same cadence as Reizo):
+#   - every day at 17:43 UTC, but only when the app changed since the last TestFlight build
+#   - manually (Actions ▸ TestFlight ✈️ ▸ Run workflow), or T-Minus' "Ship" button (its release
+#     target is this workflow). Tick "force" to ship even without app changes.
+# Each successful upload is tagged `testflight/<build>`; "changed" means files outside .github/,
+# Documentation/ and Markdown changed since the newest such tag.
 #
 # Optional secrets (Settings ▸ Secrets and variables ▸ Actions ▸ Secrets):
 #   APP_STORE_KEY_ID        API key id
@@ -21,15 +23,17 @@ name: "TestFlight ✈️"
 #                           With it, the pending "For testers" notes of merged PRs ship inside the app ("What's new"),
 #                           become TestFlight's What to Test (that also needs the APP_STORE_* key), and the release is
 #                           recorded in T-Minus after a successful upload. Without it, builds ship without notes.
-#
-# Repository variables:
-#   TESTFLIGHT_ON_PUSH  "true" to upload a TestFlight build for every push to main
 
 on:
-  push:
-    branches: [ main ]
+  schedule:
+    # 17:43 UTC: early evening in Brussels, after the day's merges.
+    - cron: '43 17 * * *'
   workflow_dispatch:
     inputs:
+      force:
+        description: "Ship even if the app didn't change since the last TestFlight build"
+        type: boolean
+        default: false
       platform:
         description: "Platform"
         required: true
@@ -49,15 +53,19 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'push' }}
+  cancel-in-progress: false
+
+permissions:
+  # Pushes the testflight/<build> tag after an upload.
+  contents: write
 
 jobs:
   # One version, build number and set of release notes for every platform in this run.
   prepare:
     name: "Release notes 📝"
-    if: ${{ github.event_name != 'push' || vars.TESTFLIGHT_ON_PUSH == 'true' }}
     runs-on: [ self-hosted, macOS, swiftfin-mac ]
     outputs:
+      ship: ${{ steps.changes.outputs.ship }}
       version: ${{ steps.meta.outputs.version }}
       build: ${{ steps.meta.outputs.build }}
       whats_new: ${{ steps.notes.outputs.whats_new }}
@@ -69,6 +77,31 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Anything new since the last TestFlight build?
+        id: changes
+        env:
+          FORCE: ${{ inputs.force }}
+        run: |
+          set -euo pipefail
+          last="$(git tag --list 'testflight/*' --sort=-creatordate | head -n 1)"
+          if [ "${FORCE:-false}" = "true" ]; then
+            echo "Forced"
+            echo "ship=true" >> "$GITHUB_OUTPUT"
+          elif [ -z "$last" ]; then
+            echo "No earlier TestFlight build tag"
+            echo "ship=true" >> "$GITHUB_OUTPUT"
+          elif git diff --quiet "$last" HEAD -- . ':(exclude).github' ':(exclude)Documentation' ':(exclude)*.md'; then
+            echo "Nothing changed in the app since $last; not shipping (tick force to ship anyway)."
+            echo "ship=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "App changes since $last:"
+            git diff --stat "$last" HEAD -- . ':(exclude).github' ':(exclude)Documentation' ':(exclude)*.md' | tail -n 1
+            echo "ship=true" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Version and build
         id: meta
@@ -86,6 +119,7 @@ jobs:
 
       - name: Pending notes from T-Minus
         id: notes
+        if: steps.changes.outputs.ship == 'true'
         env:
           VERSION: ${{ steps.meta.outputs.version }}
           BUILD: ${{ steps.meta.outputs.build }}
@@ -102,6 +136,7 @@ jobs:
   testflight:
     name: "TestFlight ✈️ (${{ matrix.scheme }})"
     needs: prepare
+    if: ${{ needs.prepare.outputs.ship == 'true' }}
     runs-on: [ self-hosted, macOS, swiftfin-mac ]
     timeout-minutes: 90
     strategy:
@@ -300,6 +335,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Tag the build
+        run: |
+          # The next scheduled run compares against this tag.
+          git tag "testflight/$BUILD" "$GITHUB_SHA"
+          git push origin "testflight/$BUILD"
 
       - name: Record the release in T-Minus
         run: |
