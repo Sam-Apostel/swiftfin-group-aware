@@ -167,7 +167,9 @@ final class FourKReadinessProbe: ObservableObject {
         for _ in 0 ..< 2 {
             let start = Date()
 
-            guard (try? await client.send(Paths.getBitrateTestBytes(size: bitrateTestBytes))) != nil else { break }
+            let response = try? await client.send(Paths.getBitrateTestBytes(size: bitrateTestBytes))
+
+            guard response != nil else { break }
 
             let seconds = Date().timeIntervalSince(start)
 
