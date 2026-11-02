@@ -97,13 +97,7 @@ class MediaPlayerItem: ViewModel, MediaPlayerObserver {
 
         // TODO: Fix External Audio Tracks & Re-Enable
         self.audioStreams = mediaStreams?.filter { $0.type == .audio && $0.isExternal != true } ?? []
-        self.subtitleStreams = mediaStreams?.filter {
-            $0.type == .subtitle
-                && $0.deliveryMethod != .drop
-                && !(Defaults[.VideoPlayer.Playback.compatibilityMode] == .directPlay
-                    && $0.isExternal == true
-                    && $0.isTextSubtitleStream != true)
-        } ?? []
+        self.subtitleStreams = Self.playableSubtitleStreams(in: mediaStreams)
         self.videoStreams = mediaStreams?.filter { $0.type == .video } ?? []
 
         let resolvedAudioStreamIndex: Int = initialAudioStreamIndex
@@ -128,6 +122,17 @@ class MediaPlayerItem: ViewModel, MediaPlayerObserver {
         if !isOffline {
             observers.append(MediaProgressObserver(item: self))
         }
+    }
+
+    /// The subtitle streams that can be offered for the given media streams.
+    nonisolated static func playableSubtitleStreams(in mediaStreams: [MediaStream]?) -> [MediaStream] {
+        mediaStreams?.filter {
+            $0.type == .subtitle
+                && $0.deliveryMethod != .drop
+                && !(Defaults[.VideoPlayer.Playback.compatibilityMode] == .directPlay
+                    && $0.isExternal == true
+                    && $0.isTextSubtitleStream != true)
+        } ?? []
     }
 
     /// Decides whether a track change can be performed by the player in place, or whether the server must produce a new stream.
