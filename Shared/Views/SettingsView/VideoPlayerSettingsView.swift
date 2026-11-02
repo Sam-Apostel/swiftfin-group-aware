@@ -32,6 +32,11 @@ struct VideoPlayerSettingsView: View {
     @Default(.VideoPlayer.videoPlayerType)
     private var videoPlayerType
 
+    #if os(tvOS)
+    @Default(.VideoPlayer.nativePlayerForHDR)
+    private var nativePlayerForHDR
+    #endif
+
     // MARK: - Button Defaults
 
     @Default(.VideoPlayer.jumpBackwardInterval)
@@ -148,6 +153,14 @@ struct VideoPlayerSettingsView: View {
             ChevronButton(L10n.playbackQuality) {
                 router.route(to: .playbackQualitySettings)
             }
+
+            #if os(tvOS)
+            Toggle(L10n.FourKReadiness.nativePlayerForHDR, isOn: $nativePlayerForHDR)
+
+            ChevronButton(L10n.FourKReadiness.entryTitle) {
+                router.route(to: .fourKReadiness)
+            }
+            #endif
         } learnMore: {
             LabeledContent(
                 L10n.vlc,
@@ -157,6 +170,13 @@ struct VideoPlayerSettingsView: View {
                 L10n.avPlayer,
                 value: L10n.playerNativeDescription
             )
+
+            #if os(tvOS)
+            LabeledContent(
+                L10n.FourKReadiness.nativePlayerForHDR,
+                value: L10n.FourKReadiness.nativePlayerForHDRFooter
+            )
+            #endif
         }
     }
 

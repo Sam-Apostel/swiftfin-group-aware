@@ -63,7 +63,7 @@ enum PlaybackHealthCheck {
               let mediaSource = mediaSource ?? item.mediaSources?.first
         else { return nil }
 
-        let videoPlayerType = Defaults[.VideoPlayer.videoPlayerType]
+        let videoPlayerType = VideoPlayerType.forPlayback(of: item)
         let compatibilityMode = Defaults[.VideoPlayer.Playback.compatibilityMode]
         let bitrateLimit = Self.maxBitrate(for: requestedBitrate)
 

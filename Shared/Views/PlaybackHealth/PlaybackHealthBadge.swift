@@ -37,23 +37,43 @@ struct PlaybackHealthBadge: View {
     }
 
     private var title: String {
-        verdict.map(L10n.PlaybackHealth.badgeTitle) ?? ""
+        guard let verdict, verdict.isBadgeWorthy else { return L10n.FourKReadiness.badge }
+
+        return L10n.PlaybackHealth.badgeTitle(verdict)
+    }
+
+    private var is4K: Bool {
+        let source = mediaSource ?? item.mediaSources?.first
+        let video = source?.mediaStreams?.first { $0.type == .video }
+
+        return TranscodeStreamClass.isFourK(width: video?.width ?? item.width, height: video?.height ?? item.height)
+    }
+
+    /// On Apple TV a 4K item always gets the badge: its sheet leads to "What it takes to watch 4K on this TV".
+    private var showsFourKEntry: Bool {
+        UIDevice.isTV && is4K
+    }
+
+    private var color: Color {
+        guard let verdict, verdict.isBadgeWorthy else { return .secondary }
+
+        return verdict.tier == .poor ? .red : .orange
     }
 
     var body: some View {
         ZStack {
-            if let verdict, verdict.isBadgeWorthy {
+            if let verdict, verdict.isBadgeWorthy || showsFourKEntry {
                 Button {
                     isPresentingDetails = true
                 } label: {
-                    Label(title, systemImage: "exclamationmark.triangle.fill")
+                    Label(title, systemImage: verdict.isBadgeWorthy ? "exclamationmark.triangle.fill" : "4k.tv")
                         .labelStyle(.attributeBadgeOutline)
-                        .foregroundStyle(verdict.tier == .poor ? Color.red : Color.orange)
+                        .foregroundStyle(color)
                 }
                 .buttonStyle(.plain)
                 .accessibilityHint(L10n.PlaybackHealth.details)
                 .sheet(isPresented: $isPresentingDetails) {
-                    PlaybackHealthDetailsView(verdict: verdict) {
+                    PlaybackHealthDetailsView(verdict: verdict, is4K: is4K) {
                         isPresentingDetails = false
                     }
                 }
