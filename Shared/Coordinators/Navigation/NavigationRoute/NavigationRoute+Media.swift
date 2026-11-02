@@ -6,6 +6,7 @@
 // Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
+import Defaults
 import FactoryKit
 import JellyfinAPI
 import PreferencesView
@@ -67,6 +68,10 @@ extension NavigationRoute {
         Container.shared.mediaPlayerManager.register {
             manager
         }
+
+        // The native player for HDR and Dolby Vision on tvOS. The proxy and every item of this playback use it.
+        let player = VideoPlayerType.forPlayback(of: manager.item)
+        VideoPlayerType.playbackOverride = player == Defaults[.VideoPlayer.videoPlayerType] ? nil : player
 
         Container.shared.couchPlaybackObserver().attach(to: manager)
         Container.shared.playbackHealthMonitor().attach(to: manager)

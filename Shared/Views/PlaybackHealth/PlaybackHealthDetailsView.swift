@@ -15,6 +15,8 @@ struct PlaybackHealthDetailsView: View {
     private var isShowingFix = false
 
     let verdict: PlaybackHealthVerdict
+    /// tvOS: a 4K item links to "What it takes to watch 4K on this TV".
+    var is4K = false
     let onClose: () -> Void
 
     private var reasons: [PlaybackHealthReason] {
@@ -77,6 +79,16 @@ struct PlaybackHealthDetailsView: View {
                         }
                         #endif
                     }
+
+                    #if os(tvOS)
+                    if is4K {
+                        NavigationLink {
+                            FourKReadinessView()
+                        } label: {
+                            Label(L10n.FourKReadiness.entryTitle, systemImage: "4k.tv")
+                        }
+                    }
+                    #endif
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .edgePadding()

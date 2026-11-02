@@ -23,7 +23,7 @@ extension MediaPlayerItem {
         mediaSource _initialMediaSource: MediaSourceInfo? = nil,
         audioStreamIndex: Int? = nil,
         subtitleStreamIndex: Int? = nil,
-        videoPlayerType: VideoPlayerType = Defaults[.VideoPlayer.videoPlayerType],
+        videoPlayerType: VideoPlayerType = .current,
         requestedBitrate: PlaybackBitrate = Defaults[.VideoPlayer.Playback.appMaximumBitrate],
         compatibilityMode: PlaybackCompatibility = Defaults[.VideoPlayer.Playback.compatibilityMode],
         modifyItem: ((inout BaseItemDto) -> Void)? = nil
