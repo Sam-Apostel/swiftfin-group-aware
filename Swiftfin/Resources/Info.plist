@@ -43,6 +43,8 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>${PRODUCT_NAME} keeps a calendar on your iPhone with the episodes and movies coming up.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>${PRODUCT_NAME} uses Face ID to lock and access local users.</string>
 	<key>NSLocalNetworkUsageDescription</key>

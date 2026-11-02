@@ -238,6 +238,8 @@ struct SettingsView: View {
                 }
 
                 #if os(iOS)
+                ReleaseCalendarSyncToggle()
+
                 if userSession.user.data.policy?.isAdministrator == true {
                     ChevronButton(
                         L10n.CouchfinSettings.serverDashboard,

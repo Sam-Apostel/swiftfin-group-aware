@@ -78,13 +78,19 @@ struct DiscoverView: View {
                     HStack(spacing: 40) {
                         WatchlistsCard()
 
+                        ComingUpCard()
+
                         SearchButton()
                     }
                     .edgePadding(.horizontal)
                     .focusSection()
                     #else
-                    WatchlistsCard()
-                        .edgePadding(.horizontal)
+                    VStack(spacing: 12) {
+                        WatchlistsCard()
+
+                        ComingUpCard()
+                    }
+                    .edgePadding(.horizontal)
                     #endif
 
                     ForEach(viewModel.rows) { row in

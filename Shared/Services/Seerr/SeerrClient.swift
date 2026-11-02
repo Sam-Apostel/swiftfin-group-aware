@@ -339,6 +339,19 @@ final class SeerrClient: Sendable {
         }
     }
 
+    // MARK: - Release Dates
+
+    /// `GET /movie/{id}` or `GET /tv/{id}`, decoded for the release dates only ("Coming up").
+    func releaseDetails(mediaType: SeerrMediaType, tmdbID: Int) async throws -> SeerrReleaseDetails {
+        let path = mediaType == .movie ? "/movie/\(tmdbID)" : "/tv/\(tmdbID)"
+        return try await send(Request(path: path))
+    }
+
+    /// `GET /tv/{id}/season/{seasonNumber}`, for the air dates of its episodes.
+    func releaseSeason(tmdbID: Int, seasonNumber: Int) async throws -> SeerrReleaseSeason {
+        try await send(Request(path: "/tv/\(tmdbID)/season/\(seasonNumber)"))
+    }
+
     // MARK: - Requests
 
     /// `POST /request`, attributed to `asUser` when given.
