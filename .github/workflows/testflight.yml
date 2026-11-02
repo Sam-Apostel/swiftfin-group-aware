@@ -36,7 +36,8 @@ on:
         default: false
       platform:
         description: "Platform"
-        required: true
+        required: false
+        default: All
         type: choice
         options:
           - All
