@@ -6,6 +6,7 @@
 // Copyright (c) 2026 Jellyfin & Jellyfin Contributors
 //
 
+import FactoryKit
 import PreferencesView
 import SwiftUI
 import UIKit
@@ -34,6 +35,9 @@ struct SwiftfinApp: App {
         ]
 
         SwiftfinSpotlight().addSwiftfinToSpotlight()
+
+        // "Coming up" in the iPhone calendar, when it's turned on
+        Container.shared.releaseCalendarSync().start()
     }
 
     var body: some Scene {

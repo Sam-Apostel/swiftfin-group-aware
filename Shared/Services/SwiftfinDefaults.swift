@@ -114,6 +114,24 @@ extension Defaults.Keys {
         static let hideWatchedByAnyMember: Key<Bool> = AppKey("couchHideWatchedByAnyMember", default: true)
     }
 
+    // MARK: Release Calendar
+
+    /// "Coming up" in the iPhone calendar. The calendar lives on the device, so these are app-wide.
+    enum ReleaseCalendar {
+
+        /// Keep a "Couchfin" calendar on this iPhone with what's coming up.
+        static let syncToCalendar: Key<Bool> = AppKey("releaseCalendarSyncToCalendar", default: false)
+
+        /// The `calendarIdentifier` of the "Couchfin" calendar.
+        static let calendarIdentifier: Key<String?> = AppKey("releaseCalendarCalendarIdentifier")
+
+        /// When the calendar was last brought up to date.
+        static let lastSyncDate: Key<Date> = AppKey("releaseCalendarLastSyncDate", default: .distantPast)
+
+        /// `CalendarEntry.id` → `eventIdentifier`, for calendars that don't keep an event's URL.
+        static let eventIdentifiers: Key<[String: String]> = AppKey("releaseCalendarEventIdentifiers", default: [:])
+    }
+
     // MARK: Subtitles
 
     /// The subtitle choice each user last made in the player, keyed by user ID.
