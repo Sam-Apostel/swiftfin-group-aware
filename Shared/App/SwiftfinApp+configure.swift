@@ -49,5 +49,8 @@ extension SwiftfinApp {
         }
 
         ImagePipeline.shared = .Swiftfin.posters
+
+        // T-Minus: a heartbeat at most once a day, and problem reports saved while offline
+        TMinusClient.launch()
     }
 }

@@ -38,6 +38,7 @@ struct UserSessionRootView: View {
             case .signedIn:
                 PosterPreferencesEnvironment {
                     MainTabView()
+                        .whatsNewAfterUpdate()
                 }
                 // Rebuild tabs and home whenever the people on the couch change,
                 // or the couch browses as another member (same people, new primary)

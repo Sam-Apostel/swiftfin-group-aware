@@ -314,6 +314,13 @@ final class MediaPlayerManager: ViewModel {
             )
         }
 
+        // To T-Minus, with formats and ids but never the stream URL (it carries the access token).
+        TMinusClient.captureError(
+            error,
+            culprit: "MediaPlayerManager.onError",
+            extra: PlaybackReportContext(manager: self).extra
+        )
+
         proxy?.stop()
         Container.shared.mediaPlayerManagerPublisher().send(nil)
         Container.shared.mediaPlayerManager.reset()
