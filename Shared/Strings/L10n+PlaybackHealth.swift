@@ -20,8 +20,26 @@ extension L10n {
         static let fixTitle = "What would fix it"
         static let details = "Details"
         static let badgeHeavy = "May stutter"
+        static let badgeLikely = "Likely to stutter"
+        static let badgeSlow = "Will stutter"
         static let badgePoor = "Won't play well"
         static let badgeStalled = "Stuttered before"
+        static let serverFixTitle = "On your server"
+
+        static func badgeTitle(_ verdict: PlaybackHealthVerdict) -> String {
+            switch (verdict.tier, verdict.server) {
+            case (.poor, .tooSlow):
+                badgeSlow
+            case (.poor, .some):
+                badgeLikely
+            case (.poor, .none):
+                badgePoor
+            case (.heavy, _):
+                badgeHeavy
+            case (.direct, _), (.light, _):
+                badgeStalled
+            }
+        }
 
         static func tierTitle(_ tier: PlaybackHealthTier) -> String {
             switch tier {
@@ -30,9 +48,9 @@ extension L10n {
             case .light:
                 "Light: your server only converts the audio or container"
             case .heavy:
-                "Heavy: your server re-encodes the video, which may stutter"
+                "Heavy: your server re-encodes the video"
             case .poor:
-                "Won't play well here"
+                "Won't play here"
             }
         }
 
@@ -43,9 +61,142 @@ extension L10n {
             case .light:
                 "Cheap for your server. This should play smoothly."
             case .heavy:
-                "Converting video takes a lot of work. A small server can fall behind and pause to catch up."
+                "Converting video takes a lot of work. A server that falls behind pauses to catch up."
             case .poor:
-                "Your server would have to convert a very big or HDR video, or can't play it at all."
+                "Your server can't play or convert this file for this device."
+            }
+        }
+
+        /// The headline of the details sheet: the server outlook when the video is re-encoded, else the tier.
+        static func verdictTitle(_ verdict: PlaybackHealthVerdict) -> String {
+            guard let server = verdict.server else { return tierTitle(verdict.tier) }
+
+            switch server {
+            case .smooth:
+                return "Plays smoothly: your server converts it fast enough"
+
+            case .hardwareReady:
+                return "Should play smoothly: not tested yet"
+
+            case .tight:
+                return "May stutter: your server only just keeps up"
+
+            case .tooSlow:
+                return "Will stutter: your server converts it too slowly"
+
+            case .softwareFallback, .softwareOnly:
+                let outcome = verdict.tier == .poor ? "Likely to stutter" : "May stutter"
+                return "\(outcome): your server's processor does the work"
+
+            case .notMeasured:
+                return "May stutter: not measured on your server yet"
+            }
+        }
+
+        /// The verdict in a sentence: the server outlook when the video is re-encoded, else the tier.
+        static func verdictDescription(_ verdict: PlaybackHealthVerdict) -> String {
+            guard let server = verdict.server, let streamClass = verdict.streamClass else { return tierDescription(verdict.tier) }
+
+            return serverDescription(server, streamClass: streamClass)
+        }
+
+        /// "4K HDR" when tone mapping, else e.g. "4K HEVC" or "HD H.264".
+        static func streamClassLabel(_ streamClass: TranscodeStreamClass) -> String {
+            let resolution = streamClass.is4K ? "4K" : "HD"
+
+            return streamClass.toneMaps ? "\(resolution) HDR" : "\(resolution) \(codecName(streamClass.codec))"
+        }
+
+        static func codecName(_ codec: String) -> String {
+            switch codec {
+            case "hevc":
+                "HEVC"
+            case "h264":
+                "H.264"
+            case "unknown":
+                "video"
+            default:
+                codec.uppercased()
+            }
+        }
+
+        static func hardwareName(_ hardware: String) -> String {
+            switch hardware {
+            case "qsv":
+                "Intel Quick Sync"
+            case "vaapi":
+                "VA-API"
+            case "nvenc":
+                "NVIDIA NVENC"
+            case "amf":
+                "AMD AMF"
+            case "videotoolbox":
+                "Apple VideoToolbox"
+            case "rkmpp":
+                "Rockchip MPP"
+            case "v4l2m2m":
+                "V4L2"
+            default:
+                hardware.uppercased()
+            }
+        }
+
+        static func serverDescription(_ server: PlaybackHealthServerOutlook, streamClass: TranscodeStreamClass) -> String {
+            let label = streamClassLabel(streamClass)
+            let isDemanding = streamClass.is4K || streamClass.toneMaps
+
+            switch server {
+            case let .smooth(fps, neededFPS):
+                return "Your server converts \(label) at \(fps) fps — this video needs \(neededFPS). Plays smoothly."
+
+            case let .tight(fps, neededFPS):
+                return "Your server converts \(label) at \(fps) fps, barely the \(neededFPS) this video needs. It may pause to catch up."
+
+            case let .tooSlow(fps, neededFPS):
+                return "Your server converts \(label) at \(fps) fps, but this video needs \(neededFPS). It will stutter."
+
+            case let .hardwareReady(hardware):
+                let toneMapping = streamClass.toneMaps ? ", tone mapping included" : ""
+                return "Your server converts \(label) with \(hardwareName(hardware))\(toneMapping). "
+                    + "Should be fine, not tested yet: Couchfin measures the speed the first time you play one."
+
+            case let .softwareFallback(hardware, gap):
+                let outcome = isDemanding ? "\(label) is likely to stutter." : "It may stutter."
+
+                switch gap {
+                case let .decoding(format):
+                    return "Your server's \(hardwareName(hardware)) isn't set up to decode \(format), so its processor does it. \(outcome)"
+                case .toneMapping:
+                    return "Your server's \(hardwareName(hardware)) isn't set up to tone map HDR, so its processor does it. \(outcome)"
+                case .encoding:
+                    return "Hardware encoding is off on your server, so its processor encodes the video. \(outcome)"
+                }
+
+            case .softwareOnly:
+                let outcome = isDemanding ? "\(label) is likely to stutter." : "It may stutter."
+                return "Your server has no hardware acceleration set up, so its processor converts everything. \(outcome)"
+
+            case .notMeasured:
+                return "Couchfin hasn't seen your server convert \(label) yet. It measures the speed the first time you play one, "
+                    + "and learns the server's setup when an administrator opens Couchfin."
+            }
+        }
+
+        /// What an administrator can change on the server, when it would help.
+        static func serverFix(_ server: PlaybackHealthServerOutlook?) -> String? {
+            let place = "In the Jellyfin dashboard, Playback › Transcoding"
+
+            switch server {
+            case let .softwareFallback(_, .decoding(format)):
+                return "\(place): turn on hardware decoding for \(format), if your hardware supports it."
+            case .softwareFallback(_, .toneMapping):
+                return "\(place): turn on tone mapping."
+            case .softwareFallback(_, .encoding):
+                return "\(place): turn on hardware encoding."
+            case .softwareOnly:
+                return "\(place): choose your server's hardware acceleration, e.g. Intel Quick Sync or VA-API on an Intel-based server."
+            case .hardwareReady, .notMeasured, .smooth, .tight, .tooSlow, .none:
+                return nil
             }
         }
 

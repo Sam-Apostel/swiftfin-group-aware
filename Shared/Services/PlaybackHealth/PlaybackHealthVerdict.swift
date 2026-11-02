@@ -18,9 +18,9 @@ enum PlaybackHealthTier: Int, Comparable {
     case direct
     /// The server only converts the audio, the subtitles or the container. Cheap.
     case light
-    /// The server re-encodes the video. May stutter on a small server.
+    /// The server re-encodes the video and it's unclear whether it keeps up.
     case heavy
-    /// Re-encoding a 4K or HDR video, or no way to play it at all.
+    /// The server is measured or set up too slow for this video, or there's no way to play it at all.
     case poor
 
     static func < (lhs: PlaybackHealthTier, rhs: PlaybackHealthTier) -> Bool {
@@ -79,6 +79,36 @@ enum PlaybackHealthReason: Hashable {
     }
 }
 
+// MARK: - Server outlook
+
+/// What the server can't do in hardware for a video, so its processor has to.
+enum PlaybackHealthServerGap: Equatable {
+
+    /// Decoding this format, e.g. "HEVC 10-bit".
+    case decoding(String)
+    case toneMapping
+    case encoding
+}
+
+/// How the server will keep up with re-encoding a video, from what was measured on it or how it's set up.
+enum PlaybackHealthServerOutlook: Equatable {
+
+    /// Measured: converts this kind of video comfortably faster than it plays.
+    case smooth(fps: Int, neededFPS: Int)
+    /// Measured: only just as fast as it plays.
+    case tight(fps: Int, neededFPS: Int)
+    /// Measured: slower than it plays.
+    case tooSlow(fps: Int, neededFPS: Int)
+    /// Not measured yet, but the server's hardware does all the work for this video.
+    case hardwareReady(hardware: String)
+    /// Not measured yet; the hardware is set up, but the processor has to do part of the work.
+    case softwareFallback(hardware: String, gap: PlaybackHealthServerGap)
+    /// Not measured yet, and no hardware acceleration is set up.
+    case softwareOnly
+    /// Not measured yet, and the setup hasn't been shared by an administrator.
+    case notMeasured
+}
+
 // MARK: - Target
 
 /// A copy of the item that would play directly on this device.
@@ -103,6 +133,14 @@ struct PlaybackHealthVerdict: Equatable {
 
     /// Rebuffering stalls remembered for this item on this device.
     var stalledBefore: Int = 0
+    /// The kind of conversion, when the server re-encodes the video.
+    var streamClass: TranscodeStreamClass?
+    /// How the server will keep up, when it re-encodes the video.
+    var server: PlaybackHealthServerOutlook?
+
+    var reencodesVideo: Bool {
+        server != nil
+    }
 
     /// Only heavy work, bad prospects, or a stutter history earn a badge on the item page.
     var isBadgeWorthy: Bool {
@@ -125,6 +163,8 @@ struct PlaybackHealthInput {
     var audioStreamIndex: Int?
     var subtitleStreamIndex: Int?
     var stalledBefore: Int = 0
+    /// The server's setup and measured conversion speeds.
+    var server: ServerPlaybackFacts?
 }
 
 // MARK: - Classifier
@@ -134,8 +174,10 @@ enum PlaybackHealthClassifier {
 
     /// Direct plays above this bitrate get a Wi-Fi note.
     static let highBitrateWarning = 40_000_000
-    /// Re-encoding above this height is too much for a small server.
+    /// Above this height a video counts as 4K.
     static let heavyHeightLimit = 1440
+    /// A server that converts this much faster than the video plays keeps up comfortably.
+    static let smoothSpeedMargin = 1.2
     /// Sessions with at least this many stalls are reported.
     static let stallsWorthReporting = 2
 
@@ -258,21 +300,33 @@ enum PlaybackHealthClassifier {
         let reencodesVideo = reasons.contains(where: \.isVideoReencode)
             || (reasons.contains(.unknownConversion) && source.isSupportsDirectStream != true)
 
+        var streamClass: TranscodeStreamClass?
+        var server: PlaybackHealthServerOutlook?
+
+        if hasPlayablePath, reencodesVideo {
+            let candidate = TranscodeStreamClass.make(
+                video: video,
+                transcodeReasons: transcodeReasons,
+                outputCodec: nil,
+                hardware: input.server?.encoding?.hardwareAcceleration ?? "unknown"
+            )
+
+            streamClass = candidate
+            server = serverOutlook(
+                for: candidate,
+                bitDepth: video?.bitDepth,
+                sourceFramerate: (video?.realFrameRate ?? video?.averageFrameRate).map(Double.init),
+                facts: input.server
+            )
+        }
+
         let tier: PlaybackHealthTier = {
             if !hasPlayablePath {
                 return .poor
             }
 
-            if reencodesVideo {
-                let isLarge = (video?.height ?? 0) > heavyHeightLimit
-                let isToneMapping = reasons.contains(.hdrConversion) || reasons.contains { reason in
-                    if case .dolbyVision = reason {
-                        return true
-                    }
-                    return false
-                }
-
-                return isLarge || isToneMapping ? .poor : .heavy
+            if let server, let streamClass {
+                return Self.tier(for: server, streamClass: streamClass)
             }
 
             return isConverted ? .light : .direct
@@ -282,7 +336,14 @@ enum PlaybackHealthClassifier {
             reasons.append(.highBitrate(mbps: megabits(bitrate)))
         }
 
-        var verdict = PlaybackHealthVerdict(tier: tier, reasons: reasons, target: nil, stalledBefore: input.stalledBefore)
+        var verdict = PlaybackHealthVerdict(
+            tier: tier,
+            reasons: reasons,
+            target: nil,
+            stalledBefore: input.stalledBefore,
+            streamClass: streamClass,
+            server: server
+        )
 
         if verdict.isBadgeWorthy {
             verdict.target = target(
@@ -295,6 +356,70 @@ enum PlaybackHealthClassifier {
         }
 
         return verdict
+    }
+
+    // MARK: - Server
+
+    /// How the server will keep up with converting this class of video: the measured speed first,
+    /// then what its setup says.
+    static func serverOutlook(
+        for streamClass: TranscodeStreamClass,
+        bitDepth: Int?,
+        sourceFramerate: Double?,
+        facts: ServerPlaybackFacts?
+    ) -> PlaybackHealthServerOutlook {
+        if let speed = facts?.speed(for: streamClass) {
+            let needed = sourceFramerate.flatMap { $0 > 0 ? $0 : nil } ?? PlaybackHealthDiagnoser.fallbackFramerate
+            let fps = speed.medianFPS
+            let fpsValue = Int(fps.rounded())
+            let neededValue = Int(needed.rounded())
+
+            if fps >= needed * smoothSpeedMargin {
+                return .smooth(fps: fpsValue, neededFPS: neededValue)
+            }
+
+            if fps >= needed * PlaybackHealthDiagnoser.framerateTolerance {
+                return .tight(fps: fpsValue, neededFPS: neededValue)
+            }
+
+            return .tooSlow(fps: fpsValue, neededFPS: neededValue)
+        }
+
+        guard let encoding = facts?.encoding else { return .notMeasured }
+        guard encoding.hasHardware else { return .softwareOnly }
+
+        let hardware = encoding.hardwareAcceleration
+
+        if !encoding.decodesInHardware(codec: streamClass.codec, bitDepth: bitDepth) {
+            let isDeep = (bitDepth ?? 8) > 8
+            let format = isDeep ? "\(streamClass.codec.uppercased()) \(bitDepth ?? 10)-bit" : streamClass.codec.uppercased()
+
+            return .softwareFallback(hardware: hardware, gap: .decoding(format))
+        }
+
+        if streamClass.toneMaps, !encoding.hasHardwareToneMapping {
+            return .softwareFallback(hardware: hardware, gap: .toneMapping)
+        }
+
+        if !encoding.hardwareEncoding {
+            return .softwareFallback(hardware: hardware, gap: .encoding)
+        }
+
+        return .hardwareReady(hardware: hardware)
+    }
+
+    /// The tier of a video re-encode. The processor alone is likely too slow for 4K or tone mapping.
+    static func tier(for server: PlaybackHealthServerOutlook, streamClass: TranscodeStreamClass) -> PlaybackHealthTier {
+        switch server {
+        case .hardwareReady, .smooth:
+            .light
+        case .notMeasured, .tight:
+            .heavy
+        case .tooSlow:
+            .poor
+        case .softwareFallback, .softwareOnly:
+            streamClass.is4K || streamClass.toneMaps ? .poor : .heavy
+        }
     }
 
     // MARK: - Target

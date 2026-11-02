@@ -125,9 +125,14 @@ enum LighterCopyStore {
 
     // MARK: - Networking
 
-    static func fetchCustomPrefs(userID: String, client: JellyfinClient) async throws -> [String: String?] {
+    /// The custom prefs of one row: the lighter copy list by default, or the server facts next to it.
+    static func fetchCustomPrefs(
+        userID: String,
+        client: JellyfinClient,
+        preferencesID: String = LighterCopyStore.displayPreferencesID
+    ) async throws -> [String: String?] {
         let request = Request<CouchPrefsDTO>(
-            path: "/DisplayPreferences/\(displayPreferencesID)",
+            path: "/DisplayPreferences/\(preferencesID)",
             query: [
                 ("userId", userID),
                 ("client", Self.client),
@@ -138,11 +143,16 @@ enum LighterCopyStore {
         return response.value.customPrefs
     }
 
-    static func postCustomPrefs(_ customPrefs: [String: String], userID: String, client: JellyfinClient) async throws {
+    static func postCustomPrefs(
+        _ customPrefs: [String: String],
+        userID: String,
+        client: JellyfinClient,
+        preferencesID: String = LighterCopyStore.displayPreferencesID
+    ) async throws {
         let body = DisplayPreferencesDto(
             client: Self.client,
             customPrefs: customPrefs,
-            id: displayPreferencesID,
+            id: preferencesID,
             isRememberIndexing: false,
             isRememberSorting: false,
             isShowBackdrop: true,
@@ -155,7 +165,7 @@ enum LighterCopyStore {
         )
 
         let request = Paths.updateDisplayPreferences(
-            displayPreferencesID: displayPreferencesID,
+            displayPreferencesID: preferencesID,
             userID: userID,
             client: Self.client,
             body

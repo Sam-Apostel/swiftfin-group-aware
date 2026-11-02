@@ -100,13 +100,20 @@ enum PlaybackHealthCheck {
             }
         }
 
+        var serverFacts: ServerPlaybackFacts?
+
+        if let userSession = Container.shared.currentUserSession() {
+            serverFacts = await Container.shared.serverPlaybackFactsStore().facts(for: userSession)
+        }
+
         let input = PlaybackHealthInput(
             mediaSource: decision ?? mediaSource,
             isServerDecision: decision != nil,
             deviceProfile: deviceProfile,
             device: .current,
             maxBitrate: bitrateLimit,
-            stalledBefore: PlaybackHealthMemory.stalls(for: itemID)
+            stalledBefore: PlaybackHealthMemory.stalls(for: itemID),
+            server: serverFacts
         )
 
         return PlaybackHealthClassifier.verdict(for: input)

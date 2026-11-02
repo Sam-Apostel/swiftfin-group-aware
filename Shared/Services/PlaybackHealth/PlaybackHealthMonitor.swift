@@ -65,6 +65,9 @@ final class PlaybackHealthMonitor: ObservableObject {
     private var lastSessionPoll: Date = .distantPast
     private var reportedStallCount = 0
     private var hasShownStutterNote = false
+    /// Full-speed conversion readings of this stream, for the server facts.
+    private var speedFramerates: [Double] = []
+    private var speedClass: TranscodeStreamClass?
 
     private weak var manager: MediaPlayerManager?
     private var playbackItem: MediaPlayerItem?
@@ -129,6 +132,7 @@ final class PlaybackHealthMonitor: ObservableObject {
             startSession(with: newItem)
         } else {
             // Track or bitrate change: same item, new stream.
+            recordSpeed()
             playbackItem = newItem
             isTranscoding = newItem.mediaSource.transcodingURL != nil
             samples = []
@@ -149,6 +153,8 @@ final class PlaybackHealthMonitor: ObservableObject {
         lastSessionPoll = .distantPast
         reportedStallCount = 0
         hasShownStutterNote = false
+        speedFramerates = []
+        speedClass = nil
 
         stallCount = 0
         diagnosis = nil
@@ -163,6 +169,7 @@ final class PlaybackHealthMonitor: ObservableObject {
             report()
         }
 
+        recordSpeed()
         sessionTask?.cancel()
         sessionTask = nil
         item = nil
@@ -258,13 +265,33 @@ final class PlaybackHealthMonitor: ObservableObject {
                 runtimeSeconds: runtime
             )
 
-            self.add(sample)
+            let streamClass = self.playbackItem.map { playbackItem in
+                let urlReasons = PlaybackHealthClassifier.transcodeReasons(in: playbackItem.mediaSource.transcodingURL)
+
+                return TranscodeStreamClass.make(
+                    video: playbackItem.videoStreams.first,
+                    transcodeReasons: urlReasons.union(info.transcodeReasons ?? []),
+                    outputCodec: info.videoCodec,
+                    hardware: info.hardwareAccelerationType?.rawValue ?? HardwareAccelerationType.none.rawValue
+                )
+            }
+
+            self.add(sample, streamClass: streamClass)
         }
     }
 
-    private func add(_ sample: PlaybackHealthTranscodeSample) {
+    private func add(_ sample: PlaybackHealthTranscodeSample, streamClass: TranscodeStreamClass?) {
         latestSample = sample
         samples.append(sample)
+
+        if let streamClass, let framerate = sample.framerate, TranscodeSpeedMeter.isMeasurement(sample) {
+            if streamClass != speedClass {
+                recordSpeed()
+                speedClass = streamClass
+            }
+
+            speedFramerates.append(framerate)
+        }
 
         if samples.count > Self.maxSamples {
             samples.removeFirst(samples.count - Self.maxSamples)
@@ -278,6 +305,26 @@ final class PlaybackHealthMonitor: ObservableObject {
                 playbackRate: manager?.rate ?? 1
             )
         }
+    }
+
+    // MARK: - Server speed
+
+    /// Saves how fast the server converted this stream to the server facts, the fact future verdicts rely on.
+    private func recordSpeed() {
+        let framerates = speedFramerates
+        speedFramerates = []
+
+        guard let streamClass = speedClass,
+              let fps = TranscodeSpeedMeter.sessionFPS(framerates),
+              let userSession = Container.shared.currentUserSession()
+        else { return }
+
+        Container.shared.serverPlaybackFactsStore().record(
+            fps: fps,
+            samples: framerates.count,
+            streamClass: streamClass,
+            userSession: userSession
+        )
     }
 
     // MARK: - Reporting
@@ -300,7 +347,8 @@ final class PlaybackHealthMonitor: ObservableObject {
                 maxBitrate: PlaybackHealthCheck.maxBitrate(for: playbackItem.requestedBitrate),
                 audioStreamIndex: playbackItem.selectedAudioStreamIndex,
                 subtitleStreamIndex: playbackItem.selectedSubtitleStreamIndex,
-                stalledBefore: stallCount
+                stalledBefore: stallCount,
+                server: Container.shared.serverPlaybackFactsStore().cachedFacts(for: userSession)
             )
         )
 

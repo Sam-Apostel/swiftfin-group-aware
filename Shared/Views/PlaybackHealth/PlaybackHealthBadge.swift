@@ -37,16 +37,7 @@ struct PlaybackHealthBadge: View {
     }
 
     private var title: String {
-        guard let verdict else { return "" }
-
-        switch verdict.tier {
-        case .poor:
-            return L10n.PlaybackHealth.badgePoor
-        case .heavy:
-            return L10n.PlaybackHealth.badgeHeavy
-        case .direct, .light:
-            return L10n.PlaybackHealth.badgeStalled
-        }
+        verdict.map(L10n.PlaybackHealth.badgeTitle) ?? ""
     }
 
     var body: some View {

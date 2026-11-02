@@ -26,11 +26,21 @@ struct PlaybackHealthDetailsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(L10n.PlaybackHealth.tierTitle(verdict.tier))
+                        Text(L10n.PlaybackHealth.verdictTitle(verdict))
                             .font(.headline)
 
-                        Text(L10n.PlaybackHealth.tierDescription(verdict.tier))
+                        Text(L10n.PlaybackHealth.verdictDescription(verdict))
                             .foregroundStyle(.secondary)
+                    }
+
+                    if let serverFix = L10n.PlaybackHealth.serverFix(verdict.server) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(L10n.PlaybackHealth.serverFixTitle)
+                                .font(.headline)
+
+                            Text(serverFix)
+                                .foregroundStyle(.secondary)
+                        }
                     }
 
                     if reasons.isNotEmpty || verdict.stalledBefore > 0 {
