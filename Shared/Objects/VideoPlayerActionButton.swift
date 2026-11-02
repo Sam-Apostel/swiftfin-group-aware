@@ -30,7 +30,7 @@ enum VideoPlayerActionButton: String, CaseIterable, Displayable, Equatable, Iden
         case .audio:
             L10n.audio
         case .audioOffset:
-            L10n.audioOffset
+            L10n.AVSync.fixAudioSync
         case .autoPlay:
             L10n.autoPlay
         case .pictureInPicture:

@@ -183,8 +183,19 @@ extension VideoPlayer {
         }
 
         private(set) var guestSupplement: any MediaPlayerSupplement? {
-            didSet { observeSupplementActions() }
+            didSet {
+                observeSupplementActions()
+
+                // Leaving the sync studio without saving (Back, swipe, tapping away) restores the offset
+                if guestSupplement == nil {
+                    syncStudio?.cancel()
+                }
+            }
         }
+
+        /// The open sync studio, which takes over some remote buttons while it's presented.
+        @ObservationIgnored
+        weak var syncStudio: SyncStudioModel?
 
         var supplements: [any MediaPlayerSupplement] {
             access(keyPath: \.supplements)

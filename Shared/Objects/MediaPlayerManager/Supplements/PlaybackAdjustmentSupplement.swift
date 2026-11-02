@@ -74,10 +74,6 @@ extension PlaybackAdjustmentSupplement {
 
 extension PlaybackAdjustmentSupplement {
 
-    static var audioOffset: Self {
-        offset(id: "PlaybackAdjustment-audioOffset", title: L10n.audioOffset, keyPath: \.audioOffset)
-    }
-
     static var subtitleOffset: Self {
         offset(id: "PlaybackAdjustment-subtitleOffset", title: L10n.subtitleOffset, keyPath: \.subtitleOffset)
     }

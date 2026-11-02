@@ -62,6 +62,7 @@ extension VideoPlayer.PlaybackControls.Toolbar {
             }
 
             if manager.item.isLiveStream {
+                filteredButtons.removeAll { $0 == .audioOffset }
                 filteredButtons.removeAll { $0 == .autoPlay }
                 filteredButtons.removeAll { $0 == .playbackSpeed }
                 filteredButtons.removeAll { $0 == .playbackSettings }

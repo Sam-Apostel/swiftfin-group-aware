@@ -106,6 +106,8 @@ final class MediaPlayerManager: ViewModel {
             if let playbackItem {
                 if oldValue?.baseItem.id != playbackItem.baseItem.id || oldValue == nil {
                     resetPlaybackOffsets()
+                    // Apply the file's saved audio sync fix on top of the reset
+                    avSync.itemDidChange(playbackItem)
                 }
                 self.item = playbackItem.baseItem
                 seconds = playbackItem.baseItem.startSeconds ?? .zero
@@ -151,6 +153,9 @@ final class MediaPlayerManager: ViewModel {
             (proxy as? MediaPlayerOffsetConfigurable)?.setSubtitleOffset(subtitleOffset)
         }
     }
+
+    /// Applies the saved audio sync fix of the playing file (see the sync studio).
+    private(set) lazy var avSync = AVSyncController(manager: self)
 
     func applyPlaybackOffsets() {
         guard let proxy = proxy as? MediaPlayerOffsetConfigurable else { return }
