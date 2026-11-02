@@ -145,6 +145,10 @@ extension MPVMediaPlayerProxy {
             proxy.isBuffering.value = true
             proxy.videoSize.value = .zero
 
+            if !item.isOffline, PlaybackHealthMemory.isSteadyPlayback(for: item.baseItem.id) {
+                proxy.setSteadyPlayback(true)
+            }
+
             let start = max(.zero, (item.baseItem.startSeconds ?? .zero) - .seconds(Defaults[.VideoPlayer.resumeOffset]))
             player.load(item.url, autoPlay: manager.playbackRequestStatus == .playing, startTime: item.baseItem.isLiveStream ? nil : start)
             proxy.setRate(manager.rate)

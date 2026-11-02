@@ -69,6 +69,7 @@ extension NavigationRoute {
         }
 
         Container.shared.couchPlaybackObserver().attach(to: manager)
+        Container.shared.playbackHealthMonitor().attach(to: manager)
 
         Container.shared
             .mediaPlayerManagerPublisher()

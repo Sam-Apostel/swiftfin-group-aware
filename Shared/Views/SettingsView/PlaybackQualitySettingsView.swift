@@ -26,6 +26,8 @@ struct PlaybackQualitySettingsView: View {
     private var appMaximumBitrateTest
     @Default(.VideoPlayer.Playback.compatibilityMode)
     private var compatibilityMode
+    @Default(.PlaybackHealth.steadyPlayback)
+    private var steadyPlayback
 
     @StoredValue(.User.forceDVTranscode)
     private var forceDVTranscode
@@ -104,6 +106,15 @@ struct PlaybackQualitySettingsView: View {
                     L10n.custom,
                     value: L10n.customDescription
                 )
+            }
+
+            Section {
+                Toggle(
+                    L10n.PlaybackHealth.steadyPlayback,
+                    isOn: $steadyPlayback
+                )
+            } footer: {
+                Text(L10n.PlaybackHealth.steadyPlaybackFooter)
             }
 
             Section {

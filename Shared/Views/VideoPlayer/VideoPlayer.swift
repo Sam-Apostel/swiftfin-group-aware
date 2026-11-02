@@ -60,6 +60,11 @@ struct VideoPlayer: View {
         } playbackControls: {
             PlaybackControls()
         }
+        .overlay(alignment: .top) {
+            PlaybackHealthStutterNote()
+                .padding(.top, safeAreaInsets.top + (UIDevice.isTV ? 140 : 70))
+                .padding(.horizontal, safeAreaInsets.leading)
+        }
         .onAppear {
             manager.proxy = proxy
             manager.start()

@@ -37,6 +37,8 @@ extension ItemView {
                         case .subtitles: Subtitles()
                         }
                     }
+
+                    PlaybackHealthBadge(item: item, mediaSource: selectedMediaSource)
                 }
                 .lineLimit(1)
             }
