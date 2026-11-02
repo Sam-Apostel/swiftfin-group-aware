@@ -215,8 +215,7 @@ final class ReleaseCalendarSync: ObservableObject {
 
     /// Syncs when on and the last sync is older than `minimumInterval`.
     func syncIfNeeded() async {
-        guard isEnabled else { return }
-        guard Date.now.timeIntervalSince(Defaults[.ReleaseCalendar.lastSyncDate]) > Self.minimumInterval else { return }
+        guard isEnabled, Date.now.timeIntervalSince(Defaults[.ReleaseCalendar.lastSyncDate]) > Self.minimumInterval else { return }
 
         await sync()
     }
@@ -243,8 +242,7 @@ final class ReleaseCalendarSync: ObservableObject {
     }
 
     private func performSync() async {
-        guard isEnabled, hasFullAccess else { return }
-        guard Container.shared.currentUserSession() != nil else { return }
+        guard isEnabled, hasFullAccess, Container.shared.currentUserSession() != nil else { return }
 
         let service = Container.shared.releaseCalendarService()
         await service.refresh()
