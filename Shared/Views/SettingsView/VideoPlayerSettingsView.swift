@@ -302,10 +302,15 @@ struct VideoPlayerSettingsView: View {
 
     @ViewBuilder
     private var subtitleSettings: some View {
+        RememberedSubtitlesSection {
+            updateConfiguration { $0.subtitleMode = .default }
+        }
+
         Section(L10n.subtitles) {
             CulturePicker(L10n.preferredLanguage, threeLetterISOLanguageName: Binding(
                 get: { viewModel.user.configuration?.subtitleLanguagePreference },
                 set: { newValue in
+                    SubtitlePreferenceStore.clearLocalPreference(for: viewModel.user.id)
                     updateConfiguration { $0.subtitleLanguagePreference = newValue }
                 }
             ))
@@ -313,6 +318,7 @@ struct VideoPlayerSettingsView: View {
             PlatformPicker(L10n.subtitleMode, selection: Binding(
                 get: { viewModel.user.configuration?.subtitleMode ?? .default },
                 set: { newValue in
+                    SubtitlePreferenceStore.clearLocalPreference(for: viewModel.user.id)
                     updateConfiguration { $0.subtitleMode = newValue }
                 }
             ))

@@ -113,6 +113,11 @@ extension Defaults.Keys {
         /// Hide items from couch home rows that any member has already watched.
         static let hideWatchedByAnyMember: Key<Bool> = AppKey("couchHideWatchedByAnyMember", default: true)
     }
+
+    // MARK: Subtitles
+
+    /// The subtitle choice each user last made in the player, keyed by user ID.
+    static let subtitlePreferences: Key<[String: SubtitlePreference]> = AppKey("subtitlePreferences", default: [:])
 }
 
 // MARK: User
