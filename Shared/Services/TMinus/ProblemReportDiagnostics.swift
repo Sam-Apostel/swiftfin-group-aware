@@ -38,7 +38,7 @@ struct PlaybackReportContext {
 
         var title = item.displayTitle
         if let seriesName = item.seriesName {
-            title = [seriesName, item.seasonEpisodeLabel, item.displayTitle].compactMap { $0 }.joined(separator: " · ")
+            title = [seriesName, item.seasonEpisodeLabel, item.displayTitle].compactMap(\.self).joined(separator: " · ")
         }
 
         self.itemTitle = title
@@ -86,7 +86,7 @@ struct PlaybackReportContext {
     }
 
     private static func describe(_ stream: MediaStream) -> String {
-        var parts = [stream.codec, stream.profile].compactMap { $0 }
+        var parts = [stream.codec, stream.profile].compactMap(\.self)
 
         if let width = stream.width, let height = stream.height {
             parts.append("\(width)×\(height)")
@@ -112,7 +112,7 @@ struct PlaybackReportContext {
             Line(label: "Player", value: player),
             Line(label: "Position", value: position),
         ]
-        return all.compactMap { $0 }
+        return all.compactMap(\.self)
     }
 
     /// For `POST /errors`' `extra`.
@@ -166,7 +166,7 @@ enum ProblemReportDiagnostics {
             Line(label: "User", value: userName),
         ]
 
-        return app.compactMap { $0 } + (playback?.lines ?? [])
+        return app.compactMap(\.self) + (playback?.lines ?? [])
     }
 
     /// "iPhone17,1", "AppleTV14,1".

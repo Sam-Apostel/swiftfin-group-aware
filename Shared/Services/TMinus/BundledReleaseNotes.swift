@@ -67,8 +67,8 @@ struct BundledReleaseNotes: Decodable, Equatable {
 
     /// This build's notes, if they haven't been shown yet.
     static var unseen: BundledReleaseNotes? {
-        guard let current, current.notes.isNotEmpty else { return nil }
-        guard UserDefaults.appSuite.string(forKey: lastShownKey) != currentBuild else { return nil }
+        guard let current, current.notes.isNotEmpty,
+              UserDefaults.appSuite.string(forKey: lastShownKey) != currentBuild else { return nil }
 
         return current
     }
