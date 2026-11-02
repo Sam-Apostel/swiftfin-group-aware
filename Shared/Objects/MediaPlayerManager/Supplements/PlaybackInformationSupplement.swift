@@ -231,6 +231,7 @@ extension PlaybackInformationSupplement {
             ScrollView {
                 VStack(alignment: .leading, spacing: 4) {
                     playbackInfoSection
+                    PlaybackHealthInfoSection()
                     videoInfoSection
                     originalMediaInfoSection
                     streamingInfoSection
@@ -247,6 +248,7 @@ extension PlaybackInformationSupplement {
                 HStack(alignment: .top, spacing: 24) {
                     VStack(alignment: .leading, spacing: 4) {
                         playbackInfoSection
+                        PlaybackHealthInfoSection()
                         videoInfoSection
                         streamingInfoSection
                         transcodeReasonsSection

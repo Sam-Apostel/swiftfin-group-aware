@@ -27,6 +27,10 @@ struct AdminDashboardView: View {
                 router.route(to: .activeSessions)
             }
 
+            ChevronButton(L10n.PlaybackHealth.lighterCopies) {
+                router.route(to: .lighterCopies)
+            }
+
             Section(L10n.activity) {
                 ChevronButton(L10n.activity) {
                     router.route(to: .activity)

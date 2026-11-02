@@ -278,6 +278,10 @@ extension AVMediaPlayerProxy {
         let playerItem = AVPlayerItem(url: item.url)
         playerItem.externalMetadata = item.baseItem.avMetadata
 
+        if !item.isOffline, PlaybackHealthMemory.isSteadyPlayback(for: item.baseItem.id) {
+            playerItem.preferredForwardBufferDuration = PlaybackHealthMemory.steadyForwardBufferSeconds
+        }
+
         removeItemObservers()
         addTimeObserver()
 

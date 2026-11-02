@@ -200,6 +200,11 @@ class VLCMediaPlayerProxy: VideoMediaPlayerLayoutConfigurable,
                 media.addOption(":freetype-color=\(color)")
             }
 
+            // Steady playback: read further ahead for items that stalled before on this device.
+            if !item.isOffline, PlaybackHealthMemory.isSteadyPlayback(for: item.baseItem.id) {
+                media.addOption(":network-caching=\(PlaybackHealthMemory.steadyVLCNetworkCachingMilliseconds)")
+            }
+
             try player.play(media)
             setSubtitleConfiguration(subtitleConfiguration)
         } catch {
