@@ -288,9 +288,8 @@ struct ServerPlaybackFacts: Codable, Equatable {
         }
 
         if let hardware = encoding?.hardwareAcceleration {
-            return candidates
-                .filter { $0.streamClass.hardware == hardware }
-                .max { $0.lastSeen < $1.lastSeen }
+            let matching = candidates.filter { $0.streamClass.hardware == hardware }
+            return matching.max { $0.lastSeen < $1.lastSeen }
         }
 
         return candidates.max { $0.lastSeen < $1.lastSeen }
@@ -375,9 +374,8 @@ enum ServerPlaybackFactsSync {
             result[encodingKey] = String(data: data, encoding: .utf8)
         }
 
-        let kept = facts.speeds.values
-            .sorted { $0.lastSeen > $1.lastSeen }
-            .prefix(maxSpeeds)
+        let summaries = Array(facts.speeds.values)
+        let kept = summaries.sorted { $0.lastSeen > $1.lastSeen }.prefix(maxSpeeds)
 
         for summary in kept {
             if let data = try? encoder.encode(summary) {
