@@ -146,7 +146,7 @@ final class FourKReadinessProbe: ObservableObject {
         }
     }
 
-    static func link(for path: NWPath) -> FourKNetworkFacts.Link {
+    nonisolated static func link(for path: NWPath) -> FourKNetworkFacts.Link {
         guard path.status == .satisfied else { return .offline }
 
         if path.usesInterfaceType(.wiredEthernet) {
