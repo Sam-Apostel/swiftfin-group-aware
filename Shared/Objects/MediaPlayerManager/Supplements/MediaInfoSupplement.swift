@@ -38,6 +38,9 @@ extension MediaInfoSupplement {
         @EnvironmentObject
         private var manager: MediaPlayerManager
 
+        @Router
+        private var router
+
         @State
         private var item: BaseItemDto
 
@@ -140,6 +143,24 @@ extension MediaInfoSupplement {
             .frame(height: UIDevice.isTV ? 80 : 40)
         }
 
+        /// Opens "Report a problem" with what's playing attached, and pauses meanwhile.
+        private var reportProblemButton: some View {
+            Button {
+                let playback = PlaybackReportContext(manager: manager)
+                manager.setPlaybackRequestStatus(status: .paused)
+                viewState.selectedSupplementID = nil
+                router.route(to: .reportPlaybackProblem(playback))
+            } label: {
+                Label(L10n.ReportProblem.fromPlayer, systemImage: "exclamationmark.bubble")
+                    .font(.subheadline)
+                    .fontWeight(.semibold)
+                    .lineLimit(1)
+                    .padding(.horizontal)
+            }
+            .buttonStyle(.supplementAction)
+            .frame(height: UIDevice.isTV ? 80 : 40)
+        }
+
         // TODO: may need to be a layout for correct overview frame
         //       with scrolling if too long
         var iOSView: some View {
@@ -193,6 +214,9 @@ extension MediaInfoSupplement {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical)
                 }
+
+                reportProblemButton
+                    .frame(maxWidth: .infinity)
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
             .edgePadding()
@@ -236,6 +260,10 @@ extension MediaInfoSupplement {
                     accessoryView
                         .font(.caption)
                         .foregroundStyle(.secondary)
+
+                    reportProblemButton
+                        .fixedSize(horizontal: true, vertical: false)
+                        .padding(.top, 5)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 

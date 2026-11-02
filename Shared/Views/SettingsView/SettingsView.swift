@@ -272,6 +272,20 @@ struct SettingsView: View {
             ) {
                 router.route(to: .aboutApp)
             }
+
+            ChevronButton(
+                L10n.WhatsNew.title,
+                systemName: "sparkles"
+            ) {
+                router.route(to: .whatsNew)
+            }
+
+            ChevronButton(
+                L10n.ReportProblem.title,
+                systemName: "exclamationmark.bubble.fill"
+            ) {
+                router.route(to: .reportProblem)
+            }
         }
     }
 }

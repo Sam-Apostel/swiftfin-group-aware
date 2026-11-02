@@ -14,7 +14,8 @@ To sign with an API key instead (role **Admin**, which cloud-managed signing nee
 
 ## Running
 
-- Manually: Actions ▸ TestFlight ✈️ ▸ Run workflow (platform, optional version and build number).
-- On every push to `main`: set the repository variable `TESTFLIGHT_ON_PUSH` to `true`.
+- Daily at 17:43 UTC, only when the app changed since the last TestFlight build. Every successful upload is tagged `testflight/<build>`, and the next run compares against the newest tag. Changes under `.github/`, `Documentation/` and Markdown files don't count.
+- Manually: Actions ▸ TestFlight ✈️ ▸ Run workflow (platform, optional version and build number). Tick **force** to ship without app changes.
+- From T-Minus: the project's release target is this workflow, so T-Minus' **Ship** button starts it, sending `force`.
 
 The build number defaults to the UTC time (`yyyymmddHHMM`), so it always increases, including alongside uploads made from Xcode. The version defaults to the project's `MARKETING_VERSION`.
