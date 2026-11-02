@@ -101,7 +101,9 @@ final class AVSyncController {
     private func observeSeconds() {
         guard secondsCancellable == nil, let manager else { return }
 
-        secondsCancellable = manager.secondsBox.$value
+        let secondsPublisher = manager.secondsBox.$value
+
+        secondsCancellable = secondsPublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] seconds in
                 self?.secondsDidChange(seconds)

@@ -342,7 +342,6 @@ private struct SyncStudioView: PlatformView {
 
 private extension View {
 
-    @ViewBuilder
     func syncStudioFocus(_ id: String) -> some View {
         #if os(tvOS)
         coordinatedFocus(id)
@@ -351,7 +350,6 @@ private extension View {
         #endif
     }
 
-    @ViewBuilder
     func syncStudioFocusSection() -> some View {
         #if os(tvOS)
         focusSection()
@@ -361,7 +359,6 @@ private extension View {
     }
 
     /// Clicking left or right on the remote steps the picture one frame. Swipes slide the sound.
-    @ViewBuilder
     func syncStudioFrameStepping(viewState: VideoPlayer.ViewState, model: SyncStudioModel) -> some View {
         #if os(tvOS)
         onReceive(viewState.containerView?.onPressEvent ?? .init()) { press in

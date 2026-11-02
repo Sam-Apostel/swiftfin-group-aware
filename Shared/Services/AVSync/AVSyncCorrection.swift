@@ -97,14 +97,20 @@ struct AVSyncCorrection: Equatable, Sendable {
     /// - Two points: the new point replaces the closer one. If the two are then too
     ///   close, only the new point is kept.
     func adding(_ point: Point) -> AVSyncCorrection {
-        let newPoints = points.count < 2
-            ? (addsSecondPoint(at: point.seconds) ? points + [point] : [point])
-            : replacingClosestPoint(with: point)
+        let newPoints = nextPoints(adding: point)
 
         return AVSyncCorrection(points: newPoints) ?? AVSyncCorrection(
             constantOffsetMilliseconds: point.offsetMilliseconds,
             at: point.seconds
         )
+    }
+
+    private func nextPoints(adding point: Point) -> [Point] {
+        if points.count >= 2 {
+            return replacingClosestPoint(with: point)
+        }
+
+        return addsSecondPoint(at: point.seconds) ? points + [point] : [point]
     }
 
     private func replacingClosestPoint(with point: Point) -> [Point] {
