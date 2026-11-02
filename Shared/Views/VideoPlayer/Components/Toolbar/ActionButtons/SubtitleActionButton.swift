@@ -30,7 +30,22 @@ extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
         }
 
         private func content(playbackItem: MediaPlayerItem) -> some View {
-            Picker(L10n.subtitles, selection: $selectedSubtitleStreamIndex) {
+            Picker(
+                L10n.subtitles,
+                selection: Binding(
+                    get: { selectedSubtitleStreamIndex },
+                    set: { newValue in
+                        selectedSubtitleStreamIndex = newValue
+
+                        // Only the user's own picks are remembered, not tracks the app sets.
+                        SubtitlePreferenceStore.recordUserSelection(
+                            index: newValue,
+                            in: playbackItem.subtitleStreams,
+                            userSession: manager.userSession
+                        )
+                    }
+                )
+            ) {
                 ForEach(playbackItem.subtitleStreams.prepending(.none), id: \.index) { stream in
                     Text(stream.displayTitle ?? L10n.unknown)
                         .tag(stream.index as Int?)
