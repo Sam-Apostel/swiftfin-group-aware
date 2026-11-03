@@ -14,6 +14,7 @@ import SwiftVLC
 
 @MainActor
 class VLCMediaPlayerProxy: VideoMediaPlayerLayoutConfigurable,
+    MediaPlayerFrameStepping,
     MediaPlayerOffsetConfigurable,
     MediaPlayerSubtitleConfigurable
 {
@@ -136,6 +137,11 @@ class VLCMediaPlayerProxy: VideoMediaPlayerLayoutConfigurable,
         } catch {
             log(error)
         }
+    }
+
+    /// A paused seek lands on whatever frame libVLC finds nearby, often the same one as before.
+    func showNextFrame() {
+        player.nextFrame()
     }
 
     func setSubtitleConfiguration(_ configuration: SubtitleConfiguration) {
@@ -288,7 +294,7 @@ extension VLCMediaPlayerProxy {
                         case .playing:
                             proxy.applyPendingStartTimeIfPossible()
                             proxy.isBuffering.value = false
-                            manager.setPlaybackRequestStatus(status: .playing)
+                            manager.playerDidReport(status: .playing)
                             proxy.setRate(manager.rate)
                             playbackItem.switchTrack(type: .audio, index: playbackItem.selectedAudioStreamIndex)
                             playbackItem.switchTrack(type: .subtitle, index: playbackItem.selectedSubtitleStreamIndex)
@@ -296,7 +302,7 @@ extension VLCMediaPlayerProxy {
 
                         case .paused:
                             proxy.isBuffering.value = false
-                            manager.setPlaybackRequestStatus(status: .paused)
+                            manager.playerDidReport(status: .paused)
 
                         case .idle, .stopped, .stopping: ()
                         }

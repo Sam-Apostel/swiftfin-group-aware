@@ -22,6 +22,8 @@ extension VideoPlayer.PlaybackControls.Toolbar.ActionButtons {
 
         var body: some View {
             Button {
+                guard viewState.syncStudio == nil, !viewState.isGestureLocked else { return }
+
                 // Opening the studio pauses playback and remembers where
                 let model = SyncStudioModel(manager: manager, viewState: viewState)
                 viewState.presentGuestSupplement(SyncStudioSupplement(model: model))

@@ -83,16 +83,11 @@ extension VideoPlayer {
                 viewState.visibleElements.contains(.dimming)
             }
 
-            /// The sync studio needs to see the paused frame clearly.
-            private var shouldPresentFlatDimOverlay: Bool {
-                shouldPresentDimOverlay && viewState.selectedSupplementID != SyncStudioSupplement.supplementID
-            }
-
             var body: some View {
                 VideoViewport(videoSize: videoSize) { videoLayout in
                     player(videoLayout)
                         #if os(iOS)
-                            .overlay(Color.black.opacity(shouldPresentFlatDimOverlay ? 0.5 : 0.0))
+                            .overlay(Color.black.opacity(shouldPresentDimOverlay ? 0.5 : 0.0))
                         #endif
                         .overlay {
                             Group {
@@ -323,6 +318,10 @@ extension VideoPlayer {
             let isCompact = isCompact ?? viewState.isCompact
             let availableHeight = availableSupplementHeight
 
+            if viewState.isPresentingSyncStudio {
+                return min(availableHeight, SyncStudioSupplement.contentHeight(in: view.bounds.size) + view.safeAreaInsets.bottom)
+            }
+
             if !isCompact, viewState.selectedSupplement?.presentationStyle == .expanded {
                 return availableHeight
             }
@@ -358,7 +357,22 @@ extension VideoPlayer {
         }
 
         private var compactPlayerBottomOffset: CGFloat {
-            compactPlayerOverlap ?? dismissedSupplementContainerOffset
+            if viewState.isPresentingSyncStudio {
+                return 0
+            }
+
+            return compactPlayerOverlap ?? dismissedSupplementContainerOffset
+        }
+
+        /// The sync studio is about the picture: nothing may cover it, on any screen.
+        private func updatePlayerAnchors(isCompact: Bool) {
+            if isCompact || viewState.isPresentingSyncStudio {
+                playerRegularBottomAnchor?.isActive = false
+                playerCompactBottomAnchor?.isActive = true
+            } else {
+                playerCompactBottomAnchor?.isActive = false
+                playerRegularBottomAnchor?.isActive = true
+            }
         }
 
         private var compactPlayerOverlap: CGFloat? {
@@ -549,6 +563,7 @@ extension VideoPlayer {
             supplementHeightAnchor.constant = presentedOffset
             supplementBottomAnchor.constant = didPresent ? -presentedOffset : -dismissedSupplementContainerOffset
 
+            updatePlayerAnchors(isCompact: viewState.isCompact)
             playerCompactBottomAnchor.constant = compactPlayerBottomOffset
             viewState.centerOffsetBox.value = centerOffset
 
@@ -647,8 +662,7 @@ extension VideoPlayer {
                 playerView.topAnchor.constraint(equalTo: view.topAnchor),
             ])
 
-            playerCompactBottomAnchor?.isActive = viewState.isCompact
-            playerRegularBottomAnchor?.isActive = !viewState.isCompact
+            updatePlayerAnchors(isCompact: viewState.isCompact)
         }
 
         private func setupOnLoadViews() {
@@ -770,13 +784,7 @@ extension VideoPlayer {
 
             let presentedOffset = supplementContainerOffset(isCompact: isCompact)
 
-            if isCompact {
-                playerRegularBottomAnchor?.isActive = false
-                playerCompactBottomAnchor.isActive = true
-            } else {
-                playerCompactBottomAnchor.isActive = false
-                playerRegularBottomAnchor?.isActive = true
-            }
+            updatePlayerAnchors(isCompact: isCompact)
 
             supplementBottomAnchor.constant = viewState
                 .isPresentingSupplement ? -presentedOffset : -dismissedSupplementContainerOffset

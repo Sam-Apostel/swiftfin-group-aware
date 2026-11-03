@@ -41,7 +41,7 @@ private struct SyncWaveformStrip: View {
     let isEditing: Bool
 
     private var rulerHeight: CGFloat {
-        UIDevice.isTV ? 34 : 18
+        UIDevice.isTV ? 50 : 18
     }
 
     /// Ruler labels every second on iPhone and iPad, every half second on TV.

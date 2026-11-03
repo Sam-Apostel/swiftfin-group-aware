@@ -64,6 +64,12 @@ protocol MediaPlayerOffsetConfigurable {
     func setSubtitleOffset(_ seconds: Duration)
 }
 
+/// A player that can show the next frame while paused, more exactly than a seek can.
+@MainActor
+protocol MediaPlayerFrameStepping {
+    func showNextFrame()
+}
+
 @MainActor
 protocol MediaPlayerPictureInPictureCapable: AnyObject {
     var isPiPActive: PublishedBox<Bool> { get }
