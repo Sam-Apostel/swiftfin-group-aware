@@ -154,6 +154,26 @@ final class MediaPlayerManager: ViewModel {
         }
     }
 
+    /// While held, what the player reports about play and pause is not taken as a request.
+    private var playerStatusHolds = 0
+
+    /// The sync studio decides play and pause, and the player's reports lag behind its
+    /// seeks and requests: a late "paused" would stop the check it just started.
+    func holdPlayerStatus() {
+        playerStatusHolds += 1
+    }
+
+    func releasePlayerStatus() {
+        playerStatusHolds = max(0, playerStatusHolds - 1)
+    }
+
+    /// For the player's own state changes, as opposed to someone asking it to play or pause.
+    func playerDidReport(status: PlaybackRequestStatus) {
+        guard playerStatusHolds == 0 else { return }
+
+        setPlaybackRequestStatus(status: status)
+    }
+
     /// Applies the saved audio sync fix of the playing file (see the sync studio).
     private(set) lazy var avSync = AVSyncController(manager: self)
 

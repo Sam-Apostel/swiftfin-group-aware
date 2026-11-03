@@ -194,10 +194,10 @@ extension MPVMediaPlayerProxy {
                 loadedSubtitleIndexes.removeAll()
 
             case .playing:
-                manager.setPlaybackRequestStatus(status: .playing)
+                manager.playerDidReport(status: .playing)
 
             case .paused:
-                manager.setPlaybackRequestStatus(status: .paused)
+                manager.playerDidReport(status: .paused)
 
             case .ended:
                 guard manager.playbackItem?.baseItem.isLiveStream == false else { return }

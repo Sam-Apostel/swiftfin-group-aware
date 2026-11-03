@@ -73,6 +73,7 @@ final class SyncStudioModel: ObservableObject {
     private var waveformTask: Task<Void, Never>?
     private var waveformRange: ClosedRange<Double>?
     private var previewTask: Task<Void, Never>?
+    private var previewReturnTask: Task<Void, Never>?
 
     private var pendingSeek: Double?
     private var seekTask: Task<Void, Never>?
@@ -106,6 +107,7 @@ final class SyncStudioModel: ObservableObject {
         self.frameDuration = 1 / clamp(frameRate.isFinite ? frameRate : 24, min: 10, max: 120)
 
         manager.avSync.suspend()
+        manager.holdPlayerStatus()
         manager.setPlaybackRequestStatus(status: .paused)
         viewState.syncStudio = self
 
@@ -182,15 +184,21 @@ final class SyncStudioModel: ObservableObject {
             .store(in: &cancellables)
     }
 
-    /// The players report their state back to the manager, sometimes late: a stale "paused" after
-    /// a seek would otherwise stop a check, and anything else can ask to play. Only the studio decides.
+    /// A remote command or a keyboard shortcut can still ask to play or pause. Only the studio
+    /// decides, and a request made while another is on its way can get lost, so it checks again.
     private func holdPlaybackStatus() {
         guard !isFinished, let manager else { return }
 
         let wanted: MediaPlayerManager.PlaybackRequestStatus = isPreviewing ? .playing : .paused
 
-        if manager.playbackRequestStatus != wanted {
-            manager.setPlaybackRequestStatus(status: wanted)
+        guard manager.playbackRequestStatus != wanted else { return }
+
+        manager.setPlaybackRequestStatus(status: wanted)
+
+        Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(200))
+
+            self?.holdPlaybackStatus()
         }
     }
 
@@ -251,6 +259,8 @@ final class SyncStudioModel: ObservableObject {
     }
 
     private func cancelSeeks() {
+        previewReturnTask?.cancel()
+        previewReturnTask = nil
         pendingSeek = nil
         seekTask?.cancel()
         seekTask = nil
@@ -282,14 +292,28 @@ final class SyncStudioModel: ObservableObject {
 
         stopPreview()
 
-        let target = clampedToFilm(videoSeconds + (forward ? frameDuration : -frameDuration))
+        let stepper = manager?.proxy as? MediaPlayerFrameStepping
+
+        // Without a way to step back exactly, one frame back may land on the same picture.
+        // Two always move it, and the next frame button gets back the one that's skipped.
+        let distance = forward ? frameDuration : -frameDuration * (stepper == nil ? 1 : 2)
+        let target = clampedToFilm(videoSeconds + distance)
         guard target != videoSeconds else { return }
 
         videoSeconds = target
+        loadWaveform(at: target, debounced: true)
+
+        if forward, seekTask == nil, let stepper {
+            seekSettleTask?.cancel()
+            seekSettleTask = nil
+            stepper.showNextFrame()
+            settleSeek()
+            return
+        }
+
         // An exact seek shows the first frame at or after the target. Aiming a little early
         // keeps rounding from skipping past the next frame.
         requestSeek(to: max(0, target - frameDuration * 0.1))
-        loadWaveform(at: target, debounced: true)
     }
 
     // MARK: - Sound
@@ -413,6 +437,15 @@ final class SyncStudioModel: ObservableObject {
 
         holdPlaybackStatus()
         requestSeek(to: videoSeconds)
+
+        // A seek that crosses paths with the pause moves the clock but not the picture
+        previewReturnTask = Task { [weak self] in
+            try? await Task.sleep(for: .milliseconds(350))
+
+            guard !Task.isCancelled, let self, !isFinished, !isPreviewing else { return }
+
+            requestSeek(to: videoSeconds)
+        }
     }
 
     // MARK: - Save, reset, cancel
@@ -511,6 +544,13 @@ final class SyncStudioModel: ObservableObject {
         manager.avSync.resume()
         manager.setPlaybackRequestStatus(status: wasPlaying ? .playing : .paused)
 
+        // The player still has reports on their way from before this
+        Task { [weak manager] in
+            try? await Task.sleep(for: .seconds(1))
+
+            manager?.releasePlayerStatus()
+        }
+
         dismiss()
     }
 
@@ -520,6 +560,7 @@ final class SyncStudioModel: ObservableObject {
 
         close()
 
+        manager?.releasePlayerStatus()
         manager?.audioOffset = originalOffset
         manager?.avSync.resume()
 

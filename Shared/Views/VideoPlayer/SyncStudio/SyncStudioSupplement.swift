@@ -24,11 +24,11 @@ struct SyncStudioSupplement: MediaPlayerSupplement {
     /// The height of the panel's content on a screen of this size. The picture gets the rest.
     static func contentHeight(in size: CGSize) -> CGFloat {
         if UIDevice.isTV {
-            return 470
+            return 490
         }
 
-        if size.height < 500 {
-            return 196
+        if UIDevice.isPhone, !size.isPortrait {
+            return 204
         }
 
         return size.width < 560 ? 372 : 316
@@ -59,9 +59,6 @@ private struct SyncStudioView: PlatformView {
 
     @Environment(\.safeAreaInsets)
     private var safeAreaInsets
-
-    @Environment(\.verticalSizeClass)
-    private var verticalSizeClass
 
     @Environment(VideoPlayer.ViewState.self)
     private var viewState
@@ -99,7 +96,7 @@ private struct SyncStudioView: PlatformView {
 
     /// An iPhone on its side: every point of height goes to the strips.
     private var isShort: Bool {
-        !UIDevice.isTV && verticalSizeClass == .compact
+        UIDevice.isPhone && !viewState.isCompact
     }
 
     private var spacing: CGFloat {
@@ -120,7 +117,7 @@ private struct SyncStudioView: PlatformView {
 
     private var waveformHeight: CGFloat {
         if UIDevice.isTV {
-            return 130
+            return 150
         }
 
         return isShort ? 56 : 76
