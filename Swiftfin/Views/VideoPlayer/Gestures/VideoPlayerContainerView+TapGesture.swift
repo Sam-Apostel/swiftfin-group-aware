@@ -45,6 +45,9 @@ extension VideoPlayer.UIContainerViewController {
         unitPoint: UnitPoint,
         count: Int
     ) {
+        // A tap that just misses a button in the sync studio mustn't close it or jump away
+        guard !viewState.isPresentingSyncStudio else { return }
+
         if count == 1 {
             guard checkGestureLock() else { return }
 
@@ -220,6 +223,8 @@ extension VideoPlayer.UIContainerViewController {
         unitPoint: UnitPoint,
         state: UILongPressGestureRecognizer.State
     ) {
+        guard !viewState.isPresentingSyncStudio else { return }
+
         if state == .began {
             viewState.cancelTapGesture()
         }

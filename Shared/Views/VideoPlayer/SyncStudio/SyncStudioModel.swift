@@ -13,15 +13,19 @@ import SwiftUI
 
 /// State of one visit to the sync studio.
 ///
-/// Opening it pauses playback at `pausedSeconds`. The picture can be stepped frame by frame
-/// and the sound slid under it; a check plays only the few seconds around the frame and comes
-/// back. Saving or cancelling resumes playback from `pausedSeconds`.
+/// Opening it pauses playback at `pausedSeconds`. The picture can be scrubbed or stepped frame
+/// by frame and the sound slid under it; a check plays only the few seconds around the frame
+/// and comes back. Saving or cancelling returns to `pausedSeconds` as playback was before.
+///
+/// While the studio is open it owns the player: it holds the player paused (or playing during a
+/// check) against anything else that asks, and follows the position if something else moves it,
+/// like a remote command or a keyboard shortcut.
 @MainActor
 final class SyncStudioModel: ObservableObject {
 
-    enum WaveformState: Equatable {
+    enum WaveformStatus: Equatable {
         case loading
-        case loaded(AVSyncWaveform.Envelope)
+        case ready
         case failed
     }
 
@@ -29,17 +33,26 @@ final class SyncStudioModel: ObservableObject {
     static let visibleSeconds: Double = 6
     /// How far the sound can be slid, in milliseconds.
     static let offsetRange: ClosedRange<Double> = -3000 ... 3000
-    /// How far frame stepping may move away from where playback paused.
-    static let maximumStepSeconds: Double = 3
     /// The check plays from 3 s before the frame to 1 s after it.
     static let previewLeadIn: Double = 3
     static let previewTail: Double = 1
+    /// Staying this far from the end keeps a check or a scrub from ending the film.
+    private static let endMargin: Double = 2
+    /// One seek at a time while scrubbing.
+    private static let seekInterval: Duration = .milliseconds(100)
+    /// How long a seek gets to land before the player's own position is believed again.
+    private static let seekSettle: Duration = .milliseconds(600)
+    private static let seekSettleLimit: TimeInterval = 8
+    /// Fetched beyond what the strip and the slide range can show, to scrub a little without fetching again.
+    private static let waveformSlack: Double = 8
 
     @Published
-    private(set) var waveformState: WaveformState = .loading
+    private(set) var waveformStatus: WaveformStatus = .loading
+    @Published
+    private(set) var envelope: AVSyncWaveform.Envelope?
     /// The candidate offset in the player's convention: positive plays the sound later.
     @Published
-    var offsetMilliseconds: Double
+    private(set) var offsetMilliseconds: Double
     /// The position of the frame on screen.
     @Published
     private(set) var videoSeconds: Double
@@ -50,11 +63,22 @@ final class SyncStudioModel: ObservableObject {
 
     let pausedSeconds: Double
     let frameDuration: Double
+    let runtimeSeconds: Double?
+
+    private let wasPlaying: Bool
+    private let startingItem: MediaPlayerItem?
 
     private var originalOffset: Duration
     private var isFinished = false
-    private var fetchTask: Task<Void, Never>?
+    private var waveformTask: Task<Void, Never>?
+    private var waveformRange: ClosedRange<Double>?
     private var previewTask: Task<Void, Never>?
+
+    private var pendingSeek: Double?
+    private var seekTask: Task<Void, Never>?
+    private var seekSettleTask: Task<Void, Never>?
+
+    private var cancellables: Set<AnyCancellable> = []
 
     private weak var manager: MediaPlayerManager?
     private weak var viewState: VideoPlayer.ViewState?
@@ -66,8 +90,11 @@ final class SyncStudioModel: ObservableObject {
         let seconds = manager.seconds.seconds
         self.pausedSeconds = seconds
         self.videoSeconds = seconds
+        self.wasPlaying = manager.playbackRequestStatus == .playing
+        self.startingItem = manager.playbackItem
         self.originalOffset = manager.audioOffset
         self.correction = manager.avSync.correction
+        self.runtimeSeconds = manager.item.runtime?.seconds
         self.offsetMilliseconds = clamp(
             Double(manager.audioOffset.microseconds) / 1000,
             min: Self.offsetRange.lowerBound,
@@ -82,7 +109,8 @@ final class SyncStudioModel: ObservableObject {
         manager.setPlaybackRequestStatus(status: .paused)
         viewState.syncStudio = self
 
-        loadWaveform()
+        observe(manager)
+        loadWaveform(at: seconds, debounced: false)
     }
 
     // MARK: - Derived
@@ -95,64 +123,238 @@ final class SyncStudioModel: ObservableObject {
         correction?.addsSecondPoint(at: videoSeconds) ?? false
     }
 
-    // MARK: - Waveform
+    /// The film's length as far as the player can be moved.
+    var scrubbableSeconds: Double {
+        guard let runtimeSeconds, runtimeSeconds > Self.endMargin else {
+            return max(videoSeconds, pausedSeconds) + 3600
+        }
 
-    private func loadWaveform() {
+        return runtimeSeconds - Self.endMargin
+    }
+
+    /// Whether the fetched sound covers what the strip shows right now.
+    var isWaveformVisible: Bool {
+        guard let envelope else { return false }
+
+        let centerSeconds = videoSeconds - offsetMilliseconds / 1000
+        return envelope.endSeconds > centerSeconds - Self.visibleSeconds / 2
+            && envelope.startSeconds < centerSeconds + Self.visibleSeconds / 2
+    }
+
+    // MARK: - Holding the player
+
+    private func observe(_ manager: MediaPlayerManager) {
+        manager.$playbackRequestStatus
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.holdPlaybackStatus()
+            }
+            .store(in: &cancellables)
+
+        manager.secondsBox
+            .$value
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.followPlayerPosition()
+            }
+            .store(in: &cancellables)
+
+        manager.$playbackItem
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] item in
+                guard let self, item !== startingItem else { return }
+
+                abandon()
+            }
+            .store(in: &cancellables)
+
+        manager.$state
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] state in
+                guard state == .stopped else { return }
+
+                self?.abandon()
+            }
+            .store(in: &cancellables)
+    }
+
+    /// The players report their state back to the manager, sometimes late: a stale "paused" after
+    /// a seek would otherwise stop a check, and anything else can ask to play. Only the studio decides.
+    private func holdPlaybackStatus() {
+        guard !isFinished, let manager else { return }
+
+        let wanted: MediaPlayerManager.PlaybackRequestStatus = isPreviewing ? .playing : .paused
+
+        if manager.playbackRequestStatus != wanted {
+            manager.setPlaybackRequestStatus(status: wanted)
+        }
+    }
+
+    /// Something other than the studio moved the player, or a seek landed somewhere else than asked.
+    /// Positions from before a seek has landed say nothing, so they wait until it settled.
+    private func followPlayerPosition() {
+        guard !isFinished,
+              !isPreviewing,
+              seekTask == nil,
+              seekSettleTask == nil,
+              let seconds = manager?.seconds.seconds,
+              abs(seconds - videoSeconds) > max(frameDuration * 2, 0.25)
+        else { return }
+
+        videoSeconds = seconds
+        loadWaveform(at: seconds, debounced: true)
+    }
+
+    // MARK: - Seeking
+
+    private func requestSeek(to seconds: Double) {
+        seekSettleTask?.cancel()
+        seekSettleTask = nil
+        pendingSeek = seconds
+
+        guard seekTask == nil else { return }
+
+        seekTask = Task { [weak self] in
+            while let self, !Task.isCancelled, let seconds = pendingSeek {
+                pendingSeek = nil
+                manager?.proxy?.setSeconds(.seconds(seconds))
+
+                try? await Task.sleep(for: Self.seekInterval)
+            }
+
+            guard !Task.isCancelled else { return }
+
+            self?.seekTask = nil
+            self?.settleSeek()
+        }
+    }
+
+    private func settleSeek() {
+        seekSettleTask = Task { [weak self] in
+            try? await Task.sleep(for: Self.seekSettle)
+
+            let deadline = Date.now.addingTimeInterval(Self.seekSettleLimit)
+
+            while !Task.isCancelled, Date.now < deadline, self?.manager?.proxy?.isBuffering.value == true {
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+
+            guard !Task.isCancelled else { return }
+
+            self?.seekSettleTask = nil
+            self?.followPlayerPosition()
+        }
+    }
+
+    private func cancelSeeks() {
+        pendingSeek = nil
+        seekTask?.cancel()
+        seekTask = nil
+        seekSettleTask?.cancel()
+        seekSettleTask = nil
+    }
+
+    private func clampedToFilm(_ seconds: Double) -> Double {
+        clamp(seconds, min: 0, max: scrubbableSeconds)
+    }
+
+    // MARK: - Picture
+
+    func scrub(to seconds: Double) {
+        guard !isFinished, seconds.isFinite else { return }
+
+        stopPreview()
+
+        let target = clampedToFilm(seconds)
+        guard target != videoSeconds else { return }
+
+        videoSeconds = target
+        requestSeek(to: target)
+        loadWaveform(at: target, debounced: true)
+    }
+
+    func stepFrame(forward: Bool) {
+        guard !isFinished else { return }
+
+        stopPreview()
+
+        let target = clampedToFilm(videoSeconds + (forward ? frameDuration : -frameDuration))
+        guard target != videoSeconds else { return }
+
+        videoSeconds = target
+        // An exact seek shows the first frame at or after the target. Aiming a little early
+        // keeps rounding from skipping past the next frame.
+        requestSeek(to: max(0, target - frameDuration * 0.1))
+        loadWaveform(at: target, debounced: true)
+    }
+
+    // MARK: - Sound
+
+    func slideSound(toMilliseconds milliseconds: Double) {
+        guard !isFinished else { return }
+
+        stopPreview()
+        offsetMilliseconds = clamp(milliseconds, min: Self.offsetRange.lowerBound, max: Self.offsetRange.upperBound)
+    }
+
+    private func loadWaveform(at seconds: Double, debounced: Bool) {
+        let margin = Self.visibleSeconds / 2 + Self.offsetRange.upperBound / 1000
+        let needed = max(0, seconds - margin) ... seconds + margin
+
+        if let waveformRange, waveformRange.contains(needed.lowerBound), waveformRange.contains(needed.upperBound) {
+            return
+        }
+
         guard let manager,
               let item = manager.playbackItem,
               let itemID = item.baseItem.id,
               let client = manager.userSession?.client
         else {
-            waveformState = .failed
+            waveformStatus = .failed
             return
         }
 
-        // Room for the visible strip, the full slide range and some frame stepping
-        let margin = Self.visibleSeconds / 2 + Self.offsetRange.upperBound / 1000 + 0.5
-        let startSeconds = max(0, pausedSeconds - margin)
-        let durationSeconds = pausedSeconds + margin - startSeconds
+        let range = max(0, seconds - margin - Self.waveformSlack) ... seconds + margin + Self.waveformSlack
         let mediaSourceID = item.mediaSource.id
         let audioStreamIndex = item.selectedAudioStreamIndex
 
-        fetchTask = Task { [weak self] in
+        waveformTask?.cancel()
+        waveformRange = range
+        waveformStatus = .loading
+
+        waveformTask = Task { [weak self] in
+            if debounced {
+                try? await Task.sleep(for: .milliseconds(300))
+            }
+
+            guard !Task.isCancelled else { return }
+
             do {
                 let envelope = try await AVSyncWaveformFetcher.fetchEnvelope(
                     itemID: itemID,
                     mediaSourceID: mediaSourceID,
                     audioStreamIndex: audioStreamIndex,
-                    startSeconds: startSeconds,
-                    durationSeconds: durationSeconds,
+                    startSeconds: range.lowerBound,
+                    durationSeconds: range.upperBound - range.lowerBound,
                     client: client
                 )
 
                 guard !Task.isCancelled else { return }
 
-                self?.waveformState = .loaded(envelope)
+                self?.envelope = envelope
+                self?.waveformStatus = .ready
             } catch {
                 guard !Task.isCancelled else { return }
 
                 self?.manager?.logger.warning("Audio sync: fetching the waveform failed: \(error.localizedDescription)")
-                self?.waveformState = .failed
+                self?.waveformRange = nil
+                self?.waveformStatus = .failed
             }
         }
-    }
-
-    // MARK: - Frames
-
-    func stepFrame(forward: Bool) {
-        guard !isFinished, let manager else { return }
-
-        if isPreviewing {
-            stopPreview()
-        }
-
-        let target = videoSeconds + (forward ? frameDuration : -frameDuration)
-        let lowerBound = max(0, pausedSeconds - Self.maximumStepSeconds)
-        let upperBound = pausedSeconds + Self.maximumStepSeconds
-
-        videoSeconds = clamp(target, min: lowerBound, max: upperBound)
-        manager.seconds = .seconds(videoSeconds)
-        manager.proxy?.setSeconds(.seconds(videoSeconds))
     }
 
     // MARK: - Check
@@ -170,13 +372,13 @@ final class SyncStudioModel: ObservableObject {
     func startPreview() {
         guard !isFinished, !isPreviewing, let manager, let proxy = manager.proxy else { return }
 
+        cancelSeeks()
         isPreviewing = true
 
         let startSeconds = max(0, videoSeconds - Self.previewLeadIn)
         let endSeconds = videoSeconds + Self.previewTail
 
         manager.audioOffset = .milliseconds(Int64(offsetMilliseconds.rounded()))
-        manager.seconds = .seconds(startSeconds)
         proxy.setSeconds(.seconds(startSeconds))
         manager.setPlaybackRequestStatus(status: .playing)
 
@@ -209,11 +411,8 @@ final class SyncStudioModel: ObservableObject {
 
         isPreviewing = false
 
-        guard let manager else { return }
-
-        manager.setPlaybackRequestStatus(status: .paused)
-        manager.seconds = .seconds(videoSeconds)
-        manager.proxy?.setSeconds(.seconds(videoSeconds))
+        holdPlaybackStatus()
+        requestSeek(to: videoSeconds)
     }
 
     // MARK: - Save, reset, cancel
@@ -256,6 +455,7 @@ final class SyncStudioModel: ObservableObject {
     func resetSaved() {
         guard !isFinished, let manager else { return }
 
+        stopPreview()
         correction = nil
         originalOffset = .zero
         offsetMilliseconds = 0
@@ -285,26 +485,49 @@ final class SyncStudioModel: ObservableObject {
         finish()
     }
 
-    /// Resumes playback from where it paused and closes the studio.
-    private func finish() {
+    /// Stops holding the player and closes the studio.
+    private func close() {
         isFinished = true
-        fetchTask?.cancel()
+        cancellables.removeAll()
+        waveformTask?.cancel()
         previewTask?.cancel()
         previewTask = nil
         isPreviewing = false
+        cancelSeeks()
 
         if let viewState, viewState.syncStudio === self {
             viewState.syncStudio = nil
         }
+    }
+
+    /// Returns to where playback paused, as it was, and closes the studio.
+    private func finish() {
+        close()
 
         guard let manager else { return }
 
         manager.seconds = .seconds(pausedSeconds)
         manager.proxy?.setSeconds(.seconds(pausedSeconds))
         manager.avSync.resume()
-        manager.setPlaybackRequestStatus(status: .playing)
+        manager.setPlaybackRequestStatus(status: wasPlaying ? .playing : .paused)
 
-        if let viewState, viewState.selectedSupplementID == SyncStudioSupplement.supplementID {
+        dismiss()
+    }
+
+    /// The film changed or stopped underneath the studio: there's nothing to return to.
+    private func abandon() {
+        guard !isFinished else { return }
+
+        close()
+
+        manager?.audioOffset = originalOffset
+        manager?.avSync.resume()
+
+        dismiss()
+    }
+
+    private func dismiss() {
+        if let viewState, viewState.isPresentingSyncStudio {
             viewState.hideControls()
         }
     }

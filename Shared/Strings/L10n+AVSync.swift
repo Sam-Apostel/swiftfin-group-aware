@@ -47,7 +47,7 @@ extension L10n {
         // MARK: - Guidance
 
         static let hintTV =
-            "Find a frame with a sound. Swipe to slide the sound under the line, click left or right for a frame, play/pause to check."
+            "Swipe to move the picture or slide the sound under the line. Click left or right for one frame, play/pause to check."
         static let hintPhone = "Find a frame with a sound, then drag the sound under the line."
         static let listening = "Listening…"
         static let waveformFailed = "Couldn't fetch the sound. You can still slide it and check by ear."

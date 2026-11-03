@@ -17,6 +17,23 @@ struct SyncStudioSupplement: MediaPlayerSupplement {
         "\(VideoPlayer.ViewState.Focus.supplementContent(supplementID)).waveform"
     }
 
+    static var pictureFocusID: String {
+        "\(VideoPlayer.ViewState.Focus.supplementContent(supplementID)).picture"
+    }
+
+    /// The height of the panel's content on a screen of this size. The picture gets the rest.
+    static func contentHeight(in size: CGSize) -> CGFloat {
+        if UIDevice.isTV {
+            return 470
+        }
+
+        if size.height < 500 {
+            return 196
+        }
+
+        return size.width < 560 ? 372 : 316
+    }
+
     let model: SyncStudioModel
 
     var id: String {
@@ -43,11 +60,21 @@ private struct SyncStudioView: PlatformView {
     @Environment(\.safeAreaInsets)
     private var safeAreaInsets
 
+    @Environment(\.verticalSizeClass)
+    private var verticalSizeClass
+
     @Environment(VideoPlayer.ViewState.self)
     private var viewState
 
     @ObservedObject
     var model: SyncStudioModel
+
+    @State
+    private var pictureStripSize: CGSize = .zero
+    @State
+    private var scrubStartSeconds: Double?
+    @GestureState
+    private var isScrubbingPicture = false
 
     private typealias Model = SyncStudioModel
 
@@ -65,21 +92,38 @@ private struct SyncStudioView: PlatformView {
         Binding(
             get: { (model.offsetMilliseconds - Model.offsetRange.lowerBound) / sliderUnit },
             set: { newValue in
-                model.offsetMilliseconds = clamp(
-                    newValue * sliderUnit + Model.offsetRange.lowerBound,
-                    min: Model.offsetRange.lowerBound,
-                    max: Model.offsetRange.upperBound
-                )
+                model.slideSound(toMilliseconds: newValue * sliderUnit + Model.offsetRange.lowerBound)
             }
         )
     }
 
+    /// An iPhone on its side: every point of height goes to the strips.
+    private var isShort: Bool {
+        !UIDevice.isTV && verticalSizeClass == .compact
+    }
+
     private var spacing: CGFloat {
-        UIDevice.isTV ? 20 : 8
+        if UIDevice.isTV {
+            return 20
+        }
+
+        return isShort ? 6 : 10
+    }
+
+    private var pictureStripHeight: CGFloat {
+        if UIDevice.isTV {
+            return 72
+        }
+
+        return isShort ? 38 : 48
     }
 
     private var waveformHeight: CGFloat {
-        UIDevice.isTV ? 150 : 76
+        if UIDevice.isTV {
+            return 130
+        }
+
+        return isShort ? 56 : 76
     }
 
     // MARK: - Header
@@ -101,22 +145,6 @@ private struct SyncStudioView: PlatformView {
             .controlSize(UIDevice.isTV ? .regular : .small)
         }
         .font(UIDevice.isTV ? .callout : .caption)
-    }
-
-    private var header: some View {
-        HStack(alignment: .center, spacing: spacing) {
-            Text(L10n.AVSync.fixAudioSync)
-                .font(UIDevice.isTV ? .title3.weight(.bold) : .subheadline.weight(.bold))
-                .fontDesign(.rounded)
-                .lineLimit(1)
-
-            Spacer(minLength: 0)
-
-            if model.correction != nil {
-                savedStatus
-            }
-        }
-        .syncStudioFocusSection()
     }
 
     // MARK: - Direction
@@ -153,7 +181,7 @@ private struct SyncStudioView: PlatformView {
         }
     }
 
-    private var directionRow: some View {
+    private var direction: some View {
         HStack(spacing: UIDevice.isTV ? 16 : 8) {
             SyncDirectionDiagram(offsetMilliseconds: model.offsetMilliseconds)
                 .frame(width: UIDevice.isTV ? 150 : 72, height: UIDevice.isTV ? 54 : 28)
@@ -162,50 +190,145 @@ private struct SyncStudioView: PlatformView {
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-
-            Spacer(minLength: 0)
         }
         .font(UIDevice.isTV ? .callout : .footnote)
         .accessibilityElement(children: .combine)
     }
 
-    // MARK: - Waveform
+    /// The saved fix sits beside the direction where there's room, above it where there isn't.
+    @ViewBuilder
+    private var statusRow: some View {
+        if model.correction == nil {
+            HStack(spacing: 0) {
+                direction
 
-    private var envelope: AVSyncWaveform.Envelope? {
-        if case let .loaded(envelope) = model.waveformState {
-            return envelope
+                Spacer(minLength: 0)
+            }
+        } else {
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: spacing) {
+                    direction
+
+                    Spacer(minLength: spacing)
+
+                    savedStatus
+                }
+
+                VStack(alignment: .leading, spacing: spacing) {
+                    savedStatus
+
+                    direction
+                }
+            }
+            .syncStudioFocusSection()
         }
-        return nil
     }
+
+    // MARK: - Picture
+
+    private var pictureSeconds: Binding<Double> {
+        Binding(
+            get: { model.videoSeconds },
+            set: { model.scrub(to: $0) }
+        )
+    }
+
+    private var secondsPerPoint: Double {
+        pictureStripSize.width > 0 ? SyncPictureStrip.visibleSeconds / pictureStripSize.width : 0
+    }
+
+    #if os(iOS)
+    /// Dragging moves the ruler under the line, and a flick carries on past the finger.
+    private var scrubGesture: some Gesture {
+        DragGesture(minimumDistance: 1)
+            .updating($isScrubbingPicture) { _, isScrubbing, _ in
+                isScrubbing = true
+            }
+            .onChanged { value in
+                let start = scrubStartSeconds ?? model.videoSeconds
+                scrubStartSeconds = start
+                model.scrub(to: start - value.translation.width * secondsPerPoint)
+            }
+            .onEnded { value in
+                let carry = value.predictedEndTranslation.width - value.translation.width
+
+                if abs(carry) > 40 {
+                    model.scrub(to: model.videoSeconds - carry * secondsPerPoint)
+                }
+            }
+    }
+    #endif
+
+    private var pictureStrip: some View {
+        Group {
+            #if os(tvOS)
+            SliderContainer(
+                value: pictureSeconds,
+                total: model.scrubbableSeconds
+            )
+            .sliderContainerStyle(SyncPictureSliderStyle())
+            .syncStudioFocus(SyncStudioSupplement.pictureFocusID)
+            .focusSection()
+            #else
+            SyncPictureStrip(
+                seconds: model.videoSeconds,
+                isFocused: false,
+                isEditing: isScrubbingPicture
+            )
+            .contentShape(Rectangle())
+            .highPriorityGesture(scrubGesture)
+            .trackingSize($pictureStripSize)
+            .onChange(of: isScrubbingPicture) {
+                if !isScrubbingPicture {
+                    scrubStartSeconds = nil
+                }
+            }
+            #endif
+        }
+        .frame(height: pictureStripHeight)
+        .accessibilityElement()
+        .accessibilityLabel(L10n.AVSync.picture)
+        .accessibilityValue(Duration.seconds(model.videoSeconds).formatted(.time(pattern: .hourMinuteSecond)))
+        .accessibilityAdjustableAction { direction in
+            switch direction {
+            case .increment: model.scrub(to: model.videoSeconds + 1)
+            case .decrement: model.scrub(to: model.videoSeconds - 1)
+            @unknown default: break
+            }
+        }
+    }
+
+    // MARK: - Waveform
 
     @ViewBuilder
     private var waveformMessage: some View {
-        switch model.waveformState {
-        case .loading:
-            HStack(spacing: 8) {
-                ProgressView()
-                Text(L10n.AVSync.listening)
+        if !model.isWaveformVisible {
+            switch model.waveformStatus {
+            case .loading:
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text(L10n.AVSync.listening)
+                }
+
+            case .failed:
+                Text(L10n.AVSync.waveformFailed)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal)
+
+            case .ready:
+                EmptyView()
             }
-
-        case .failed:
-            Text(L10n.AVSync.waveformFailed)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal)
-
-        case .loaded:
-            EmptyView()
         }
     }
 
     private var waveform: some View {
         SliderContainer(
             value: sliderValue,
-            total: sliderTotal,
-            isScrollingEnabled: !model.isPreviewing
+            total: sliderTotal
         )
         .sliderContainerStyle(
             SyncWaveformSliderStyle(
-                envelope: envelope,
+                envelope: model.envelope,
                 videoSeconds: model.videoSeconds,
                 offsetRange: Model.offsetRange,
                 visibleSeconds: Model.visibleSeconds
@@ -223,8 +346,8 @@ private struct SyncStudioView: PlatformView {
         .accessibilityValue(Duration.milliseconds(Int64(model.offsetMilliseconds.rounded())).formatted(.playbackOffset))
         .accessibilityAdjustableAction { direction in
             switch direction {
-            case .increment: model.offsetMilliseconds = min(model.offsetMilliseconds + 10, Model.offsetRange.upperBound)
-            case .decrement: model.offsetMilliseconds = max(model.offsetMilliseconds - 10, Model.offsetRange.lowerBound)
+            case .increment: model.slideSound(toMilliseconds: model.offsetMilliseconds + 10)
+            case .decrement: model.slideSound(toMilliseconds: model.offsetMilliseconds - 10)
             @unknown default: break
             }
         }
@@ -232,27 +355,25 @@ private struct SyncStudioView: PlatformView {
 
     // MARK: - Controls
 
-    private var frameButtons: some View {
-        Group {
+    private var frameAndCheckButtons: some View {
+        HStack(spacing: UIDevice.isTV ? 24 : 8) {
             Button {
                 model.stepFrame(forward: false)
             } label: {
                 Label(L10n.AVSync.previousFrame, systemImage: "backward.frame")
                     .labelStyle(.iconOnly)
+                    .frame(minWidth: UIDevice.isTV ? nil : 28)
             }
+            .buttonRepeatBehavior(.enabled)
 
             Button {
                 model.stepFrame(forward: true)
             } label: {
                 Label(L10n.AVSync.nextFrame, systemImage: "forward.frame")
                     .labelStyle(.iconOnly)
+                    .frame(minWidth: UIDevice.isTV ? nil : 28)
             }
-        }
-    }
-
-    private var controls: some View {
-        HStack(spacing: UIDevice.isTV ? 24 : 8) {
-            frameButtons
+            .buttonRepeatBehavior(.enabled)
 
             Button {
                 model.togglePreview()
@@ -262,9 +383,11 @@ private struct SyncStudioView: PlatformView {
                     systemImage: model.isPreviewing ? "stop.fill" : "play.fill"
                 )
             }
+        }
+    }
 
-            Spacer(minLength: 0)
-
+    private var finishButtons: some View {
+        HStack(spacing: UIDevice.isTV ? 24 : 8) {
             Button {
                 model.cancel()
             } label: {
@@ -280,13 +403,50 @@ private struct SyncStudioView: PlatformView {
                 )
             }
         }
+    }
+
+    private var controlsInOneRow: some View {
+        HStack(spacing: 0) {
+            frameAndCheckButtons
+
+            Spacer(minLength: 16)
+
+            finishButtons
+        }
+    }
+
+    private var controlsInTwoRows: some View {
+        VStack(alignment: .leading, spacing: spacing) {
+            frameAndCheckButtons
+
+            finishButtons
+                .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+    }
+
+    /// On touch the buttons are a full 44 points tall: a near miss lands on nothing.
+    private var controls: some View {
+        Group {
+            if UIDevice.isTV {
+                controlsInOneRow
+            } else {
+                ViewThatFits(in: .horizontal) {
+                    controlsInOneRow
+
+                    controlsInTwoRows
+                }
+                .font(.subheadline)
+            }
+        }
         .buttonStyle(.capsule)
-        .controlSize(UIDevice.isTV ? .large : .small)
+        .controlSize(UIDevice.isTV ? .large : .extraLarge)
         .foregroundStyle(.white)
         .syncStudioFocusSection()
     }
 
     private var hint: String? {
+        guard !isShort else { return nil }
+
         if model.addsSecondPoint {
             return L10n.AVSync.secondPointReady
         }
@@ -302,9 +462,9 @@ private struct SyncStudioView: PlatformView {
 
     private var content: some View {
         VStack(alignment: .leading, spacing: spacing) {
-            header
+            statusRow
 
-            directionRow
+            pictureStrip
 
             waveform
 
@@ -323,16 +483,22 @@ private struct SyncStudioView: PlatformView {
         .padding(.vertical, UIDevice.isTV ? 12 : 6)
         .padding(.leading, safeAreaInsets.leading)
         .padding(.trailing, safeAreaInsets.trailing)
-        .scrollIfLargerThanContainer()
-        .padding(.bottom, safeAreaInsets.bottom)
     }
 
+    /// Clipped, unlike `scrollIfLargerThanContainer`: a button drawn past the panel can't be tapped.
     var iOSView: some View {
-        content
+        ScrollView {
+            content
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .scrollIndicators(.never)
+        .padding(.bottom, safeAreaInsets.bottom)
     }
 
     var tvOSView: some View {
         content
+            .scrollIfLargerThanContainer()
+            .padding(.bottom, safeAreaInsets.bottom)
             .syncStudioFocusSection()
             .syncStudioFrameStepping(viewState: viewState, model: model)
     }
@@ -362,9 +528,11 @@ private extension View {
     func syncStudioFrameStepping(viewState: VideoPlayer.ViewState, model: SyncStudioModel) -> some View {
         #if os(tvOS)
         onReceive(viewState.containerView?.onPressEvent ?? .init()) { press in
+            let focusedIDs = viewState.focusCoordinator.focusedIDs
+
             guard press.phase == .ended,
                   press.type == .leftArrow || press.type == .rightArrow,
-                  viewState.focusCoordinator.focusedIDs.contains(SyncStudioSupplement.waveformFocusID)
+                  focusedIDs.contains(SyncStudioSupplement.waveformFocusID) || focusedIDs.contains(SyncStudioSupplement.pictureFocusID)
             else { return }
 
             model.stepFrame(forward: press.type == .rightArrow)

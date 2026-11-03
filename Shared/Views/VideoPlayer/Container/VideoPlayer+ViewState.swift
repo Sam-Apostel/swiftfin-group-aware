@@ -240,6 +240,10 @@ extension VideoPlayer {
             selectedSupplementID != nil
         }
 
+        var isPresentingSyncStudio: Bool {
+            selectedSupplementID == SyncStudioSupplement.supplementID
+        }
+
         var isPresentingFullScreenSupplement: Bool {
             !isCompact && selectedSupplement?.presentationStyle == .expanded
         }
@@ -287,6 +291,11 @@ extension VideoPlayer {
                 return elements
 
             case let .supplement(_, showsPlaybackButtons):
+                // The studio has its own controls for everything, and needs a clear picture
+                if isPresentingSyncStudio {
+                    return [.supplements]
+                }
+
                 if UIDevice.isTV {
                     return [.supplements, .dimming]
                 }

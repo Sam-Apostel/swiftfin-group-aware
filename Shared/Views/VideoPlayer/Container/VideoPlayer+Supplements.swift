@@ -147,7 +147,9 @@ extension VideoPlayer.UIContainerViewController {
 
                 VStack(alignment: .leading, spacing: 0) {
 
-                    tabButtons
+                    if !viewState.isPresentingSyncStudio {
+                        tabButtons
+                    }
 
                     SupplementTabView(
                         data: viewState.supplements,
@@ -163,7 +165,7 @@ extension VideoPlayer.UIContainerViewController {
                     .onSelectionPresented { id in
                             viewState.focusSupplementIfNeeded(id)
                         }
-                        .onFocusExit(.up, perform: viewState.singleSupplement == nil ? nil : {
+                        .onFocusExit(.up, perform: viewState.singleSupplement == nil || viewState.isPresentingSyncStudio ? nil : {
                             viewState.selectedSupplementID = nil
                         })
                     #endif
@@ -173,7 +175,7 @@ extension VideoPlayer.UIContainerViewController {
                 }
                 .isVisible(viewState.visibleElements.contains(.supplements))
                 .enabled(viewState.visibleElements.contains(.supplements))
-                .padding(.top, EdgeInsets.edgeInsets.bottom / (UIDevice.isTV ? 2 : 1))
+                .padding(.top, viewState.isPresentingSyncStudio ? 0 : EdgeInsets.edgeInsets.bottom / (UIDevice.isTV ? 2 : 1))
                 .animation(.linear(duration: 0.25), value: viewState.presentation)
                 .animation(.linear(duration: 0.1), value: viewState.isScrubbing)
                 .animation(.bouncy(duration: 0.25, extraBounce: 0.1), value: viewState.supplements.map(\.id))

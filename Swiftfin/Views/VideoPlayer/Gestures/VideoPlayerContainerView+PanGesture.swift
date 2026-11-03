@@ -20,7 +20,8 @@ extension VideoPlayer.UIContainerViewController {
         unitPoint: UnitPoint,
         state: UIGestureRecognizer.State
     ) {
-        guard checkGestureLock() else { return }
+        // The studio's strips take the drags. It closes with Cancel, not with a stray swipe.
+        guard !viewState.isPresentingSyncStudio, checkGestureLock() else { return }
 
         if state == .began {
             viewState.cancelTapGesture()
