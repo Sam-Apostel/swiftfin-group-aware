@@ -1,0 +1,50 @@
+manifestVersion: 1
+id: couchfin-universes
+storage:
+  dataRoot: data
+category: media
+name: Universes
+version: "1.0.0"
+tagline: Cinematic universes, timelines and YouTube backlogs for Couchfin
+icon: https://raw.githubusercontent.com/Sam-Apostel/umbrel-apps/master/couchfin-universes/icon.svg
+description: >-
+  One step after installing: open Universes and paste a Jellyfin API key (Jellyfin > Dashboard >
+  API Keys > +). Seerr is connected automatically when it is installed.
+
+
+  Universes links your Jellyfin library into the worlds it belongs to, using Wikidata: the Marvel
+  Cinematic Universe, the Arrowverse, the Addams Family (Wednesday included), the world of Avatar
+  with its novels and comics. Couchfin shows them on the item pages and as themed timelines, in
+  release order or in story order, with what you don't have yet (request it through Seerr) next to
+  what you do.
+
+
+  YouTube playlists become backlogs mixed in with movies and series, and videos downloaded with
+  TubeArchivist or Pinchflat join universes such as a Hermitcraft season, one lane per creator.
+  Documentaries land on a history timeline by the period they are about.
+
+
+  Optional AI tagging (local with the Ollama app, or Claude) places videos and documentaries that
+  structured data doesn't know, suggests in-universe order and picks themes. Suggestions it isn't
+  sure about wait for a yes or no in Couchfin.
+
+
+  Only external ids (TMDB, IMDb, TVDB) of your library leave the server, as public Wikidata queries.
+releaseNotes: ""
+
+developer: Sam Apostel
+website: https://github.com/Sam-Apostel/swiftfin-group-aware
+dependencies:
+  - jellyfin
+repo: https://github.com/Sam-Apostel/swiftfin-group-aware/tree/main/Companion/universes
+support: https://github.com/Sam-Apostel/swiftfin-group-aware/issues
+
+port: 7457
+gallery: []
+path: ""
+
+defaultUsername: ""
+defaultPassword: ""
+
+submitter: Sam Apostel
+submission: https://github.com/sam-apostel/umbrel-apps

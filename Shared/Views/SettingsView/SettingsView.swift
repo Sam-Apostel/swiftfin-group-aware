@@ -31,6 +31,9 @@ struct SettingsView: View {
     @InjectedObject(\.seerrService)
     private var seerrService: SeerrService
 
+    @InjectedObject(\.universeService)
+    private var universeService: UniverseService
+
     // MARK: - Body
 
     var body: some View {
@@ -237,6 +240,14 @@ struct SettingsView: View {
                     router.route(to: .seerrSettings)
                 }
 
+                ChevronButton(
+                    L10n.Universes.title,
+                    content: universesHostDescription,
+                    systemName: "globe.americas.fill"
+                ) {
+                    router.route(to: .universeSettings)
+                }
+
                 #if os(iOS)
                 ReleaseCalendarSyncToggle()
 
@@ -251,6 +262,14 @@ struct SettingsView: View {
                 #endif
             }
         }
+    }
+
+    private var universesHostDescription: String {
+        guard universeService.isConfigured, let serverURL = universeService.serverURL else {
+            return L10n.Universes.notConnected
+        }
+
+        return serverURL.host() ?? serverURL.absoluteString
     }
 
     private var seerrHostDescription: String {

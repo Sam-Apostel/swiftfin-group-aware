@@ -80,6 +80,8 @@ struct DiscoverView: View {
 
                         ComingUpCard()
 
+                        UniversesCard()
+
                         SearchButton()
                     }
                     .edgePadding(.horizontal)
@@ -89,6 +91,8 @@ struct DiscoverView: View {
                         WatchlistsCard()
 
                         ComingUpCard()
+
+                        UniversesCard()
                     }
                     .edgePadding(.horizontal)
                     #endif
