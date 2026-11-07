@@ -122,11 +122,7 @@ struct UniverseView: View {
     private func header(_ universe: Universe, style: UniverseStyle, accent: Color) -> some View {
         VStack(alignment: .leading, spacing: UIDevice.isTV ? 16 : 10) {
             if let hero = viewModel.heroItem {
-                ImageView(hero.imageSource(
-                    .backdrop,
-                    itemID: hero.id,
-                    environment: ImageSourceOptions(maxWidth: UIDevice.isTV ? 1920 : 1200)
-                ))
+                ImageView(backdropSource(for: hero))
                     .image { (image: UIImage) in
                         Image(uiImage: image)
                             .resizable()
@@ -180,6 +176,10 @@ struct UniverseView: View {
             .edgePadding(.horizontal)
             .padding(.top, viewModel.heroItem == nil ? 20 : -40)
         }
+    }
+
+    private func backdropSource(for item: BaseItemDto) -> ImageSource? {
+        item.imageSource(.backdrop, itemID: item.id, environment: ImageSourceOptions(maxWidth: UIDevice.isTV ? 1920 : 1200))
     }
 
     private func resolveColor(from image: UIImage) {
@@ -273,7 +273,7 @@ struct UniverseView: View {
         #if os(tvOS)
         .buttonStyle(.card)
         #else
-        .buttonStyle(.plain)
+            .buttonStyle(.plain)
         #endif
         .edgePadding(.horizontal)
     }
@@ -363,10 +363,10 @@ struct UniverseView: View {
 
     // MARK: - Actions
 
-    private func entryButton<Content: View>(
+    private func entryButton(
         _ entry: UniverseEntry,
         universe: Universe,
-        @ViewBuilder label: () -> Content
+        @ViewBuilder label: () -> some View
     ) -> some View {
         Button {
             open(entry)
@@ -376,7 +376,7 @@ struct UniverseView: View {
         #if os(tvOS)
         .buttonStyle(.card)
         #else
-        .buttonStyle(.plain)
+            .buttonStyle(.plain)
         #endif
         .contextMenu {
             if entry.status == .suggested {

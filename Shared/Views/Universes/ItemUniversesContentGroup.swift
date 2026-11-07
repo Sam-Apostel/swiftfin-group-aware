@@ -82,7 +82,7 @@ struct ItemUniversesContentGroup: ContentGroup {
                             #if os(tvOS)
                             .buttonStyle(.card)
                             #else
-                            .buttonStyle(.plain)
+                                .buttonStyle(.plain)
                             #endif
                         }
                     }

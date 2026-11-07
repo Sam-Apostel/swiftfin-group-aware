@@ -113,7 +113,7 @@ struct UniversesListView: View {
                     #if os(tvOS)
                     .buttonStyle(.card)
                     #else
-                    .buttonStyle(.plain)
+                        .buttonStyle(.plain)
                     #endif
                     .edgePadding(.horizontal)
                 }
@@ -135,7 +135,7 @@ struct UniversesListView: View {
                                 #if os(tvOS)
                                 .buttonStyle(.card)
                                 #else
-                                .buttonStyle(.plain)
+                                    .buttonStyle(.plain)
                                 #endif
                             }
                         }

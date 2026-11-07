@@ -110,10 +110,21 @@ struct UniverseSettingsView: View {
         .errorMessage($error)
         .alert(
             notice ?? "",
-            isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } })
+            isPresented: isNoticePresented
         ) {
             Button(L10n.dismiss, role: .cancel) {}
         }
+    }
+
+    private var isNoticePresented: Binding<Bool> {
+        Binding(
+            get: { notice != nil },
+            set: { isPresented in
+                if !isPresented {
+                    notice = nil
+                }
+            }
+        )
     }
 
     private func connect() {
