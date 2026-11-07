@@ -46,9 +46,14 @@ struct UniverseReviewsView: View {
         .errorMessage($error)
     }
 
+    private func image(for review: UniverseReview) -> ImageSource? {
+        review.entry.jellyfinItemId.flatMap(UniverseCollage.posterSource(itemID:))
+            ?? review.entry.imageUrl.map { ImageSource(url: $0) }
+    }
+
     private func row(_ review: UniverseReview) -> some View {
         HStack(spacing: UIDevice.isTV ? 30 : 14) {
-            ImageView(review.entry.jellyfinItemId.flatMap(UniverseCollage.posterSource(itemID:)) ?? review.entry.imageUrl.map { ImageSource(url: $0) })
+            ImageView(image(for: review))
                 .placeholder { _ in
                     Color.secondarySystemFill
                 }

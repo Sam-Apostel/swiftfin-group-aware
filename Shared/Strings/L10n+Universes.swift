@@ -49,7 +49,7 @@ extension L10n {
         static let undated = "Not dated"
 
         static func span(from: Int, to: Int) -> String {
-            from == to ? Self.year(from) : "\(Self.year(from)) – \(Self.year(to))"
+            from == to ? year(from) : "\(year(from)) – \(year(to))"
         }
 
         /// "2019", "500 BCE", "13.8 billion years ago".
@@ -138,8 +138,8 @@ extension L10n {
         // MARK: - Settings
 
         static let settingsTitle = "Universes"
-        static let settingsFooter =
-            "The Universes app runs next to Jellyfin (on umbrelOS: install it from the Couchfin store). Couchfin signs in with your Jellyfin account."
+        static let settingsFooter = "The Universes app runs next to Jellyfin (on umbrelOS: install it from the Couchfin store). "
+            + "Couchfin signs in with your Jellyfin account."
         static let urlPrompt = "http://umbrel.local:7457"
         static let findAutomatically = "Find automatically"
         static let connect = "Connect"

@@ -108,7 +108,7 @@ struct UniversesListView: View {
                             .padding(UIDevice.isTV ? 24 : 14)
                             #if os(iOS)
                             .background(Color.secondarySystemBackground, in: .rect(cornerRadius: 14))
-                        #endif
+                            #endif
                     }
                     #if os(tvOS)
                     .buttonStyle(.card)

@@ -46,6 +46,7 @@ enum UniverseLayout {
             case "playlist": L10n.Universes.timelinePlaylist
             default: L10n.Universes.timelineStory
             }
+
         case .historical:
             L10n.Universes.timelineHistory
         case .lanes:
@@ -63,8 +64,10 @@ enum UniverseLayout {
             return placed.sorted { ($0.positions.chronological ?? 0, releaseKey($0)) < ($1.positions.chronological ?? 0, releaseKey($1)) }
         case .historical:
             let placed = universe.entries.filter { $0.positions.historical != nil }
-            return placed.sorted {
-                ($0.positions.historical?.start ?? 0, $0.positions.historical?.end ?? 0) < ($1.positions.historical?.start ?? 0, $1.positions.historical?.end ?? 0)
+            return placed.sorted { lhs, rhs in
+                let left = (lhs.positions.historical?.start ?? 0, lhs.positions.historical?.end ?? 0)
+                let right = (rhs.positions.historical?.start ?? 0, rhs.positions.historical?.end ?? 0)
+                return left < right
             }
         }
     }
@@ -103,6 +106,7 @@ enum UniverseLayout {
             guard let year = entry.year else {
                 return ("undated", L10n.Universes.unknownDate, nil)
             }
+
             if let era = eras?.first(where: { year >= $0.start && year < $0.end }) {
                 return ("era-\(era.id)", era.label, L10n.Universes.span(from: era.start, to: era.end - 1))
             }
@@ -121,8 +125,10 @@ enum UniverseLayout {
             guard let start = entry.positions.historical?.start else {
                 return ("undated", L10n.Universes.undated, nil)
             }
+
             if let era = eras?.first(where: { start >= $0.start && start < $0.end }) {
-                return ("era-\(era.id)", era.label, L10n.Universes.span(from: era.start, to: min(era.end, Calendar.current.component(.year, from: .now))))
+                let end = min(era.end, Calendar.current.component(.year, from: .now))
+                return ("era-\(era.id)", era.label, L10n.Universes.span(from: era.start, to: end))
             }
             let century = start >= 0 ? start / 100 : -((-start + 99) / 100)
             let from = century * 100
@@ -172,14 +178,16 @@ enum UniverseLayout {
 
         func flush() {
             guard let current, bucket.isNotEmpty else { return }
+
             let count = used[current.id, default: 0]
             used[current.id] = count + 1
-            sections.append(UniverseSection(
+            let section = UniverseSection(
                 id: count == 0 ? current.id : "\(current.id)-\(count)",
                 title: current.title,
                 subtitle: current.subtitle,
                 entries: bucket
-            ))
+            )
+            sections.append(section)
         }
 
         for entry in entries {

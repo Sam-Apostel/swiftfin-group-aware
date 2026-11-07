@@ -140,6 +140,7 @@ struct UniverseTexture: View {
             case "parchment":
                 drawWash(&context, size, &random, blobs: 7, alpha: 0.07, tint: Color(red: 1, green: 0.85, blue: 0.6))
                 drawGrain(&context, size, &random, density: 0.0012, alpha: 0.06)
+
             case "ink":
                 drawWash(&context, size, &random, blobs: 9, alpha: 0.1, tint: color)
             case "pixel":
@@ -177,7 +178,7 @@ struct UniverseTexture: View {
         var y: CGFloat = 0
         while y < size.height {
             let fade = 1 - y / max(size.height, 1)
-            var x: CGFloat = (Int(y / spacing) % 2 == 0) ? 0 : spacing / 2
+            var x: CGFloat = Int(y / spacing) % 2 == 0 ? 0 : spacing / 2
             while x < size.width {
                 let radius = 0.6 + 2.6 * fade * fade
                 context.fill(
@@ -190,7 +191,14 @@ struct UniverseTexture: View {
         }
     }
 
-    private func drawWash(_ context: inout GraphicsContext, _ size: CGSize, _ random: inout SeededRandom, blobs: Int, alpha: Double, tint: Color) {
+    private func drawWash(
+        _ context: inout GraphicsContext,
+        _ size: CGSize,
+        _ random: inout SeededRandom,
+        blobs: Int,
+        alpha: Double,
+        tint: Color
+    ) {
         context.addFilter(.blur(radius: 60))
         for _ in 0 ..< blobs {
             let radius = (0.15 + random.next() * 0.3) * max(size.width, size.height)

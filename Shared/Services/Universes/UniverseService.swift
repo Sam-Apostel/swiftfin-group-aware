@@ -143,6 +143,7 @@ final class UniverseService: ObservableObject {
             }
 
             guard let self else { return }
+
             self.isDiscovering = false
             self.discoveryTask = nil
 

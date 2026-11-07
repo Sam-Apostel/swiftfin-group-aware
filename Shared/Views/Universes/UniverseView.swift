@@ -67,10 +67,15 @@ struct UniverseView: View {
         .task {
             await viewModel.load()
         }
-        .errorMessage(Binding(
+        .errorMessage(alertError)
+    }
+
+    /// Errors after the universe loaded (a failed answer); before that, the error replaces the screen.
+    private var alertError: Binding<Error?> {
+        Binding(
             get: { viewModel.universe == nil ? nil : viewModel.error },
             set: { viewModel.error = $0 }
-        ))
+        )
     }
 
     @ViewBuilder
@@ -117,7 +122,11 @@ struct UniverseView: View {
     private func header(_ universe: Universe, style: UniverseStyle, accent: Color) -> some View {
         VStack(alignment: .leading, spacing: UIDevice.isTV ? 16 : 10) {
             if let hero = viewModel.heroItem {
-                ImageView(hero.imageSource(.backdrop, itemID: hero.id, environment: ImageSourceOptions(maxWidth: UIDevice.isTV ? 1920 : 1200)))
+                ImageView(hero.imageSource(
+                    .backdrop,
+                    itemID: hero.id,
+                    environment: ImageSourceOptions(maxWidth: UIDevice.isTV ? 1920 : 1200)
+                ))
                     .image { (image: UIImage) in
                         Image(uiImage: image)
                             .resizable()
@@ -196,10 +205,7 @@ struct UniverseView: View {
 
         VStack(alignment: .leading, spacing: 12) {
             if available.count > 1 {
-                Picker(L10n.Universes.title, selection: Binding(
-                    get: { timeline },
-                    set: { self.timeline = $0 }
-                )) {
+                Picker(L10n.Universes.title, selection: timelineSelection(current: timeline)) {
                     ForEach(available) { option in
                         Text(UniverseLayout.title(for: option, in: universe))
                             .tag(option)
@@ -221,6 +227,13 @@ struct UniverseView: View {
         }
         .edgePadding(.horizontal)
         .focusSection()
+    }
+
+    private func timelineSelection(current: UniverseTimeline) -> Binding<UniverseTimeline> {
+        Binding(
+            get: { current },
+            set: { timeline = $0 }
+        )
     }
 
     // MARK: - Next up
@@ -254,7 +267,7 @@ struct UniverseView: View {
             }
             .padding(UIDevice.isTV ? 24 : 12)
             #if os(iOS)
-                .background(.white.opacity(0.08), in: .rect(cornerRadius: 16))
+            .background(.white.opacity(0.08), in: .rect(cornerRadius: 16))
             #endif
         }
         #if os(tvOS)
@@ -340,8 +353,10 @@ struct UniverseView: View {
         switch timeline {
         case .historical:
             guard let historical = entry.positions.historical else { return nil }
+
             let span = L10n.Universes.span(from: historical.start, to: historical.end)
             return historical.label.map { "\(span) · \($0)" } ?? span
+
         default:
             return entry.year.map(String.init)
         }
@@ -419,7 +434,10 @@ struct UniverseView: View {
                             Button {
                                 router.route(to: .universe(id: id))
                             } label: {
-                                Label(relatedName(id), systemImage: universe.parentIds.contains(id) ? "arrow.up.forward" : "arrow.down.forward")
+                                Label(
+                                    relatedName(id),
+                                    systemImage: universe.parentIds.contains(id) ? "arrow.up.forward" : "arrow.down.forward"
+                                )
                             }
                             .foregroundStyle(.primary, .secondary)
                         }
@@ -437,6 +455,6 @@ struct UniverseView: View {
 
     private func relatedName(_ id: String) -> String {
         Container.shared.universeService().summaries.first { $0.id == id }?.name
-            ?? id.replacingOccurrences(of: "curated-", with: "").replacingOccurrences(of: "-", with: " ").capitalized
+            ?? id.replacing("curated-", with: "").replacing("-", with: " ").capitalized
     }
 }

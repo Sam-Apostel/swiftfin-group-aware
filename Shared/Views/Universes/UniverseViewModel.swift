@@ -77,6 +77,7 @@ final class UniverseViewModel: ObservableObject {
 
         for entry in UniverseLayout.ordered(universe, timeline: timeline) {
             guard let id = entry.jellyfinItemId, let item = items[id] else { continue }
+
             if item.userData?.isPlayed != true {
                 return (entry, item)
             }
