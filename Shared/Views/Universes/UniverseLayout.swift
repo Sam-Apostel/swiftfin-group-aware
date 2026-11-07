@@ -24,10 +24,13 @@ enum UniverseLayout {
         switch universe.kind {
         case .playlist where available.contains(.chronological):
             return .chronological
+
         case .nonFiction where available.contains(.historical):
             return .historical
+
         case .creatorCollab where available.contains(.lanes):
             return .lanes
+
         default:
             if available.contains(.chronological), universe.orderSource == "llm" || universe.orderSource == "curated" {
                 return .chronological
@@ -40,6 +43,7 @@ enum UniverseLayout {
         switch timeline {
         case .release:
             L10n.Universes.timelineRelease
+
         case .chronological:
             switch universe.orderSource {
             case "series": L10n.Universes.timelineSeries
@@ -49,6 +53,7 @@ enum UniverseLayout {
 
         case .historical:
             L10n.Universes.timelineHistory
+
         case .lanes:
             L10n.Universes.timelineLanes
         }
@@ -59,9 +64,13 @@ enum UniverseLayout {
         switch timeline {
         case .release, .lanes:
             return universe.entries.sorted(by: releaseOrder)
+
         case .chronological:
             let placed = universe.entries.filter { $0.positions.chronological != nil }
-            return placed.sorted { ($0.positions.chronological ?? 0, releaseKey($0)) < ($1.positions.chronological ?? 0, releaseKey($1)) }
+            return placed.sorted { lhs, rhs in
+                (lhs.positions.chronological ?? 0, releaseKey(lhs)) < (rhs.positions.chronological ?? 0, releaseKey(rhs))
+            }
+
         case .historical:
             let placed = universe.entries.filter { $0.positions.historical != nil }
             return placed.sorted { lhs, rhs in
@@ -149,19 +158,22 @@ enum UniverseLayout {
             lanes[lane, default: []].append(entry)
         }
         // Busiest lanes first; entries without a lane last.
-        return order
-            .sorted { lhs, rhs in
-                if lhs.isEmpty != rhs.isEmpty { return !lhs.isEmpty }
-                return (lanes[lhs]?.count ?? 0) > (lanes[rhs]?.count ?? 0)
+        let busiestFirst = order.sorted { lhs, rhs in
+            if lhs.isEmpty != rhs.isEmpty {
+                return !lhs.isEmpty
             }
-            .map { lane in
-                UniverseSection(
-                    id: "lane-\(lane)",
-                    title: lane.isEmpty ? L10n.Universes.kindVideo : lane,
-                    subtitle: nil,
-                    entries: lanes[lane] ?? []
-                )
-            }
+
+            return (lanes[lhs]?.count ?? 0) > (lanes[rhs]?.count ?? 0)
+        }
+
+        return busiestFirst.map { lane in
+            UniverseSection(
+                id: "lane-\(lane)",
+                title: lane.isEmpty ? L10n.Universes.kindVideo : lane,
+                subtitle: nil,
+                entries: lanes[lane] ?? []
+            )
+        }
     }
 
     // MARK: - Grouping

@@ -280,7 +280,6 @@ struct UniverseView: View {
 
     // MARK: - Sections
 
-    @ViewBuilder
     private func sectionView(
         _ section: UniverseSection,
         universe: Universe,

@@ -89,9 +89,8 @@ final class UniverseViewModel: ObservableObject {
     var heroItem: BaseItemDto? {
         guard let universe else { return nil }
 
-        return universe.entries
-            .compactMap { $0.jellyfinItemId.flatMap { items[$0] } }
-            .first { $0.backdropImageTags?.isNotEmpty == true }
+        let libraryItems = universe.entries.compactMap { $0.jellyfinItemId.flatMap { items[$0] } }
+        return libraryItems.first { $0.backdropImageTags?.isNotEmpty == true }
     }
 
     // MARK: - Jellyfin

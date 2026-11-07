@@ -133,22 +133,29 @@ struct UniverseTexture: View {
             switch kind {
             case "grain":
                 drawGrain(&context, size, &random, density: 0.0016, alpha: 0.07)
+
             case "starfield":
                 drawStars(&context, size, &random)
+
             case "halftone":
                 drawHalftone(&context, size)
+
             case "parchment":
                 drawWash(&context, size, &random, blobs: 7, alpha: 0.07, tint: Color(red: 1, green: 0.85, blue: 0.6))
                 drawGrain(&context, size, &random, density: 0.0012, alpha: 0.06)
 
             case "ink":
                 drawWash(&context, size, &random, blobs: 9, alpha: 0.1, tint: color)
+
             case "pixel":
                 drawPixels(&context, size, &random)
+
             case "paper":
                 drawLines(&context, size, spacing: 28, alpha: 0.05)
+
             case "strata":
                 drawStrata(&context, size, &random)
+
             default:
                 break
             }
