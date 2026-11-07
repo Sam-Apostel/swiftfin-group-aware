@@ -1,0 +1,11 @@
+{
+  "id": "hermitcraft",
+  "name": "Hermitcraft",
+  "kind": "creator-collab",
+  "description": "The Hermitcraft Minecraft server across all seasons and creators.",
+  "theme": { "preset": "blocky" },
+  "lanes": "channel",
+  "match": {
+    "titlePatterns": ["hermitcraft"]
+  }
+}

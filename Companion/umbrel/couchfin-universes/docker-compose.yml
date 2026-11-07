@@ -1,0 +1,26 @@
+version: "3.7"
+
+services:
+  app_proxy:
+    environment:
+      # <app-id>_<service>_1
+      APP_HOST: couchfin-universes_web_1
+      APP_PORT: 7457
+      # Couchfin calls /api with the person's own Jellyfin token, which the app checks with
+      # Jellyfin. The settings page keeps Umbrel's login in front of it.
+      PROXY_AUTH_WHITELIST: "/api/*"
+
+  web:
+    # Built from Companion/universes by the companion-universes workflow; run
+    # Companion/umbrel/pin-image.sh to fill in the digest of a published version.
+    image: ghcr.io/sam-apostel/couchfin-universes:1.0.0@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    user: "1000:1000"
+    environment:
+      JELLYFIN_URL: "http://jellyfin_server_1:8096"
+      SEERR_URL: ${APP_COUCHFIN_UNIVERSES_SEERR_URL:-}
+      SEERR_API_KEY: ${APP_COUCHFIN_UNIVERSES_SEERR_API_KEY:-}
+      SCAN_INTERVAL_HOURS: "12"
+    volumes:
+      # Settings, cache and the owner's own universe files (data/app/universes/*.json).
+      - ${APP_DATA_DIR}/data/app:/data
+    restart: on-failure

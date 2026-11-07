@@ -1,0 +1,12 @@
+{
+  "id": "hermitcraft-season-11",
+  "name": "Hermitcraft Season 11",
+  "kind": "creator-collab",
+  "description": "One Minecraft server, many creators. Every Hermit's episodes on one timeline, a lane per channel.",
+  "theme": { "preset": "blocky" },
+  "parents": ["hermitcraft"],
+  "lanes": "channel",
+  "match": {
+    "titlePatterns": ["hermitcraft\\s*(season\\s*)?11\\b", "\\bhc\\s*11\\b", "hermitcraft\\s*s11\\b"]
+  }
+}

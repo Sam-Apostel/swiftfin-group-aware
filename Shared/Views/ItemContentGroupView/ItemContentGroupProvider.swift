@@ -99,6 +99,13 @@ final class ItemContentGroupProvider: ViewModel, ContentGroupProvider {
             []
         }
 
+        switch item.type {
+        case .movie, .series, .season, .episode, .video, .musicVideo, .boxSet:
+            ItemUniversesContentGroup(item: item)
+        default:
+            []
+        }
+
         if let genres = item.itemGenres, genres.isNotEmpty {
             PillGroup(
                 displayTitle: L10n.genres,
